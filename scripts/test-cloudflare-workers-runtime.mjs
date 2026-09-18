@@ -73,12 +73,14 @@ try {
     void [common, verify];
   `;
   for (const extension of ['mts', 'cts']) await writeFile(path.join(temporary, `consumer.${extension}`), typeConsumer);
+  // Workers are bundled. Preserve/Bundler handles the runtime's export assignments
+  // and extensionless generated Worker references while keeping declaration checks on.
   await writeFile(path.join(temporary, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
-    target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', lib: ['ESNext'], types: [],
-    strict: true, skipLibCheck: false, noEmit: true,
+    target: 'ES2022', module: 'Preserve', moduleResolution: 'Bundler', lib: ['ESNext'], types: [],
+    allowJs: true, strict: true, skipLibCheck: false, noEmit: true,
   }, files: ['worker-configuration.d.ts', 'consumer.mts', 'consumer.cts'] }));
   run(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', 'tsconfig.json']);
-  console.log('Wrangler-generated Env.AI and Workers Web API types: ESM/CJS consumers passed without casts or DOM/Node globals.');
+  console.log('Wrangler-generated Env.AI and Workers Web API types: bundled consumers passed without casts or DOM/Node globals.');
 
   // Bundle an installed consumer so workerd runs the published layout rather than TS sources.
   const fixture = await readFile(path.join(root, 'tests/workers/cloudflare-workers.mjs'), 'utf8');
