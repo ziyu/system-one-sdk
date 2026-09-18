@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/sdk",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Dependency-free, typed System One decisions for Jev and compatible models, with optional protocol adapters.",
   "license": "MIT",
   "repository": {

@@ -2,7 +2,7 @@
 
 **English** | [简体中文](cloudflare-workers.zh-CN.md)
 
-This unreleased entry complements the REST support shipped in 0.5.2. Import `@system-one-ai/sdk/cloudflare-workers` to call `env.AI.run()` directly. The client implements `EvaluationClient`, so existing `defineDecision()`, policies and `evaluateMany()` callers retain their interface. Runtime dependencies remain unchanged.
+Available in 0.5.3+, this entry complements the Cloudflare REST adapter. Import `@system-one-ai/sdk/cloudflare-workers` to call `env.AI.run()` directly. The client implements `EvaluationClient`, so existing `defineDecision()`, policies and `evaluateMany()` callers retain their interface. Runtime dependencies remain unchanged.
 
 ```ts
 import { choice } from '@system-one-ai/sdk';
@@ -45,5 +45,7 @@ Cancellation and timeout remain distinct (`RequestAbortedError` and `TimeoutErro
 `examples/cloudflare-workers/` contains a fixed-input smoke Worker. It uses a POST route to opt into inference, and its Wrangler configuration disables public workers.dev routes. With an authenticated Wrangler installation, run `wrangler dev --config examples/cloudflare-workers/wrangler.jsonc` and POST to the printed local URL. Each request uses real Cloudflare AI inference and consumes usage; do not expose the example as an unauthenticated production API.
 
 `tests/cloudflare-workers.test.mjs` covers primitive conversion, response envelopes, invalid inputs/results, deadlines, cancellation, retries, per-response metadata, snapshots, composition and optional ESM/CJS entries. `tests/types/cloudflare-workers.ts` checks inference and the core/subpath boundary. These fixture tests do not establish deployed Workers execution, real Cloudflare inference, model quality or a latency improvement; those require separate checks.
+
+Run `npm run build` followed by `node scripts/test-cloudflare-workers-runtime.mjs` for the separate Workers integration check. It installs Wrangler 4.135.0 and the built SDK tarball in an isolated temporary consumer, verifies actual generated `Env.AI` and Workers Web API types without casts or skipped declaration checks, and runs eight scenarios in workerd without `nodejs_compat`: success, retry, cancel, timeout, invalid output, oversized output, parallel request IDs and composition. These checks and 19 native binding Node regression tests passed on September 18, 2026. Inference responses are controlled fixtures; real Cloudflare account access, hosted inference and latency improvements remain unverified. Recorded feature checks: [Node CI](https://github.com/ziyu/sytem-one-sdk/actions/runs/35352387802) and [Workers runtime](https://github.com/ziyu/sytem-one-sdk/actions/runs/35352387792).
 
 Protocol references checked September 18, 2026: [Jev model](https://developers.cloudflare.com/ai/models/typesafe/jev/), [binding configuration](https://developers.cloudflare.com/workers-ai/configuration/bindings/), and [workerd AI implementation](https://github.com/cloudflare/workerd/blob/main/src/cloudflare/internal/ai-api.ts) for `signal`, `returnRawResponse` and `extraHeaders`.

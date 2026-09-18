@@ -6,14 +6,17 @@
 
 运行时代码零第三方依赖，使用标准 Fetch、AbortController、ReadableStream；提供 ESM、CommonJS 和 TypeScript 声明。Node.js 最低目标为 20。浏览器、Workers 等环境需要提供这些 Web API；长期模型密钥应放在服务端。
 
+**0.5.3 新增：**通过 `createCloudflareWorkers({ binding: env.AI })` 使用 Cloudflare Workers 原生 `env.AI.run()` 调用 Jev。已有决策组合、概率策略及批量评估继续使用同一客户端接口，详见 [Workers 原生 binding](#cloudflare-workers-原生-binding053)。
+
 ## 当前能力矩阵
 
-SDK 入口包含在 npm 包中；仓库示例需要在源码目录运行，并由示例提供动作执行器。下表验证状态依据 **2026-09-18** 的已有运行记录，详细结果和边界见[验证记录](docs/validation.md)。
+SDK 入口包含在 npm 包中；仓库示例需要在源码目录运行，并由示例提供动作执行器。下表验证状态依据 **2026-09-18** 的已有运行记录，详细结果和边界见[验证记录](docs/validation.md)及 [Workers binding 文档](docs/cloudflare-workers.zh-CN.md)。
 
 | 能力 | 提供方式 / 入口 | 支持范围与验证状态 |
 | --- | --- | --- |
 | 类型化决策 | SDK 核心：`evaluate`、`choice`、`score`、`booleanQuestion` | 同一字符串或 JSON 状态回答多个问题，返回类型化选择项、小数评分和 P(true)；TypeSafe、OpenRouter 真实调用已验证。 |
-| 请求控制与校验 | SDK 核心：`SystemOne` | 整次调用期限、取消、重试、响应大小限制与类型化错误；已通过协议和本地 HTTP 回归。 |
+| 请求控制与校验 | `SystemOne` 与可选 `CloudflareWorkers` | 整次调用期限、取消、重试、响应大小限制与类型化错误；已通过协议、本地 HTTP 和 workerd fixture 回归。 |
+| Workers AI 原生 binding | 可选 `cloudflare-workers`：`CloudflareWorkers`、`createCloudflareWorkers` | 直接调用 `env.AI.run()`，无需模型 REST 凭据；Wrangler 生成的 `Env.AI` 类型与 8 个 workerd fixture 场景已验证，线上推理尚未验证。 |
 | 动态候选与动作参数 | 可选 `decisions`：`choiceFrom`、`defineDecision` | 候选快照、原业务对象映射、类型化动作分支及各参数证据；已用于真实工作流验证。 |
 | 不确定性策略 | 可选 `policies`：`gateChoice`、`gateBoolean` | 显式概率、差值和 confidence 阈值，返回接受、不确定或弃权；不会自动调用备用模型。 |
 | 批量评估 | 可选 `batch`：`evaluateMany` | 客户端有界并发、按输入顺序返回、部分失败、取消和已报告用量覆盖；已通过回归及真实联调。 |
@@ -22,16 +25,17 @@ SDK 入口包含在 npm 包中；仓库示例需要在源码目录运行，并�
 | 文件与客服工作流 | 仓库示例：`examples/scenarios/` | 文件读取与移动、工单持久化、状态检查和请求重放；业务数据由示例生成，磁盘操作真实执行，已有 20 条用例在 TypeSafe、OpenRouter 均通过。[使用说明](docs/decision-workflows.zh-CN.md)。 |
 | 慢模型转交 | 应用回调示例：`examples/uncertainty.ts` | 通过 `SLOW_THINK_URL` 显式接入服务，未配置时返回待转交；没有内置规划器，也未验证真实慢模型调用。 |
 
-四个内置 adapter 均实现 choice、score、boolean 评估，并提供默认地址和模型。Cloudflare 另需账户 ID，配置方式见[地址与协议](#地址与协议)。
+四个内置 REST/协议 adapter 均实现 choice、score、boolean 评估，并提供默认地址和模型。Cloudflare REST adapter 另需账户 ID；Workers 原生客户端传入 `env.AI`，无需 API token、账户 ID 或 baseURL。配置方式见[地址与协议](#地址与协议)及 [Workers 原生 binding](#cloudflare-workers-原生-binding053)。
 
 | 供应商 | SDK 接入 | 已有验证状态 |
 | --- | --- | --- |
 | TypeSafe | 默认 `systemOneAdapter` | 真实模型请求与工作流已验证。 |
 | OpenRouter | 可选 `adapters/openrouter` | 真实请求、generation 后台记录回查与工作流已验证。 |
 | Vercel AI Gateway | 可选 `adapters/vercel` | Evaluation 协议和安装包测试通过；尚未验证真实推理。 |
-| Cloudflare | 可选 `adapters/cloudflare` | REST 协议、本地 HTTP 和安装包测试通过；因缺少凭据，尚未验证真实推理。未实现原生 `env.AI.run()` binding。 |
+| Cloudflare REST | 可选 `adapters/cloudflare` | REST 协议、本地 HTTP 和安装包测试通过；因缺少凭据，尚未验证真实推理。 |
+| Cloudflare Workers AI | 可选 `cloudflare-workers`（0.5.3+） | 原生 binding 契约、ESM/CJS 安装包、生成的 Workers 类型及 8 个 workerd fixture 场景通过，无需 `nodejs_compat`；真实 Cloudflare 推理和延迟提升尚未验证。 |
 
-ESM、CommonJS 和 TypeScript 声明已在 Node.js 验证。SDK 在浏览器、Workers、Bun、Deno 内运行尚未验证；浏览器操作示例是在 Node.js 中运行 SDK，再控制 Chrome。聊天/文本生成和模型响应流式输出未实现。浏览器示例目前面向公开网站搜索与阅读，输入文本由调用方提供，未实现 iframe/Canvas 操作和登录态持久化。GitHub 已有成功导航及后续 429 失败记录，npm 任务仍被浏览器安全验证阻断。
+ESM、CommonJS 和 TypeScript 声明已在 Node.js 验证；Workers 原生客户端与组合模块也已在实际 workerd 中通过可控推理响应验证。SDK 在浏览器、Bun、Deno 内运行尚未验证；浏览器操作示例是在 Node.js 中运行 SDK，再控制 Chrome。聊天/文本生成和模型响应流式输出未实现。浏览器示例目前面向公开网站搜索与阅读，输入文本由调用方提供，未实现 iframe/Canvas 操作和登录态持久化。GitHub 已有成功导航及后续 429 失败记录，npm 任务仍被浏览器安全验证阻断。
 
 ## 安装
 
@@ -49,7 +53,7 @@ npm run check
 npm run test:package
 ```
 
-其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.5.2.tgz`。例如两个项目同处一层目录时：
+其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.5.3.tgz`。例如两个项目同处一层目录时：
 
 ```sh
 npm install ../sytem-one-sdk
@@ -81,7 +85,7 @@ result.answers.interrupt.probability;   // number，P(true)
 result.usage.inputTokens;               // number | undefined
 ```
 
-内置 adapter 自带默认地址和模型。选择 adapter 并提供对应凭据即可使用；Cloudflare 还需要账户 ID。正常接入无需查找 `baseURL` 或模型名称。`baseURL` 保留为代理和兼容服务的可选覆盖项；`model` 可用于固定版本或选择其他受支持的决策模型。客户端不会根据 hostname 猜测供应商。
+内置 adapter 自带默认地址和模型。选择 adapter 并提供对应凭据即可使用；Cloudflare REST adapter 还需要账户 ID。正常接入无需查找 `baseURL` 或模型名称。`baseURL` 保留为代理和兼容服务的可选覆盖项；`model` 可用于固定版本或选择其他受支持的决策模型。客户端不会根据 hostname 猜测供应商。Workers 内部可以直接向[原生客户端](#cloudflare-workers-原生-binding053)传入 `env.AI`。
 
 ```ts
 const direct = new SystemOne({
@@ -113,7 +117,7 @@ SDK 以 `boolean` 命名真假问题，TypeSafe 适配器会将它转换成原�
 
 ## 可选决策组合（0.4.0+）
 
-这些模块适用于 `SystemOne` 以及实现 `EvaluationClient` 类型的应用包装器。它们不选择供应商，也不增加运行时依赖；核心入口不会加载它们。新的组合声明要求 TypeScript 5.4+。
+这些模块适用于 `SystemOne`、`CloudflareWorkers` 以及实现 `EvaluationClient` 类型的应用包装器。它们不选择供应商，也不增加运行时依赖；核心入口不会加载它们。新的组合声明要求 TypeScript 5.4+。
 
 | 入口 | API |
 | --- | --- |
@@ -209,6 +213,8 @@ npm run example:browser -- --task github-agents
 
 客户端显式配置覆盖 adapter 的默认值，单次请求的 `model` 再覆盖客户端模型。自定义 adapter 同样可以提供 `defaultBaseURL` 和 `defaultModel`；只有没有默认地址的 adapter 才需要调用方填写 `baseURL`。需要账户或租户的地址可以通过工厂生成，Cloudflare 就采用这种方式。
 
+独立的 `createCloudflareWorkers({ binding: env.AI })` 客户端（0.5.3+）使用原生 binding，默认模型同为 `typesafe/jev`，不接收 `baseURL`、`accountId` 或 `apiKey`。
+
 默认原生协议下，自定义地址按以下规则处理：
 
 | `baseURL` | 默认协议 | 请求地址 |
@@ -293,7 +299,7 @@ console.log(result.answers.refund.probability);
 
 工厂自动生成账户地址并选用 `typesafe/jev`。实现模型页的 REST 协议：`POST /client/v4/accounts/{accountId}/ai/run`，请求体为 `{ model, input: { state, questions } }`。适配器将 `boolean` 映射为原生 `noul`，保留概率和 confidence，并统一 token 用量字段。需要代理时，`baseURL` 可覆盖为 API 根地址或以 `/ai/run` 结尾的代理端点；显式模型名原样发送。
 
-此入口通过现有 Fetch transport 调用 REST API；Workers 原生 `env.AI.run()` binding 是另一种接口。没有新增 Cloudflare SDK 依赖，现有 `decisions`、`policies`、`batch` 模块可直接复用。
+此入口通过现有 Fetch transport 调用 REST API；Workers 原生 `env.AI.run()` 使用独立的 [binding 客户端](#cloudflare-workers-原生-binding053)。没有新增 Cloudflare SDK 依赖，现有 `decisions`、`policies`、`batch` 模块可以在两种客户端上直接复用。
 
 包含 `state: "Completed"` 和嵌套 `result` 的 Cloudflare AI runner 响应需要使用 0.5.2+。adapter 逐层校验并解开 REST 与 runner 包装，保留模型答案和用量；失败、待完成、格式错误或有歧义的结果会抛出 `ResponseValidationError`，不重试。模型直接结果和普通 `result` 包装继续兼容。
 
@@ -305,6 +311,47 @@ npm run test:live:cloudflare
 ```
 
 主动运行联调命令会发出三次真实请求，不重试，脱敏报告保存在 `.artifacts/`。该命令需要 Cloudflare 凭据，普通测试和 CI 不会调用。协议 fixture 和本地 HTTP 测试不代表已取得真实账户访问权限。完整契约和验证范围见 [Cloudflare 接入文档](docs/cloudflare.zh-CN.md)（[English](docs/cloudflare.md)）。
+
+## Cloudflare Workers 原生 binding（0.5.3+）
+
+在 Worker 请求处理函数中向可选客户端传入 `env.AI`。下面的 `env` 和 `request` 来自处理函数；支持 Wrangler 生成的 `Env.AI` 类型，无需类型断言。
+
+```ts
+import { choice } from '@system-one-ai/sdk';
+import { createCloudflareWorkers } from '@system-one-ai/sdk/cloudflare-workers';
+
+const client = createCloudflareWorkers({
+  binding: env.AI,
+  timeoutMs: 1500,
+  maxRetries: 0,
+});
+const result = await client.evaluate({
+  state: { message: '我被重复扣款了。' },
+  questions: {
+    department: choice('应该交给哪个团队处理？', {
+      billing: '付款、扣款与退款',
+      technical: '软件故障与集成问题',
+    }),
+  },
+}, { signal: request.signal });
+
+result.answers.department.choice; // 'billing' | 'technical'
+result.response.requestId;         // 上游提供时保留本次响应的请求 ID
+```
+
+在服务的 Wrangler 配置中加入：
+
+```jsonc
+{
+  "ai": { "binding": "AI" }
+}
+```
+
+客户端默认模型为 `typesafe/jev`，实现现有 `EvaluationClient`。无需模型 REST token、账户 ID 或 baseURL；部署认证和模型调用计费仍然存在。你的 API 服务继续负责公开接口认证、租户范围、配额和响应契约。
+
+原生调用与 REST 客户端共用 Cloudflare envelope 解码及受限 Response 读取。SDK 传递取消信号、执行总超时限制，保留每次响应的元数据并校验结果。binding 在返回 Response 前抛错时产生脱敏 `BindingError`，不猜测 HTTP 状态码，也不自动重试。传递取消信号不保证远端推理停止或免于计费。此接口不支持非空 `providerOptions`、流式模型响应或 Gateway 路由。
+
+完整配置、错误与验证说明见 [Workers 接入文档](docs/cloudflare-workers.zh-CN.md)（[English](docs/cloudflare-workers.md)）。`examples/cloudflare-workers/` 提供独立的 POST smoke Worker。实际 workerd fixture 和生成类型检查已通过；线上推理、模型质量和延迟提升尚未验证。
 
 ## 可选 Vercel 适配器
 
@@ -371,7 +418,7 @@ try {
 
 网络失败、408、429、5xx（包括 TypeSafe 529）可以重试。401、403、422、非法 JSON 和非法答案不会触发重试。服务器的 `Retry-After` 支持秒数、HTTP 日期及 `retry-after-ms`；超出剩余预算时直接报 `TimeoutError`，不会提前重试。
 
-错误类型包括 `ConfigurationError`、`ValidationError`、`UnsupportedFeatureError`、`ResponseValidationError`、`APIError`、`ConnectionError`、`TimeoutError`、`RequestAbortedError`，均继承 `SystemOneError`，带有稳定的 `code`。
+错误类型包括 `ConfigurationError`、`ValidationError`、`UnsupportedFeatureError`、`ResponseValidationError`、`APIError`、`ConnectionError`、`BindingError`、`TimeoutError`、`RequestAbortedError`，均继承 `SystemOneError`，带有稳定的 `code`。`BindingError` 表示原生 binding 在返回 Response 前发生错误，不会自动重试。
 
 SDK 不记录密钥和请求体，也不把可能回显敏感信息的服务端错误正文附在异常上。`APIError` 保留状态码、request ID 和重试延迟。鉴权、Content-Type、Host 以及协议头由 SDK 管理，不允许通过普通业务头覆盖。请求不自动跟随重定向；适配器也不能将密钥发送到不同于 baseURL 的 origin。
 
@@ -434,6 +481,8 @@ node --env-file=.env .examples/examples/realtime-agent.js
 
 `npm run check` 还会执行 `test:scenarios`，编译业务示例并通过离线模型 fixture 验证真实本地执行器。`test:live:decisions` 是独立的主动联调命令，CI 不会调用付费模型。
 
+Workers 原生入口的验证命令为 `npm run build`，然后执行 `node scripts/test-cloudflare-workers-runtime.mjs`。脚本在独立临时消费项目中安装固定版本的 Wrangler 和构建后的 tarball，检查生成的 `Env.AI` 类型，再在无需 `nodejs_compat` 的实际 workerd 中运行 8 个 fixture 场景。原生 binding 另有 19 项 Node 回归测试；这些检查使用可控推理响应，不调用真实模型。
+
 官方 API 联调使用单独的命令，读取当前项目的 `.env` 并发出四个真实请求：
 
 ```sh
@@ -446,7 +495,7 @@ npm run test:live
 
 ## CI 与发布
 
-推送到 `main` 或创建 Pull Request 时，GitHub Actions 会在 Node.js 20、22、24 上检查类型、离线测试、构建及实际安装包。推送 `v0.4.0` 这样的版本标签会触发发布：先用 npm Trusted Publishing 发布已验证的包，再创建 GitHub Release，附上同一安装包及校验文件。预发布版本使用 npm 的 `next` 标签。
+推送到 `main` 或创建 Pull Request 时，GitHub Actions 会在 Node.js 20、22、24 上检查类型、离线测试、构建及实际安装包。独立的 Workers runtime 工作流还会检查生成的 Workers 类型及原生 binding 的 workerd 场景。推送 `v0.5.3` 这样的版本标签会触发发布：先用 npm Trusted Publishing 发布已验证的包，再创建 GitHub Release，附上同一安装包及校验文件。预发布版本使用 npm 的 `next` 标签。
 
 一次性可信发布配置、版本操作和失败重跑方法见 [发布说明](docs/releasing.md)。CI 和发布工作流不会执行付费模型联调。
 

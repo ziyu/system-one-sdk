@@ -6,14 +6,17 @@ A TypeScript SDK for decision models with a shared `evaluate({ state, questions 
 
 The runtime has no third-party dependencies and uses standard Fetch, AbortController, and ReadableStream APIs. The package includes ESM, CommonJS, and TypeScript declarations, with Node.js 20 as the minimum target. Browsers, Workers, and other environments need these Web APIs. Keep long-lived model API keys on the server.
 
+**New in 0.5.3:** call Jev through native Cloudflare Workers `env.AI.run()` with `createCloudflareWorkers({ binding: env.AI })`. Existing decisions, policies and batch evaluation work with the same client interface. See [Native Cloudflare Workers binding](#native-cloudflare-workers-binding-053).
+
 ## Capability matrix
 
-SDK entries are included in the npm package. Repository examples run from a checkout and provide their own action executors. Verification below refers to the recorded runs on **2026-09-18**; details and limitations are in the [validation record](docs/validation.md).
+SDK entries are included in the npm package. Repository examples run from a checkout and provide their own action executors. Verification below refers to the recorded runs on **2026-09-18**; details and limitations are in the [validation record](docs/validation.md) and [Workers binding guide](docs/cloudflare-workers.md).
 
 | Capability | Availability / entry point | Supported scope and verification |
 | --- | --- | --- |
 | Typed decisions | SDK core: `evaluate`, `choice`, `score`, `booleanQuestion` | Multiple questions over shared string or JSON state; typed choices, fractional scores and P(true). Live TypeSafe and OpenRouter calls verified. |
-| Request controls and validation | SDK core: `SystemOne` | Total deadlines, cancellation, retries, response-size limits and typed errors; protocol and local HTTP regression tests. |
+| Request controls and validation | `SystemOne` and optional `CloudflareWorkers` | Total deadlines, cancellation, retries, response-size limits and typed errors; protocol, local HTTP and workerd fixture tests. |
+| Native Workers AI binding | Optional `cloudflare-workers`: `CloudflareWorkers`, `createCloudflareWorkers` | Direct `env.AI.run()` calls without model REST credentials; Wrangler-generated `Env.AI` types and eight workerd fixture scenarios verified. Hosted inference remains unverified. |
 | Dynamic candidates and action parameters | Optional `decisions`: `choiceFrom`, `defineDecision` | Candidate snapshots, original-object resolution, typed action branches and per-parameter evidence; exercised in live workflows. |
 | Uncertainty policies | Optional `policies`: `gateChoice`, `gateBoolean` | Explicit probability, margin and confidence thresholds; accepted, uncertain or abstained results. No automatic fallback model. |
 | Batch evaluation | Optional `batch`: `evaluateMany` | Client-side bounded concurrency, ordered results, partial failures, cancellation and reported-usage coverage; regression and live integration checks. |
@@ -22,16 +25,17 @@ SDK entries are included in the npm package. Repository examples run from a chec
 | File and support workflows | Repository examples: `examples/scenarios/` | File reads and moves, persistent ticket updates, state checks and request replay. Generated business data, real disk effects; the recorded 20-case suite passed on both TypeSafe and OpenRouter. [Guide](docs/decision-workflows.md). |
 | Slow-model handoff | Application callback example: `examples/uncertainty.ts` | Explicit service integration via `SLOW_THINK_URL`; without it, returns a pending handoff. No built-in planner or verified slow-model call. |
 
-All four built-in adapters implement choice, score and boolean evaluation and supply default URLs and models. Cloudflare also requires an account ID; configuration details are under [URLs and protocols](#urls-and-protocols).
+All four built-in REST/protocol adapters implement choice, score and boolean evaluation and supply default URLs and models. The Cloudflare REST adapter also requires an account ID. The native Workers client takes `env.AI` instead of an API token, account ID or base URL; configuration details are under [URLs and protocols](#urls-and-protocols) and [Native Cloudflare Workers binding](#native-cloudflare-workers-binding-053).
 
 | Provider | SDK integration | Recorded verification |
 | --- | --- | --- |
 | TypeSafe | Default `systemOneAdapter` | Live model calls and workflows verified. |
 | OpenRouter | Optional `adapters/openrouter` | Live calls, generation-record lookup and workflows verified. |
 | Vercel AI Gateway | Optional `adapters/vercel` | Evaluation protocol and package tests passed; live inference not verified. |
-| Cloudflare | Optional `adapters/cloudflare` | REST protocol, local HTTP and package tests passed; live inference not verified because credentials were unavailable. Native `env.AI.run()` binding is not implemented. |
+| Cloudflare REST | Optional `adapters/cloudflare` | REST protocol, local HTTP and package tests passed; live inference not verified because credentials were unavailable. |
+| Cloudflare Workers AI | Optional `cloudflare-workers` (0.5.3+) | Native binding contract, installed ESM/CJS entries, generated Workers types and eight workerd fixture scenarios passed without `nodejs_compat`; real Cloudflare inference and latency improvements remain unverified. |
 
-ESM, CommonJS and TypeScript declarations are tested on Node.js. SDK execution inside browsers, Workers, Bun and Deno remains unverified; the browser-use example runs the SDK in Node.js and controls Chrome. Chat/text generation and model response streaming are not implemented. Browser use currently covers public search and reading with caller-supplied text; iframe/canvas interaction and persistent login sessions are not implemented. GitHub runs include successful navigation and a later 429 failure; the npm task remains blocked by browser verification.
+ESM, CommonJS and TypeScript declarations are tested on Node.js. The native Workers client and composition modules also run in actual workerd with controlled inference responses. SDK execution inside browsers, Bun and Deno remains unverified; the browser-use example runs the SDK in Node.js and controls Chrome. Chat/text generation and model response streaming are not implemented. Browser use currently covers public search and reading with caller-supplied text; iframe/canvas interaction and persistent login sessions are not implemented. GitHub runs include successful navigation and a later 429 failure; the npm task remains blocked by browser verification.
 
 ## Installation
 
@@ -49,7 +53,7 @@ npm run check
 npm run test:package
 ```
 
-Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.5.2.tgz` package. For example, when the two projects are sibling directories:
+Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.5.3.tgz` package. For example, when the two projects are sibling directories:
 
 ```sh
 npm install ../sytem-one-sdk
@@ -81,7 +85,7 @@ result.answers.interrupt.probability;   // number, P(true)
 result.usage.inputTokens;               // number | undefined
 ```
 
-Built-in adapters supply their default URL and model. Choose an adapter and provide its credentials; Cloudflare also needs your account ID. Normal use does not require looking up a `baseURL` or model ID. `baseURL` remains an optional override for proxies and compatible services, and `model` can pin a version or select another supported decision model. The client does not infer a provider from the hostname.
+Built-in adapters supply their default URL and model. Choose an adapter and provide its credentials; the Cloudflare REST adapter also needs your account ID. Normal use does not require looking up a `baseURL` or model ID. `baseURL` remains an optional override for proxies and compatible services, and `model` can pin a version or select another supported decision model. The client does not infer a provider from the hostname. Inside Workers, use the [native binding client](#native-cloudflare-workers-binding-053) with `env.AI`.
 
 ```ts
 const direct = new SystemOne({
@@ -113,7 +117,7 @@ The actual model determines limits on option counts, scoring levels, and context
 
 ## Optional decision composition (0.4.0+)
 
-These modules work with `SystemOne` and any wrapper implementing the exported `EvaluationClient` type. They do not select providers or add runtime dependencies, and the core does not import them. Composition declarations require TypeScript 5.4+.
+These modules work with `SystemOne`, `CloudflareWorkers` and any wrapper implementing the exported `EvaluationClient` type. They do not select providers or add runtime dependencies, and the core does not import them. Composition declarations require TypeScript 5.4+.
 
 | Entry point | Functions |
 | --- | --- |
@@ -209,6 +213,8 @@ These commands use real model requests and actual public pages. Every step obser
 
 Explicit client settings override adapter defaults. A request's `model` overrides the client's model. Custom adapters can supply `defaultBaseURL` and `defaultModel`, too; only adapters without a default URL require `baseURL`. Account-specific defaults can be built in an adapter factory, as Cloudflare does.
 
+The separate `createCloudflareWorkers({ binding: env.AI })` client (0.5.3+) calls the native binding with default model `typesafe/jev`. It does not take `baseURL`, `accountId` or `apiKey`.
+
 For the default native protocol, custom addresses are resolved as follows:
 
 | `baseURL` | Default protocol | Request URL or path |
@@ -293,7 +299,7 @@ console.log(result.answers.refund.probability);
 
 The factory constructs the account-specific URL and selects `typesafe/jev`. It implements the model page's REST protocol: `POST /client/v4/accounts/{accountId}/ai/run` with `{ model, input: { state, questions } }`. It maps `boolean` to native `noul`, preserves probabilities and confidence, and normalizes token usage. Explicit `baseURL` overrides support API roots or proxy endpoints ending in `/ai/run`; `model` overrides are sent unchanged.
 
-This is a REST adapter using the existing Fetch transport; native Workers `env.AI.run()` bindings are a separate interface. No Cloudflare SDK dependency is added. The existing `decisions`, `policies`, and `batch` modules work with this client unchanged.
+This is a REST adapter using the existing Fetch transport. For native Workers `env.AI.run()` calls, use the separate [binding client](#native-cloudflare-workers-binding-053). No Cloudflare SDK dependency is added. The existing `decisions`, `policies`, and `batch` modules work with both clients unchanged.
 
 Use 0.5.2+ for Cloudflare AI runner responses containing `state: "Completed"` and a nested `result`. The adapter unwraps the REST and runner envelopes, validates each layer, and preserves the model's answers and usage. Failed, pending, malformed or ambiguous results raise `ResponseValidationError` without retrying. Direct model results and simple `result` envelopes remain supported.
 
@@ -305,6 +311,47 @@ npm run test:live:cloudflare
 ```
 
 The opt-in live check makes three real requests with no retries and saves sanitized reports under `.artifacts/`. It requires Cloudflare credentials and is never run by ordinary tests or CI. Protocol fixtures and local HTTP tests do not establish live account access. See the [Cloudflare contract and verification scope](docs/cloudflare.md) ([中文](docs/cloudflare.zh-CN.md)).
+
+## Native Cloudflare Workers binding (0.5.3+)
+
+Inside a Worker request handler, pass `env.AI` to the optional client. `env` and `request` below are supplied by the handler; Wrangler-generated `Env.AI` types are supported without casts.
+
+```ts
+import { choice } from '@system-one-ai/sdk';
+import { createCloudflareWorkers } from '@system-one-ai/sdk/cloudflare-workers';
+
+const client = createCloudflareWorkers({
+  binding: env.AI,
+  timeoutMs: 1500,
+  maxRetries: 0,
+});
+const result = await client.evaluate({
+  state: { message: 'I was charged twice.' },
+  questions: {
+    department: choice('Which team should handle this?', {
+      billing: 'Payments, charges, refunds',
+      technical: 'Bugs and integration problems',
+    }),
+  },
+}, { signal: request.signal });
+
+result.answers.department.choice; // 'billing' | 'technical'
+result.response.requestId;         // Per-response ID, when supplied
+```
+
+Add the binding to your service's Wrangler configuration:
+
+```jsonc
+{
+  "ai": { "binding": "AI" }
+}
+```
+
+The client defaults to `typesafe/jev` and implements `EvaluationClient`. It needs no model REST token, account ID or base URL; deployment authentication and model usage billing still apply. Your API service continues to own public authentication, tenant scope, quotas and its response contract.
+
+Native calls share Cloudflare envelope decoding and bounded Response reading with the REST client. The SDK forwards cancellation, enforces a total deadline, preserves per-response metadata and applies the same result validation. A binding exception before a Response produces sanitized `BindingError` without an invented HTTP status or automatic retry. Forwarding cancellation does not guarantee remote inference stops or avoids billing. Nonempty `providerOptions`, streaming and Gateway routing are outside this interface.
+
+The [integration guide](docs/cloudflare-workers.md) ([中文](docs/cloudflare-workers.zh-CN.md)) documents options, errors and verification. `examples/cloudflare-workers/` contains a separate POST-only live smoke Worker. Actual workerd fixture checks and generated Workers types passed; hosted inference, model quality and latency improvements have not been verified.
 
 ## Optional Vercel adapter
 
@@ -359,7 +406,7 @@ try {
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `timeoutMs` | 10,000 | Total call budget, including key resolution, retries, backoff, and response body reading |
+| `timeoutMs` | 10,000 | Total call budget, including key resolution, retries, backoff, and body reading |
 | `maxRetries` | 2 | Extra attempts after the initial request; range: 0–100 |
 | `retryDelayMs` | 200 | Initial exponential backoff delay, with jitter |
 | `maxRetryDelayMs` | 2,000 | Cap on the SDK's own backoff; does not shorten the server's Retry-After |
@@ -371,7 +418,7 @@ Override `timeoutMs`, `maxRetries`, and `headers` per call using the second argu
 
 Network failures, HTTP 408, 429, and 5xx responses, including TypeSafe's 529, can be retried. HTTP 401, 403, 422, invalid JSON, and invalid answers do not trigger retries. The server's `Retry-After` supports seconds, HTTP dates, and `retry-after-ms`. If the delay exceeds the remaining budget, the SDK throws `TimeoutError` rather than retrying early.
 
-Errors include `ConfigurationError`, `ValidationError`, `UnsupportedFeatureError`, `ResponseValidationError`, `APIError`, `ConnectionError`, `TimeoutError`, and `RequestAbortedError`. All extend `SystemOneError` and carry a stable `code`.
+Errors include `ConfigurationError`, `ValidationError`, `UnsupportedFeatureError`, `ResponseValidationError`, `APIError`, `ConnectionError`, `BindingError`, `TimeoutError`, and `RequestAbortedError`. All extend `SystemOneError` and carry a stable `code`. `BindingError` is specific to native binding failures before a Response is available; it is not automatically retried.
 
 The SDK does not log keys or request bodies, and does not attach server error bodies that might echo sensitive information to exceptions. `APIError` retains the status code, request ID, and retry delay. The SDK manages authentication, Content-Type, Host, and protocol headers; application headers cannot override them. Requests do not automatically follow redirects, and adapters cannot send credentials to an origin different from `baseURL`.
 
@@ -426,13 +473,15 @@ node --env-file=.env .examples/examples/realtime-agent.js
 
 Alternatively, set environment variables in your shell and run `npm run example` or `npm run example:agent`.
 
-`npm run example:decisions` runs the file-inbox workflow and `npm run example:support` runs the persistent support workflow described above. They read the selected provider's local configuration file. `npm run example:uncertainty` hands unclear requests to an application callback, and `npm run example:batch` scores three independent code snippets with bounded concurrency; those two examples read `.env`. Without `SLOW_THINK_URL`, the uncertainty example reports a pending handoff rather than calling a slow model.
+`npm run example:decisions` runs the file-inbox workflow and `npm run example:support` runs the persistent support workflow described above. They read the selected provider's local configuration file. `npm run example:uncertainty` hands unclear requests to an application callback, and `npm run example:batch` scores three independent code snippets with bounded concurrency; those two examples read `.env`. Without `SLOW_THINK_URL`, the uncertainty example reports a pending handoff rather than calling a slow-model service.
 
 `npm run test:live:composition` directly reads `.env`, makes three real requests on success with no retries, and saves sanitized current and timestamped reports under `.artifacts/`. It verifies dynamic action resolution, policies and heterogeneous batch evaluations without calling a slow-model service.
 
 `npm test` stays offline, covering protocols, cancellation, timeouts, retries, errors, and actual local HTTP requests. `npm run typecheck` checks TypeScript inference. Package tests install the tarball into an isolated temporary project, verify the ESM/CommonJS core and optional entry points and their declarations, and confirm that importing the core does not load Vercel.
 
 `npm run check` also runs `test:scenarios`, which compiles the workflows and tests their actual local executors using offline model fixtures. `test:live:decisions` is separate and opt-in; CI never invokes paid models.
+
+For the native Workers entry, run `npm run build` followed by `node scripts/test-cloudflare-workers-runtime.mjs`. This installs pinned Wrangler tooling and the built tarball in an isolated temporary consumer, checks generated `Env.AI` types, and executes eight fixture scenarios in actual workerd without `nodejs_compat`. The recorded native binding suite also includes 19 Node regression tests. These checks use controlled inference responses and do not call a real model.
 
 Official API integration checks use a separate command that reads this project's `.env` and makes four real requests:
 
@@ -446,7 +495,7 @@ See the [design document](docs/design.md), [Jev API research](docs/jev-api.md), 
 
 ## CI and releases
 
-Pushes to `main` and pull requests run type checking, offline tests, builds, and package installation checks on Node.js 20, 22, and 24. Version tags such as `v0.4.0` trigger the release workflow, which publishes the tested tarball to npm using Trusted Publishing and then creates a GitHub Release with that same package and its checksum. Prereleases use the npm `next` tag.
+Pushes to `main` and pull requests run type checking, offline tests, builds, and package installation checks on Node.js 20, 22, and 24. The separate Workers runtime workflow verifies the native binding entry with generated Workers types and workerd fixtures. Version tags such as `v0.5.3` trigger the release workflow, which publishes the tested tarball to npm using Trusted Publishing and then creates a GitHub Release with that same package and its checksum. Prereleases use the npm `next` tag.
 
 See [Releasing the SDK](docs/releasing.md) for the one-time trusted publisher configuration, versioning commands, and how to resume a failed release. CI and release workflows do not run the live model tests.
 

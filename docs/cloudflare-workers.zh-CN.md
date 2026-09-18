@@ -2,7 +2,7 @@
 
 [English](cloudflare-workers.md) | **简体中文**
 
-这是 0.5.2 的 REST 支持之后新增、尚未发布的入口。通过 `@system-one-ai/sdk/cloudflare-workers` 直接调用 `env.AI.run()`。客户端实现现有 `EvaluationClient`，已有 `defineDecision()`、概率策略及 `evaluateMany()` 可以继续使用，运行时依赖保持不变。
+此入口从 0.5.3 起提供，与 Cloudflare REST adapter 并存。通过 `@system-one-ai/sdk/cloudflare-workers` 直接调用 `env.AI.run()`。客户端实现现有 `EvaluationClient`，已有 `defineDecision()`、概率策略及 `evaluateMany()` 可以继续使用，运行时依赖保持不变。
 
 ```ts
 import { choice } from '@system-one-ai/sdk';
@@ -45,5 +45,7 @@ HTTP 408、429、5xx 与响应体读取中断可在同一总期限内重试，�
 `examples/cloudflare-workers/` 提供固定输入的 smoke Worker，通过 POST 主动触发推理，配置关闭公开 workers.dev 路由。使用已认证的 Wrangler 执行 `wrangler dev --config examples/cloudflare-workers/wrangler.jsonc`，然后 POST 到终端打印的本地地址。每次请求均会调用真实 Cloudflare AI 并消耗用量；示例不应作为无认证的生产 API 公开。
 
 新增测试覆盖三种原语、envelope、配置及格式错误、总期限、取消、重试、并发请求 ID、快照、组合模块与 ESM/CJS 入口。类型测试覆盖闭合选项推导与可选入口边界。可控 binding 测试不能证明部署后的 Workers 执行、真实推理、模型质量或延迟提升，这些需要单独验证。
+
+独立的 Workers 集成验证命令为 `npm run build`，然后执行 `node scripts/test-cloudflare-workers-runtime.mjs`。脚本在临时消费项目中安装 Wrangler 4.135.0 和 SDK tarball，在不添加类型断言、不跳过声明检查的条件下验证真实生成的 `Env.AI` 与 Workers Web API 类型，并在无需 `nodejs_compat` 的 workerd 中执行成功响应、重试、取消、超时、非法输出、超大输出、并发请求 ID 和组合调用共 8 个场景。这些检查及 19 项 binding Node 回归于 2026-09-18 通过；推理响应是可控 fixture，真实 Cloudflare 账户访问、线上推理和延迟提升尚未验证。功能验证记录：[Node CI](https://github.com/ziyu/sytem-one-sdk/actions/runs/35352387802)、[Workers runtime](https://github.com/ziyu/sytem-one-sdk/actions/runs/35352387792)。
 
 协议依据（2026-09-18 核对）：[Jev 模型页](https://developers.cloudflare.com/ai/models/typesafe/jev/)、[binding 配置](https://developers.cloudflare.com/workers-ai/configuration/bindings/)、[workerd AI binding 源码](https://github.com/cloudflare/workerd/blob/main/src/cloudflare/internal/ai-api.ts)。
