@@ -1,4 +1,4 @@
-export type ErrorCode = 'configuration' | 'validation' | 'unsupported' | 'response' | 'http' | 'network' | 'timeout' | 'aborted';
+export type ErrorCode = 'configuration' | 'validation' | 'unsupported' | 'response' | 'http' | 'network' | 'binding' | 'timeout' | 'aborted';
 
 export class SystemOneError extends Error {
   constructor(message: string, readonly code: ErrorCode) {
@@ -33,6 +33,10 @@ export class APIError extends SystemOneError {
 }
 export class ConnectionError extends SystemOneError {
   constructor() { super('The System One request could not be completed due to a network error.', 'network'); }
+}
+export class BindingError extends SystemOneError {
+  /** No upstream message/cause or guessed retryable status is attached. */
+  constructor() { super('The model binding failed before returning an HTTP response.', 'binding'); }
 }
 export class TimeoutError extends SystemOneError {
   constructor() { super('The evaluation could not complete within its total time budget.', 'timeout'); }

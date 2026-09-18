@@ -37,6 +37,10 @@
       "import": { "types": "./dist/esm/adapters/cloudflare.d.ts", "default": "./dist/esm/adapters/cloudflare.js" },
       "require": { "types": "./dist/cjs/adapters/cloudflare.d.ts", "default": "./dist/cjs/adapters/cloudflare.js" }
     },
+    "./cloudflare-workers": {
+      "import": { "types": "./dist/esm/cloudflare-workers.d.ts", "default": "./dist/esm/cloudflare-workers.js" },
+      "require": { "types": "./dist/cjs/cloudflare-workers.d.ts", "default": "./dist/cjs/cloudflare-workers.js" }
+    },
     "./decisions": {
       "import": { "types": "./dist/esm/decisions.d.ts", "default": "./dist/esm/decisions.js" },
       "require": { "types": "./dist/cjs/decisions.d.ts", "default": "./dist/cjs/decisions.js" }

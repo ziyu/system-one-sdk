@@ -3,7 +3,7 @@ export { choice, score, booleanQuestion, defineQuestions } from './questions.js'
 export { systemOneAdapter } from './adapters/system-one.js';
 export {
   SystemOneError, ConfigurationError, ValidationError, UnsupportedFeatureError,
-  ResponseValidationError, APIError, ConnectionError, TimeoutError, RequestAbortedError,
+  ResponseValidationError, APIError, ConnectionError, BindingError, TimeoutError, RequestAbortedError,
 } from './errors.js';
 export type { ErrorCode } from './errors.js';
 export type {
