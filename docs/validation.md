@@ -2,6 +2,21 @@
 
 日期：2026-09-18。版本：`0.2.0`。npm 包名已由本地开发名 `system-one-sdk` 调整为 `@system-one-ai/sdk`；下列官方联调记录来自同一版运行逻辑。
 
+## OpenRouter 增量验证（0.3.0）
+
+新增 `@system-one-ai/sdk/adapters/openrouter`，保持核心零依赖、供应商适配器显式导入。真实推理 4/4 HTTP 200，随后按相同 generation ID 从 OpenRouter 后台回查 4/4 成功；请求与记录中的模型、提供商、原生 tokens、费用一致。完整协议来源、时间、结果和 generation ID 见 [OpenRouter 联调记录](openrouter.md)。以下 0.2.0 表格保留原始历史验证，不与新请求混合统计。
+
+| 0.3.0 检查 | 结果 |
+| --- | --- |
+| TypeScript 严格检查、双格式构建、所有示例编译 | 通过 |
+| Node.js 26.5.0 离线测试 | 123 通过，0 失败 |
+| Node.js 20.20.2 同一测试集 | 123 通过，0 失败 |
+| 实际 tarball 独立安装 | ESM/CJS 原生、Vercel、OpenRouter 调用和声明检查通过 |
+| 可选适配器边界 | 核心不导出或加载 OpenRouter / Vercel |
+| OpenRouter 推理及后台记录 | 4 次 POST 成功，4 条记录回查匹配；未重复推理 |
+
+0.3.0 本地安装包为 `.artifacts/system-one-ai-sdk-0.3.0.tgz`；本次功能开发未发布新的 npm 版本。
+
 ## 已执行
 
 | 检查 | 环境 / 方法 | 结果 |
@@ -46,7 +61,7 @@
 
 ## 尚未验证
 
-Vercel 和 OpenRouter 没有进行本次真实模型调用；不把官方 TypeSafe 的成功推断成其他供应商的成功。
+Vercel 没有进行真实模型调用。OpenRouter 原先没有进行 0.2.0 联调，现在已通过上方 0.3.0 的独立真实请求及后台记录验证。
 
 Cloudflare Workers、浏览器、Bun 和 Deno 未做本次运行验证，也未开展大规模任务质量或并发性能评测。
 

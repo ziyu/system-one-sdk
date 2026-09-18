@@ -13,6 +13,8 @@ assert.ok(pack.files.some(file => file.path === 'dist/esm/index.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/cjs/index.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/esm/adapters/vercel.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/cjs/adapters/vercel.js'));
+assert.ok(pack.files.some(file => file.path === 'dist/esm/adapters/openrouter.js'));
+assert.ok(pack.files.some(file => file.path === 'dist/cjs/adapters/openrouter.js'));
 assert.ok(pack.files.every(file => /^(dist\/|docs\/|README(?:\.zh-CN)?\.md$|LICENSE$|package\.json$)/.test(file.path)), 'Unexpected file in package');
 const consumer = await mkdtemp(path.join(artifacts, 'consumer-'));
 try {
@@ -32,7 +34,9 @@ try {
     assert.equal(manifest.devDependencies?.['@ai-sdk/gateway'], undefined);
     assert.equal('vercelAdapter' in esm, false);
     assert.equal('vercelAdapter' in cjs, false);
-    assert.ok(!Object.keys(require.cache).some(path => path.endsWith('/adapters/vercel.js')), 'Core import must not load the optional adapter');
+    assert.equal('openRouterAdapter' in esm, false);
+    assert.equal('openRouterAdapter' in cjs, false);
+    assert.ok(!Object.keys(require.cache).some(path => path.endsWith('/adapters/vercel.js') || path.endsWith('/adapters/openrouter.js')), 'Core import must not load optional adapters');
     for (const sdk of [esm, cjs]) {
       const client = new sdk.SystemOne({
         apiKey: null,
@@ -55,19 +59,40 @@ try {
       const result = await client.evaluate({state:'on',questions:{on:sdk.booleanQuestion('Is the light on?')}});
       assert.equal(result.answers.on.probability, 0.9);
     }
-    console.log('Installed tarball: ESM/CJS core and optional adapter passed; core does not load Vercel.');
+    const openRouterESM = await import('@system-one-ai/sdk/adapters/openrouter');
+    const openRouterCJS = require('@system-one-ai/sdk/adapters/openrouter');
+    for (const [sdk, optional] of [[esm, openRouterESM], [cjs, openRouterCJS]]) {
+      const client = new sdk.SystemOne({
+        apiKey: 'package-fixture', adapter: optional.openRouterAdapter,
+        fetch: async (url, init) => {
+          assert.equal(url, 'https://openrouter.ai/api/alpha/decisions');
+          assert.equal(JSON.parse(init.body).model, '~typesafe/jev-latest');
+          return new Response(JSON.stringify({id:'gen-dec-package',model:'typesafe/jev-1.13',provider:'TypeSafe',answers:{on:{type:'noul',noul:0.9}},usage:{input_tokens:10,output_tokens:2,cost:0}}));
+        },
+      });
+      const result = await client.evaluate({state:'on',questions:{on:sdk.booleanQuestion('Is the light on?')}});
+      assert.equal(result.answers.on.probability, 0.9);
+      assert.equal(result.providerMetadata.openrouter.generationId, 'gen-dec-package');
+      assert.equal(result.providerMetadata.openrouter.cost, 0);
+    }
+    console.log('Installed tarball: ESM/CJS core, Vercel, and OpenRouter passed; core loads neither optional adapter.');
   `;
   execFileSync(process.execPath, ['--input-type=module', '--eval', smoke], { cwd: consumer, stdio: 'inherit' });
   const typeConsumer = `
     import { SystemOne, choice } from '@system-one-ai/sdk';
     import { vercelAdapter } from '@system-one-ai/sdk/adapters/vercel';
+    import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
     // @ts-expect-error Optional adapters are not part of the core entry point.
     import { vercelAdapter as removedRootExport } from '@system-one-ai/sdk';
+    // @ts-expect-error OpenRouter is an optional subpath, never a core export.
+    import { openRouterAdapter as absentRootExport } from '@system-one-ai/sdk';
     const client = new SystemOne({apiKey: null});
     new SystemOne({apiKey: 'fixture', adapter: vercelAdapter});
+    new SystemOne({apiKey: 'fixture', adapter: openRouterAdapter});
     // @ts-expect-error The former protocol string must not silently persist in declarations.
     new SystemOne({apiKey: 'fixture', protocol: 'vercel'});
     void removedRootExport;
+    void absentRootExport;
     async function run() {
       const result = await client.evaluate({state:'water',questions:{action:choice('Next?',{drink:null,rest:null})}});
       const action: 'drink' | 'rest' = result.answers.action.choice;
@@ -81,6 +106,9 @@ try {
   await writeFile(path.join(consumer, 'tsconfig.json'), JSON.stringify({ compilerOptions: { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', lib: ['ES2022', 'DOM', 'DOM.Iterable'], types: [], strict: true, noEmit: true, skipLibCheck: false }, include: ['consumer.mts', 'consumer.cts'] }));
   const require = createRequire(import.meta.url);
   execFileSync(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', path.join(consumer, 'tsconfig.json')], { cwd: consumer, stdio: 'inherit' });
+  await writeFile(path.join(artifacts, 'package-manifest.json'), JSON.stringify({
+    name: pack.name, version: pack.version, filename: pack.filename, integrity: pack.integrity,
+  }, null, 2) + '\n');
   console.log(`Installed declarations: ESM and CommonJS type inference passed. Package: .artifacts/${pack.filename}`);
 } finally {
   // Only the temporary consumer created by this script is removed. The tarball is retained.

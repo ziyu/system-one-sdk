@@ -49,4 +49,4 @@ Vercel 文档要求 AI SDK 7+ 的 Evaluation 能力，明确不支持通过 Open
 
 ## 兼容边界
 
-System One 是能力类别，不代表所有供应商已经遵循同一个 HTTP 标准。本项目默认支持 TypeSafe-compatible，Vercel Evaluation 通过可选入口提供，也支持用户自定义适配器。其他模型需要具备相应问题能力；不同 wire protocol 接入后可复用同一业务接口。TypeSafe 真实调用记录见 `validation.md`；Vercel 和 OpenRouter 没有本次真实调用验证。
+System One 是能力类别，不代表所有供应商已经遵循同一个 HTTP 标准。本项目默认支持 TypeSafe-compatible，Vercel Evaluation 与 OpenRouter Decisions 通过可选入口提供，也支持用户自定义适配器。其他模型需要具备相应问题能力；不同 wire protocol 接入后可复用同一业务接口。TypeSafe 真实调用记录见 `validation.md`；OpenRouter 的独立真实请求及后台记录核验见 [openrouter.md](openrouter.md)。Vercel 尚未进行真实调用验证。

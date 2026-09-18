@@ -22,7 +22,7 @@ npm run check
 npm run test:package
 ```
 
-其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.2.0.tgz`。例如两个项目同处一层目录时：
+其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.3.0.tgz`。例如两个项目同处一层目录时：
 
 ```sh
 npm install ../sytem-one-sdk
@@ -95,6 +95,64 @@ SDK 以 `boolean` 命名真假问题，TypeSafe 适配器会将它转换成原�
 | `https://custom.example/prefix/v1` | TypeSafe-compatible | `/prefix/v1/systemone` |
 
 可以直接提供以 `/systemone` 结尾的完整接口地址。自定义路径前缀会被保留；只有没有路径的 API 根地址会补上 `/v1`。
+
+## 可选 OpenRouter 适配器
+
+需要 SDK 0.3.0 或更高版本；0.2.0 不包含此入口。
+
+```ts
+import { SystemOne, choice } from '@system-one-ai/sdk';
+import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
+
+const openrouter = new SystemOne({
+  adapter: openRouterAdapter,
+  apiKey: process.env.SYSTEM_ONE_API_KEY!,
+  baseURL: 'https://openrouter.ai/api/alpha',
+  model: '~typesafe/jev-latest',
+});
+
+const result = await openrouter.evaluate({
+  state: '同一订单扣款两次，请退回重复扣款。',
+  questions: {
+    department: choice('由哪个团队处理？', {
+      billing: '付款与退款',
+      support: '软件故障',
+    }),
+  },
+  providerOptions: { openrouter: { session_id: 'my-agent-session' } },
+});
+
+console.log(result.answers.department.choice); // 'billing' | 'support'
+console.log(result.providerMetadata?.openrouter); // 服务端提供的 generationId、provider、cost
+```
+
+实际调用 `POST /api/alpha/decisions`，不使用 Chat Completions。适配器转换 `boolean` / `noul`，保留原始概率、confidence 并归一化 token 字段。`~typesafe/jev-latest` 开头的 `~` 是模型 ID 的一部分；裸 `jev-latest` 属于 TypeSafe 直连命名，适配器不会自动重写。显式模型名原样发送，实际解析的模型放在 `result.model`。
+
+`baseURL` 支持站点根地址、`/api`、`/api/v1`、`/api/alpha` 或完整 `/api/alpha/decisions`。这些根路径别名仅在显式选择此适配器时转换，自定义代理前缀会保留。核心入口不导入该适配器，也不增加供应商 SDK 依赖。
+
+`providerOptions.openrouter` 支持 API 原生字段 `provider`、`session_id`、`trace`、`user`。未知字段会被拒绝，不能覆盖 model、questions、state。应用标识可通过标准 `headers` 设置 `HTTP-Referer` 和 `X-OpenRouter-Title`。此接口属于 alpha 协议，来源和实测结果见 [OpenRouter 接入与联调](docs/openrouter.md)。
+
+真实联调使用独立 `.env.openrouter`：
+
+```dotenv
+SYSTEM_ONE_BASE_URL=https://openrouter.ai/api/alpha/decisions
+SYSTEM_ONE_MODEL=~typesafe/jev-latest
+SYSTEM_ONE_API_KEY=your-openrouter-key
+```
+
+```sh
+npm run test:live:openrouter
+```
+
+命令直接读取该文件，不受父进程环境变量覆盖；发出四次真实推理请求，不重试，然后回查 OpenRouter 的 generation 记录。端点、时间、generation ID、答案、用量、费用保存在 `.artifacts/live-openrouter.json` 和带时间戳的报告中，不包含密钥或鉴权头。
+
+推理已成功但暂时未查到 generation 记录时，可以只核对原 ID，不重新发起推理：
+
+```sh
+node scripts/test-openrouter-live.mjs --verify-only
+```
+
+`npm run example:openrouter` 会用同一环境文件运行 `examples/openrouter.ts`。真实命令会产生 API 用量；普通测试保持离线。
 
 ## 可选 Vercel 适配器
 
@@ -227,6 +285,12 @@ npm run test:live
 它验证中文行为决策、退款分类、评分、真假判断，以及字符串、对象、数组状态；成功结果写入 `.artifacts/live-typesafe.json`。该命令会产生实际 API 用量，默认不重试。输出包含答案、用量和耗时，不包含 API key 或鉴权头。本次真实验证结果见 `docs/validation.md`。
 
 设计和来源见 [docs/design.md](docs/design.md)；Jev 与 API 调研见 [docs/jev-api.md](docs/jev-api.md)；实际验证记录见 [docs/validation.md](docs/validation.md)。
+
+## CI 与发布
+
+推送到 `main` 或创建 Pull Request 时，GitHub Actions 会在 Node.js 20、22、24 上检查类型、离线测试、构建及实际安装包。推送 `v0.3.0` 这样的版本标签会触发发布：先用 npm Trusted Publishing 发布已验证的包，再创建 GitHub Release，附上同一安装包及校验文件。预发布版本使用 npm 的 `next` 标签。
+
+一次性可信发布配置、版本操作和失败重跑方法见 [发布说明](docs/releasing.md)。CI 和发布工作流不会执行付费模型联调。
 
 ## 许可证
 

@@ -1,8 +1,16 @@
 {
   "name": "@system-one-ai/sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Dependency-free, typed System One decisions for Jev and compatible models, with optional protocol adapters.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ziyu/sytem-one-sdk.git"
+  },
+  "homepage": "https://github.com/ziyu/sytem-one-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/ziyu/sytem-one-sdk/issues"
+  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
@@ -21,6 +29,10 @@
       "import": { "types": "./dist/esm/adapters/vercel.d.ts", "default": "./dist/esm/adapters/vercel.js" },
       "require": { "types": "./dist/cjs/adapters/vercel.d.ts", "default": "./dist/cjs/adapters/vercel.js" }
     },
+    "./adapters/openrouter": {
+      "import": { "types": "./dist/esm/adapters/openrouter.d.ts", "default": "./dist/esm/adapters/openrouter.js" },
+      "require": { "types": "./dist/cjs/adapters/openrouter.d.ts", "default": "./dist/cjs/adapters/openrouter.js" }
+    },
     "./package.json": "./package.json"
   },
   "files": ["dist", "README.md", "README.zh-CN.md", "LICENSE", "docs"],
@@ -32,9 +44,11 @@
     "check": "npm run typecheck && npm run build && npm test",
     "test:package": "node scripts/test-package.mjs",
     "test:live": "npm run build && node --env-file=.env scripts/test-live.mjs",
+    "test:live:openrouter": "npm run build && node scripts/test-openrouter-live.mjs",
     "examples:build": "tsc -p tsconfig.examples.json",
     "example": "npm run examples:build && node .examples/examples/basic.js",
     "example:agent": "npm run examples:build && node .examples/examples/realtime-agent.js",
+    "example:openrouter": "npm run examples:build && node --env-file=.env.openrouter .examples/examples/openrouter.js",
     "prepack": "npm run build"
   },
   "devDependencies": {

@@ -22,7 +22,7 @@ npm run check
 npm run test:package
 ```
 
-Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.2.0.tgz` package. For example, when the two projects are sibling directories:
+Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.3.0.tgz` package. For example, when the two projects are sibling directories:
 
 ```sh
 npm install ../sytem-one-sdk
@@ -95,6 +95,64 @@ The actual model determines limits on option counts, scoring levels, and context
 | `https://custom.example/prefix/v1` | TypeSafe-compatible | `/prefix/v1/systemone` |
 
 You can also provide the complete endpoint ending in `/systemone`. Custom path prefixes are preserved. The SDK adds `/v1` only when the API URL has no path.
+
+## Optional OpenRouter adapter
+
+Requires SDK version 0.3.0 or later. Version 0.2.0 does not contain this entry point.
+
+```ts
+import { SystemOne, choice } from '@system-one-ai/sdk';
+import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
+
+const openrouter = new SystemOne({
+  adapter: openRouterAdapter,
+  apiKey: process.env.SYSTEM_ONE_API_KEY!,
+  baseURL: 'https://openrouter.ai/api/alpha',
+  model: '~typesafe/jev-latest',
+});
+
+const result = await openrouter.evaluate({
+  state: 'Please refund the duplicate charge.',
+  questions: {
+    department: choice('Which team should handle this?', {
+      billing: 'Payments and refunds',
+      support: 'Software issues',
+    }),
+  },
+  providerOptions: { openrouter: { session_id: 'my-agent-session' } },
+});
+
+console.log(result.answers.department.choice); // 'billing' | 'support'
+console.log(result.providerMetadata?.openrouter); // generationId, provider, cost (when returned)
+```
+
+This uses OpenRouter's `POST /api/alpha/decisions`, not Chat Completions. It translates `boolean` to `noul`, preserves native probabilities and confidence, and normalizes token usage. The `~` in `~typesafe/jev-latest` is part of the model ID; bare `jev-latest` is a TypeSafe-direct name and is not rewritten. Explicit model IDs are sent unchanged. The resolved model is returned in `result.model`.
+
+`baseURL` accepts the origin, `/api`, `/api/v1`, `/api/alpha`, or the full `/api/alpha/decisions` endpoint. Only this explicitly selected adapter translates those root aliases; custom proxy prefixes are preserved. Neither this adapter nor a provider SDK is imported by the core entry point.
+
+Use `providerOptions.openrouter` for the API-native `provider`, `session_id`, `trace`, and `user` fields. Unknown options are rejected, and options cannot replace the model, questions, or state. Standard `headers` can carry `HTTP-Referer` and `X-OpenRouter-Title` for app attribution. This alpha protocol may change. See [OpenRouter protocol and live verification](docs/openrouter.md) for sources and recorded results.
+
+For a live check, configure a separate `.env.openrouter`:
+
+```dotenv
+SYSTEM_ONE_BASE_URL=https://openrouter.ai/api/alpha/decisions
+SYSTEM_ONE_MODEL=~typesafe/jev-latest
+SYSTEM_ONE_API_KEY=your-openrouter-key
+```
+
+```sh
+npm run test:live:openrouter
+```
+
+This command reads that file directly, makes four real inference requests with no retries, and verifies their generation records through OpenRouter. It saves timestamps, endpoint, generation IDs, answers, token usage, and cost in `.artifacts/live-openrouter.json` and a timestamped report. Inherited shell settings do not override the file. Credentials and authentication headers are excluded from reports.
+
+If inference succeeds but generation records are not yet available, check the existing IDs again without repeating inference:
+
+```sh
+node scripts/test-openrouter-live.mjs --verify-only
+```
+
+`npm run example:openrouter` runs the smaller example in `examples/openrouter.ts` with the same environment file. Live commands consume API usage; ordinary tests remain offline.
 
 ## Optional Vercel adapter
 
@@ -227,6 +285,12 @@ npm run test:live
 It verifies Chinese action selection, refund classification, scoring, true/false judgments, and string, object, and array states. Successful results are written to `.artifacts/live-typesafe.json`. This command consumes actual API usage and does not retry by default. Its output includes answers, usage, and latency, but no API keys or authentication headers. Recorded live results are in `docs/validation.md`.
 
 See the [design document](docs/design.md), [Jev API research](docs/jev-api.md), and [validation record](docs/validation.md) for implementation details and sources. These supporting documents are currently in Chinese.
+
+## CI and releases
+
+Pushes to `main` and pull requests run type checking, offline tests, builds, and package installation checks on Node.js 20, 22, and 24. Version tags such as `v0.3.0` trigger the release workflow, which publishes the tested tarball to npm using Trusted Publishing and then creates a GitHub Release with that same package and its checksum. Prereleases use the npm `next` tag.
+
+See [Releasing the SDK](docs/releasing.md) for the one-time trusted publisher configuration, versioning commands, and how to resume a failed release. CI and release workflows do not run the live model tests.
 
 ## License
 
