@@ -91,6 +91,11 @@ export interface EvaluationResult<Q extends Questions> {
   };
 }
 
+/** Structural interface shared by optional composition modules and application wrappers. */
+export interface EvaluationClient {
+  evaluate<const Q extends Questions>(request: EvaluateRequest<Q>, options?: RequestOptions): Promise<EvaluationResult<Q>>;
+}
+
 export interface AdapterContext {
   readonly baseURL: string;
   readonly model: string;

@@ -22,7 +22,7 @@ npm run check
 npm run test:package
 ```
 
-Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.3.0.tgz` package. For example, when the two projects are sibling directories:
+Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.4.0.tgz` package. For example, when the two projects are sibling directories:
 
 ```sh
 npm install ../sytem-one-sdk
@@ -80,11 +80,75 @@ const compatible = new SystemOne({
 
 The public SDK calls true/false questions `boolean`. The TypeSafe adapter converts them to native `noul` questions and maps the returned `noul` value to `probability`. The value retains its probability semantics; the SDK does not apply a threshold to turn it into true or false.
 
-`state` accepts a string, JSON object, or array. An array is still one shared state, not a batch of independent requests. Multiple questions share that state. Call `evaluate` separately for independent states.
+`state` accepts a string, JSON object, or array. An array is still one shared state, not a batch of independent requests. Multiple questions share that state. For independent states, call `evaluate` separately or use the optional `evaluateMany` scheduler below.
 
 The actual model determines limits on option counts, scoring levels, and context length. The SDK does not impose one Jev version's limits on every provider. Requests that exceed a model's capabilities retain the server's error.
 
 `instructions` and descriptions for options, scoring levels, and true/false criteria accept strings, JSON objects, arrays, or null. Nested content must be valid JSON. Circular references, undefined, NaN, functions, and class instances are rejected before a request is sent. Use `defineQuestions()` to preserve literal types when sharing question definitions.
+
+## Optional decision composition (0.4.0+)
+
+These modules work with `SystemOne` and any wrapper implementing the exported `EvaluationClient` type. They do not select providers or add runtime dependencies, and the core does not import them. Composition declarations require TypeScript 5.4+.
+
+| Entry point | Functions |
+| --- | --- |
+| `@system-one-ai/sdk/decisions` | `choiceFrom`, `defineDecision` |
+| `@system-one-ai/sdk/policies` | `gateChoice`, `gateBoolean` |
+| `@system-one-ai/sdk/batch` | `evaluateMany` |
+
+```ts
+import { choiceFrom, defineDecision } from '@system-one-ai/sdk/decisions';
+import { gateChoice } from '@system-one-ai/sdk/policies';
+
+const targets = choiceFrom({
+  instructions: 'Choose the requested device.',
+  items: [{ id: 'desk', label: 'Desk lamp', on: false }],
+  id: device => device.id,
+  describe: device => device.label,
+});
+const definition = defineDecision({
+  instructions: 'Choose an action; ask when the request is unclear.',
+  actions: {
+    turn_on: { description: 'Turn on a device', parameters: { device: targets } },
+    ask: { description: 'Request clarification' },
+  },
+});
+const { decision, evaluation } = await definition.evaluate(client, {
+  state: 'Turn on the desk lamp.',
+}, { maxRetries: 0 });
+
+const actionGate = gateChoice(evaluation.answers.action, {
+  minProbability: 0.8, abstain: ['ask'],
+});
+if (actionGate.status === 'accepted' && decision.action === 'turn_on') {
+  const targetGate = gateChoice(decision.parameterAnswers.device, { minProbability: 0.8 });
+  if (targetGate.status === 'accepted') {
+    decision.parameters.device.on = true; // Explicit application action on the original object.
+  }
+}
+```
+
+Candidate IDs and descriptions are snapshotted, while resolved objects preserve identity. Duplicate IDs reject; an empty set requires an explicit `none: { id, description }`, which adds `undefined` to the resolved type. A decision evaluates all predefined branches in one call, then exposes only the selected branch's typed parameters and named `parameterAnswers`. Ordinary choice, score and boolean parameters produce option IDs, fractional scores and P(true), respectively. Keep `evaluation` for full evidence and provider metadata.
+
+Policies have no default thresholds. `gateChoice` can require selected probability, margin over alternatives, and/or provider confidence. `gateBoolean` uses `maxFalseProbability` and `minTrueProbability` with an uncertain interval between them. Results explicitly distinguish acceptance, uncertainty and choice abstention. Missing evidence stays uncertain; API failures stay errors. Example thresholds are illustrative. Action execution and slow-thinking callbacks belong to the application.
+
+```ts
+import { evaluateMany } from '@system-one-ai/sdk/batch';
+
+const report = await evaluateMany(client, [
+  { id: 'first', request: { state: 'Turn on the desk lamp.', questions: definition.questions } },
+  { id: 'second', request: { state: 'I need help.', questions: definition.questions } },
+], { concurrency: 2, requestOptions: { timeoutMs: 5000, maxRetries: 0 } });
+
+for (const item of report.items) {
+  if (item.status === 'fulfilled') console.log(item.id, definition.resolve(item.value));
+  else console.log(item.id, item.status); // rejected or cancelled; original error retained
+}
+```
+
+The default concurrency is 4; this is client-side scheduling, not a provider batch endpoint. Input order and IDs are preserved, and individual failures do not discard other results. A batch `signal` aborts active work and skips queued work, returning a partial report. Per-item timeouts start at dispatch. `summary.reportedUsage` and `usageCoverage` distinguish reported tokens from missing counts; they are not a complete bill for failed or cancelled calls.
+
+See the [complete API contract](docs/composition.md) ([中文](docs/composition.zh-CN.md)) for types, validation, snapshots, parameter evidence, cancellation and usage semantics.
 
 ## URLs and protocols
 
@@ -274,6 +338,10 @@ node --env-file=.env .examples/examples/realtime-agent.js
 
 Alternatively, set environment variables in your shell and run `npm run example` or `npm run example:agent`.
 
+The new examples read `.env`: `npm run example:decisions` evaluates an action, checks action and target evidence, and executes a local handler; `npm run example:uncertainty` hands unclear requests to an application callback; `npm run example:batch` scores three independent code snippets with bounded concurrency. Without `SLOW_THINK_URL`, the uncertainty example reports a pending handoff rather than calling a slow model.
+
+`npm run test:live:composition` directly reads `.env`, makes three real requests on success with no retries, and saves sanitized current and timestamped reports under `.artifacts/`. It verifies dynamic action resolution, policies and heterogeneous batch evaluations without calling a slow-model service.
+
 `npm test` stays offline, covering protocols, cancellation, timeouts, retries, errors, and actual local HTTP requests. `npm run typecheck` checks TypeScript inference. Package tests install the tarball into an isolated temporary project, verify the ESM/CommonJS core and optional entry points and their declarations, and confirm that importing the core does not load Vercel.
 
 Official API integration checks use a separate command that reads this project's `.env` and makes four real requests:
@@ -288,7 +356,7 @@ See the [design document](docs/design.md), [Jev API research](docs/jev-api.md), 
 
 ## CI and releases
 
-Pushes to `main` and pull requests run type checking, offline tests, builds, and package installation checks on Node.js 20, 22, and 24. Version tags such as `v0.3.0` trigger the release workflow, which publishes the tested tarball to npm using Trusted Publishing and then creates a GitHub Release with that same package and its checksum. Prereleases use the npm `next` tag.
+Pushes to `main` and pull requests run type checking, offline tests, builds, and package installation checks on Node.js 20, 22, and 24. Version tags such as `v0.4.0` trigger the release workflow, which publishes the tested tarball to npm using Trusted Publishing and then creates a GitHub Release with that same package and its checksum. Prereleases use the npm `next` tag.
 
 See [Releasing the SDK](docs/releasing.md) for the one-time trusted publisher configuration, versioning commands, and how to resume a failed release. CI and release workflows do not run the live model tests.
 

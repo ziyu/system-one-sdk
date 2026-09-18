@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Dependency-free, typed System One decisions for Jev and compatible models, with optional protocol adapters.",
   "license": "MIT",
   "repository": {
@@ -33,6 +33,18 @@
       "import": { "types": "./dist/esm/adapters/openrouter.d.ts", "default": "./dist/esm/adapters/openrouter.js" },
       "require": { "types": "./dist/cjs/adapters/openrouter.d.ts", "default": "./dist/cjs/adapters/openrouter.js" }
     },
+    "./decisions": {
+      "import": { "types": "./dist/esm/decisions.d.ts", "default": "./dist/esm/decisions.js" },
+      "require": { "types": "./dist/cjs/decisions.d.ts", "default": "./dist/cjs/decisions.js" }
+    },
+    "./policies": {
+      "import": { "types": "./dist/esm/policies.d.ts", "default": "./dist/esm/policies.js" },
+      "require": { "types": "./dist/cjs/policies.d.ts", "default": "./dist/cjs/policies.js" }
+    },
+    "./batch": {
+      "import": { "types": "./dist/esm/batch.d.ts", "default": "./dist/esm/batch.js" },
+      "require": { "types": "./dist/cjs/batch.d.ts", "default": "./dist/cjs/batch.js" }
+    },
     "./package.json": "./package.json"
   },
   "files": ["dist", "README.md", "README.zh-CN.md", "LICENSE", "docs"],
@@ -45,10 +57,14 @@
     "test:package": "node scripts/test-package.mjs",
     "test:live": "npm run build && node --env-file=.env scripts/test-live.mjs",
     "test:live:openrouter": "npm run build && node scripts/test-openrouter-live.mjs",
+    "test:live:composition": "npm run build && node scripts/test-composition-live.mjs",
     "examples:build": "tsc -p tsconfig.examples.json",
     "example": "npm run examples:build && node .examples/examples/basic.js",
     "example:agent": "npm run examples:build && node .examples/examples/realtime-agent.js",
     "example:openrouter": "npm run examples:build && node --env-file=.env.openrouter .examples/examples/openrouter.js",
+    "example:decisions": "npm run examples:build && node --env-file=.env .examples/examples/decisions.js",
+    "example:uncertainty": "npm run examples:build && node --env-file=.env .examples/examples/uncertainty.js",
+    "example:batch": "npm run examples:build && node --env-file=.env .examples/examples/batch.js",
     "prepack": "npm run build"
   },
   "devDependencies": {

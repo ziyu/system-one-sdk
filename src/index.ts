@@ -9,6 +9,6 @@ export type { ErrorCode } from './errors.js';
 export type {
   JsonValue, JsonObject, Description, State, ChoiceCriteria, ChoiceQuestion, ScoreQuestion,
   BooleanQuestion, Question, QuestionType, Questions, ChoiceAnswer, ScoreAnswer, BooleanAnswer,
-  Answer, AnswerFor, Answers, Usage, Rounding, EvaluateRequest, RequestOptions, EvaluationResult,
+  Answer, AnswerFor, Answers, Usage, Rounding, EvaluateRequest, RequestOptions, EvaluationResult, EvaluationClient,
   AdapterContext, PreparedRequest, ProviderResponse, SystemOneAdapter, Fetch, ApiKey, SystemOneOptions,
 } from './types.js';

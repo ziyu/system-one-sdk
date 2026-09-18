@@ -22,7 +22,7 @@ npm run check
 npm run test:package
 ```
 
-其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.3.0.tgz`。例如两个项目同处一层目录时：
+其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.4.0.tgz`。例如两个项目同处一层目录时：
 
 ```sh
 npm install ../sytem-one-sdk
@@ -80,11 +80,75 @@ const compatible = new SystemOne({
 
 SDK 以 `boolean` 命名真假问题，TypeSafe 适配器会将它转换成原生 `noul`，并把返回的 `noul` 转换成 `probability`。这个值保持概率语义，SDK 不会自动把它阈值化为 true/false。
 
-`state` 可以是字符串、JSON 对象或数组；数组仍然是一份共享状态，不代表多条独立请求。多个问题共用同一份状态。需要独立状态时分别调用 `evaluate`。
+`state` 可以是字符串、JSON 对象或数组；数组仍然是一份共享状态，不代表多条独立请求。多个问题共用同一份状态。需要独立状态时分别调用 `evaluate`，或使用下方可选的 `evaluateMany` 调度器。
 
 候选项数量、评分等级数量和上下文长度的上限由实际模型决定，SDK 不把某一代 Jev 的上限固定成所有供应商的限制；超出当前模型能力时保留服务端错误。
 
 `instructions` 和候选项、等级、真假标准的描述可以是字符串、JSON 对象、数组或 null。嵌套内容必须是有效 JSON；循环引用、undefined、NaN、函数和类实例会在发请求前报错。共享问题定义可用 `defineQuestions()` 保存字面量类型。
+
+## 可选决策组合（0.4.0+）
+
+这些模块适用于 `SystemOne` 以及实现 `EvaluationClient` 类型的应用包装器。它们不选择供应商，也不增加运行时依赖；核心入口不会加载它们。新的组合声明要求 TypeScript 5.4+。
+
+| 入口 | API |
+| --- | --- |
+| `@system-one-ai/sdk/decisions` | `choiceFrom`、`defineDecision` |
+| `@system-one-ai/sdk/policies` | `gateChoice`、`gateBoolean` |
+| `@system-one-ai/sdk/batch` | `evaluateMany` |
+
+```ts
+import { choiceFrom, defineDecision } from '@system-one-ai/sdk/decisions';
+import { gateChoice } from '@system-one-ai/sdk/policies';
+
+const targets = choiceFrom({
+  instructions: '选择用户请求操作的设备。',
+  items: [{ id: 'desk', label: '台灯', on: false }],
+  id: device => device.id,
+  describe: device => device.label,
+});
+const definition = defineDecision({
+  instructions: '选择动作；请求不明确时要求澄清。',
+  actions: {
+    turn_on: { description: '打开设备', parameters: { device: targets } },
+    ask: { description: '请求澄清' },
+  },
+});
+const { decision, evaluation } = await definition.evaluate(client, {
+  state: '请打开台灯。',
+}, { maxRetries: 0 });
+
+const actionGate = gateChoice(evaluation.answers.action, {
+  minProbability: 0.8, abstain: ['ask'],
+});
+if (actionGate.status === 'accepted' && decision.action === 'turn_on') {
+  const targetGate = gateChoice(decision.parameterAnswers.device, { minProbability: 0.8 });
+  if (targetGate.status === 'accepted') {
+    decision.parameters.device.on = true; // 应用显式修改原业务对象。
+  }
+}
+```
+
+候选 ID 和描述建立快照，解析结果保留原对象引用。重复 ID 会报错；空集合需要显式 `none: { id, description }`，配置后返回类型包含 undefined。一次评估包含所有预定义动作分支，最终只暴露选中分支的类型化参数与具名 `parameterAnswers`。普通 choice、score、boolean 参数分别得到候选 ID、小数评分和 P(true)；完整证据及供应商元数据保留在 `evaluation` 中。
+
+策略没有默认阈值。`gateChoice` 可组合所选概率、与其他项的差值、供应商 confidence；`gateBoolean` 使用 `maxFalseProbability` 与 `minTrueProbability` 定义真假接受区间，中间保留不确定。结果明确区分接受、不确定和 choice 弃权；缺少证据保持不确定，接口失败保持错误。示例阈值需要在业务中验证，动作执行与慢思考回调由应用接入。
+
+```ts
+import { evaluateMany } from '@system-one-ai/sdk/batch';
+
+const report = await evaluateMany(client, [
+  { id: 'first', request: { state: '打开台灯。', questions: definition.questions } },
+  { id: 'second', request: { state: '我需要帮助。', questions: definition.questions } },
+], { concurrency: 2, requestOptions: { timeoutMs: 5000, maxRetries: 0 } });
+
+for (const item of report.items) {
+  if (item.status === 'fulfilled') console.log(item.id, definition.resolve(item.value));
+  else console.log(item.id, item.status); // rejected 或 cancelled，原错误保留
+}
+```
+
+默认并发数为 4，属于客户端调度，不依赖供应商 batch 接口。输入顺序和 ID 保留，单项失败不会丢失其他结果。批次 `signal` 取消运行中的请求并跳过排队任务，返回部分结果；单项超时从发起时计时。`summary.reportedUsage` 与 `usageCoverage` 区分已报告和缺失的 token 计数，不代表包含失败或取消请求的完整账单。
+
+完整的类型、校验、快照、参数证据、取消及用量契约见 [组合模块文档](docs/composition.zh-CN.md)（[English](docs/composition.md)）。
 
 ## 地址与协议
 
@@ -274,6 +338,10 @@ node --env-file=.env .examples/examples/realtime-agent.js
 
 也可以通过 shell 设置环境变量后执行 `npm run example` 或 `npm run example:agent`。
 
+新示例读取 `.env`：`npm run example:decisions` 检查动作与目标证据后调用本地处理函数；`npm run example:uncertainty` 将不明确请求交给应用回调；`npm run example:batch` 以有界并发评估三个独立代码片段。没有 `SLOW_THINK_URL` 时，转交示例只返回待转交状态，不调用慢模型。
+
+`npm run test:live:composition` 直接读取 `.env`，成功路径发出三次真实请求且不重试，将脱敏后的当前报告及时间戳报告写入 `.artifacts/`。它验证动态动作解析、概率策略及异构批量评估，不调用慢模型服务。
+
 `npm test` 保持离线，覆盖协议、取消、超时、重试、错误和真实本地 HTTP；`npm run typecheck` 检查 TypeScript 类型推断。打包测试会将 tarball 安装到独立临时项目，验证 ESM/CJS 的核心及可选入口、两种模块的声明解析，并确认核心加载时不包含 Vercel 模块。
 
 官方 API 联调使用单独的命令，读取当前项目的 `.env` 并发出四个真实请求：
@@ -288,7 +356,7 @@ npm run test:live
 
 ## CI 与发布
 
-推送到 `main` 或创建 Pull Request 时，GitHub Actions 会在 Node.js 20、22、24 上检查类型、离线测试、构建及实际安装包。推送 `v0.3.0` 这样的版本标签会触发发布：先用 npm Trusted Publishing 发布已验证的包，再创建 GitHub Release，附上同一安装包及校验文件。预发布版本使用 npm 的 `next` 标签。
+推送到 `main` 或创建 Pull Request 时，GitHub Actions 会在 Node.js 20、22、24 上检查类型、离线测试、构建及实际安装包。推送 `v0.4.0` 这样的版本标签会触发发布：先用 npm Trusted Publishing 发布已验证的包，再创建 GitHub Release，附上同一安装包及校验文件。预发布版本使用 npm 的 `next` 标签。
 
 一次性可信发布配置、版本操作和失败重跑方法见 [发布说明](docs/releasing.md)。CI 和发布工作流不会执行付费模型联调。
 

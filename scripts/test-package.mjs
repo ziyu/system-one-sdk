@@ -15,6 +15,12 @@ assert.ok(pack.files.some(file => file.path === 'dist/esm/adapters/vercel.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/cjs/adapters/vercel.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/esm/adapters/openrouter.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/cjs/adapters/openrouter.js'));
+for (const entry of ['decisions', 'policies', 'batch']) {
+  for (const format of ['esm', 'cjs']) {
+    assert.ok(pack.files.some(file => file.path === `dist/${format}/${entry}.js`));
+    assert.ok(pack.files.some(file => file.path === `dist/${format}/${entry}.d.ts`));
+  }
+}
 assert.ok(pack.files.every(file => /^(dist\/|docs\/|README(?:\.zh-CN)?\.md$|LICENSE$|package\.json$)/.test(file.path)), 'Unexpected file in package');
 const consumer = await mkdtemp(path.join(artifacts, 'consumer-'));
 try {
@@ -36,7 +42,12 @@ try {
     assert.equal('vercelAdapter' in cjs, false);
     assert.equal('openRouterAdapter' in esm, false);
     assert.equal('openRouterAdapter' in cjs, false);
+    for (const name of ['choiceFrom', 'defineDecision', 'gateChoice', 'gateBoolean', 'evaluateMany']) {
+      assert.equal(name in esm, false);
+      assert.equal(name in cjs, false);
+    }
     assert.ok(!Object.keys(require.cache).some(path => path.endsWith('/adapters/vercel.js') || path.endsWith('/adapters/openrouter.js')), 'Core import must not load optional adapters');
+    assert.ok(!Object.keys(require.cache).some(path => ['/decisions.js', '/policies.js', '/batch.js'].some(suffix => path.endsWith(suffix))), 'Core import must not load composition modules');
     for (const sdk of [esm, cjs]) {
       const client = new sdk.SystemOne({
         apiKey: null,
@@ -75,18 +86,46 @@ try {
       assert.equal(result.providerMetadata.openrouter.generationId, 'gen-dec-package');
       assert.equal(result.providerMetadata.openrouter.cost, 0);
     }
-    console.log('Installed tarball: ESM/CJS core, Vercel, and OpenRouter passed; core loads neither optional adapter.');
+    const compositionESM = [await import('@system-one-ai/sdk/decisions'), await import('@system-one-ai/sdk/policies'), await import('@system-one-ai/sdk/batch')];
+    const compositionCJS = [require('@system-one-ai/sdk/decisions'), require('@system-one-ai/sdk/policies'), require('@system-one-ai/sdk/batch')];
+    for (const [sdk, [decisions, policies, batch]] of [[esm, compositionESM], [cjs, compositionCJS]]) {
+      const object = { id: 'one', localOnly: true };
+      const target = decisions.choiceFrom({ instructions: 'Target', items: [object], id: item => item.id, describe: () => null });
+      const definition = decisions.defineDecision({ instructions: 'Action', actions: {
+        choose: { description: null, parameters: { target } }, wait: { description: null },
+      } });
+      const client = new sdk.SystemOne({ apiKey: null, fetch: async () => new Response(JSON.stringify({ answers: {
+        action: { type: 'choice', choice: 'choose', probabilities: { choose: 1, wait: 0 } },
+        parameter_0_0: { type: 'choice', choice: 'one', probabilities: { one: 1 } },
+      } })) });
+      const result = await definition.evaluate(client, { state: {} });
+      assert.strictEqual(result.decision.parameters.target, object);
+      assert.equal(policies.gateChoice(result.evaluation.answers.action, { minProbability: 0.9 }).status, 'accepted');
+      assert.equal(policies.gateChoice(result.decision.parameterAnswers.target, { minProbability: 0.9 }).status, 'accepted');
+      assert.deepEqual(policies.gateBoolean({ type: 'boolean', probability: 0.5 }, { maxFalseProbability: 0.2, minTrueProbability: 0.8 }), { status: 'uncertain', reason: 'between-thresholds' });
+      const report = await batch.evaluateMany(client, [{ id: 'one', request: { state: {}, questions: definition.questions } }]);
+      assert.equal(report.items[0].status, 'fulfilled');
+      assert.strictEqual(definition.resolve(report.items[0].value).parameters.target, object);
+    }
+    console.log('Installed tarball: ESM/CJS core, adapters, decisions, policies, and batch passed; optional imports remain isolated.');
   `;
   execFileSync(process.execPath, ['--input-type=module', '--eval', smoke], { cwd: consumer, stdio: 'inherit' });
   const typeConsumer = `
     import { SystemOne, choice } from '@system-one-ai/sdk';
     import { vercelAdapter } from '@system-one-ai/sdk/adapters/vercel';
     import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
+    import { choiceFrom, defineDecision } from '@system-one-ai/sdk/decisions';
+    import { gateChoice } from '@system-one-ai/sdk/policies';
+    import { evaluateMany } from '@system-one-ai/sdk/batch';
     // @ts-expect-error Optional adapters are not part of the core entry point.
     import { vercelAdapter as removedRootExport } from '@system-one-ai/sdk';
     // @ts-expect-error OpenRouter is an optional subpath, never a core export.
     import { openRouterAdapter as absentRootExport } from '@system-one-ai/sdk';
     const client = new SystemOne({apiKey: null});
+    const target = choiceFrom({instructions:'Target',items:[{id:'lamp',on:false}],id:item=>item.id,describe:()=>null});
+    const definition = defineDecision({instructions:'Action',actions:{
+      select:{description:null,parameters:{target,mode:choice('Mode',{warm:null,cool:null})}},wait:{description:null},
+    }});
     new SystemOne({apiKey: 'fixture', adapter: vercelAdapter});
     new SystemOne({apiKey: 'fixture', adapter: openRouterAdapter});
     // @ts-expect-error The former protocol string must not silently persist in declarations.
@@ -98,6 +137,30 @@ try {
       const action: 'drink' | 'rest' = result.answers.action.choice;
       // @ts-expect-error The packaged declaration must retain the choice union.
       const invalid: 'fly' = result.answers.action.choice;
+      const resolved = await definition.evaluate(client, {state:{}});
+      if (resolved.decision.action === 'select') {
+        const on: boolean = resolved.decision.parameters.target.on;
+        const mode: 'warm' | 'cool' = resolved.decision.parameters.mode;
+        const answer: 'warm' | 'cool' = resolved.decision.parameterAnswers.mode.choice;
+        void [on, mode, answer];
+      } else {
+        // @ts-expect-error Branch narrowing must survive packed declarations.
+        resolved.decision.parameters.target;
+      }
+      const outcome = gateChoice(resolved.evaluation.answers.action, {minProbability:0.9});
+      if (outcome.status === 'accepted') { const action: 'select' | 'wait' = outcome.value; void action; }
+      const report = await evaluateMany(client, [
+        {id:'typed',request:{state:{},questions:{action:choice('Action',{run:null,stop:null})}}},
+        {id:'compiled',request:{state:{},questions:definition.questions}},
+      ]);
+      const id: 'typed' = report.items[0].id;
+      if (report.items[0].status === 'fulfilled') {
+        const action: 'run' | 'stop' = report.items[0].value.answers.action.choice;
+        // @ts-expect-error Per-item option unions remain closed.
+        const invalid: 'fly' = report.items[0].value.answers.action.choice;
+        void [action, invalid];
+      }
+      void id;
       return {action, invalid};
     }
     void run;
