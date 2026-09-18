@@ -2,6 +2,102 @@
 
 日期：2026-09-18。本文件按版本保留验证历史，当前开发版本为 `0.5.0`。npm 包名为 `@system-one-ai/sdk`；旧版记录不与新请求合并统计。
 
+## 真实浏览器示例验证（基于 0.5.0）
+
+本轮新增 `examples/browser.ts` 和 `examples/browser/`。实际启动本机 Google Chrome `153.0.8010.48`，使用未登录的独立浏览器环境访问公开网站；页面响应来自网站，模型响应来自 TypeSafe / OpenRouter。所有输入、点击和页面跳转由 `defineDecision()` 结果驱动，最终 URL 和页面正文由独立检查器验收。没有用本地网页或模型 fixture 替换真实运行。
+
+### 最终默认命令：MDN 搜索与文档导航
+
+`npm run example:browser` 使用 TypeSafe；加 `--provider openrouter` 使用 OpenRouter。默认任务先打开 MDN 首页，目标为搜索 AbortController 并阅读其 abort() 方法文档。两次最终运行的五个源码摘要已与当前源文件逐项核对一致。
+
+| 项目 | TypeSafe | OpenRouter |
+| --- | --- | --- |
+| 最终验收 | 通过 | 通过 |
+| 模型 | `jev-1.13.0` | `typesafe/jev-1.13-20260917` |
+| 真实推理请求数 | 4，均 HTTP 200，无重试 | 4，均 HTTP 200，无重试 |
+| 浏览器实际操作 | 点击导航搜索、填写查询、点击实时建议、结束 | 同左 |
+| 单步 SDK 耗时（ms） | 1311 / 343 / 312 / 384 | 1177 / 271 / 316 / 351 |
+| 记录时间（UTC） | 09:09:51.322–09:09:58.948 | 09:09:59.600–09:10:06.675 |
+| 报告目录 | `.artifacts/browser-decisions-typesafe-0UT9ev/` | `.artifacts/browser-decisions-openrouter-l426ME/` |
+
+最终页面均为 `https://developer.mozilla.org/en-US/docs/Web/API/AbortController/abort`。验收同时要求模型结束、MDN 正确 origin、实际输入和点击、多步模型调用、准确路径、正文包含方法名称和 Syntax 段落。页面标题、正文、截图和 Playwright trace 均保存。准确的目标 URL 没有交给执行循环，模型从浏览器实时搜索建议中选中该链接。
+
+### 其他网站与开发中保留的失败
+
+GitHub 搜索 cloudflare/agents → 打开仓库 → 进入 examples 目录曾分别在 TypeSafe 和 OpenRouter 上完成，每次 5 次模型调用。可查 `.artifacts/browser-decisions-typesafe-SuRuNQ/github-agents/` 与 `.artifacts/browser-decisions-openrouter-hxt8bY/github-agents/`。它们是开发过程中的成功记录，不冒充最终源码的整组复测。
+
+| 实测问题 | 处理和保留证据 |
+| --- | --- |
+| MDN 的搜索按钮在开放 Shadow DOM 中，最初观察器没有发现 | 增加 Shadow DOM 遍历，原始失败保留在 `browser-decisions-typesafe-DzW4CX`、`browser-decisions-typesafe-XB29zU` |
+| Github 较大页面请求返回 400 | 安全诊断只记录状态、请求大小 72849 字节和错误类别，确认为上下文相关；将候选默认上限改为 96，去掉完整控件描述的重复输入。原始失败保留在 `browser-decisions-typesafe-D6B4Cs` |
+| 等价 MDN 搜索入口分散概率 | 补充导航区/对话框位置语义及通用选择优先级；没有修改模型概率或降低原来的 0.65 阈值 |
+| 已显示合适搜索建议时，click 与 enter 分散概率 | 明确优先点击已显示目标，只有尚无目标时才提交搜索；失败记录 `browser-decisions-typesafe-poTiqj` 保留，最终两条接入复测通过 |
+| npm 出现安全验证页（403） | `.artifacts/browser-decisions-typesafe-IBYEDq/npm-sdk/final.png` 保留实际页面；未绕过验证，npm 任务未算成功 |
+| GitHub 后续显示 429 限流页 | `.artifacts/browser-decisions-openrouter-whuPIV/github-agents/05-before.png` 明确显示 Status: 429；该任务暂停并失败，未反复重开浏览器刷新冲击网站 |
+| TypeSafe 中间一轮网络失败 | `browser-decisions-typesafe-ibb5Sp` 保留两次实际请求失败，未偷偷切换提供商 |
+
+这些结果验证的是当前浏览器、网站和少量任务的实际集成，不是生产准确率或稳定性能承诺。早期失败、最后成功和离线 fixture 测试分别保存。Cloudflare 此轮没有真实推理凭据，未验证其浏览器流程。
+
+### 回归与交付
+
+`npm run check` 的 197 项 SDK 测试、13 项已有业务执行器测试通过，记录在 `.artifacts/check-browser-example.log`。新增 `npm run test:browser` 的 7 项真实浏览器回归全部通过，记录在 `.artifacts/test-browser-example.log`；这些回归明确使用离线模型 fixture，与上述真实网站请求分开。覆盖开放 Shadow DOM、隐藏/敏感输入、过期 DOM、实际表单提交和导航、错误完成声明、步数上限以及取消。最新示例编译通过，tarball 的 ESM/CJS 入口和声明安装检查通过。
+
+每个任务目录有 `run.json`、`verification.json`、逐步截图、`final-page.txt` 和 `trace.zip`。用 `npx playwright show-trace <trace.zip>` 打开回放。Playwright 仅为浏览器案例开发依赖，SDK 运行时仍零依赖；当前只修改仓库示例和文档，未提交或发布新包。完整用法见[浏览器案例](browser-decisions.zh-CN.md)。
+
+## 决策业务示例真实验证（基于 0.5.0）
+
+新增文件收件箱归档与持久化工单示例，使用现有公开 decisions/policies API。业务文档和工单由示例生成，模型调用使用项目内现有 TypeSafe / OpenRouter 凭据和原生 Fetch；文件移动、字节校验及工单落盘是真实执行。没有连接生产客户系统。
+
+### 真实反馈及修正
+
+初测 TypeSafe 的主要用例 14/14、额外措辞 6/6 通过；OpenRouter 初测 19/20。失败用例是 `support-keep-priority`：动作和目标都正确，但“是否指定优先级”的附加真假问题返回 0.21，落在 0.2–0.8 的不确定区间，导致明确指令未执行。这个暂停被记为失败，没有当作通过。
+
+随后将优先级表示为 `keep / normal / high / urgent`，直接表达修改操作。`keep` 保留原值，覆盖“没有要求改优先级”和“明确要求不变”。动作及参数仍使用原来的 `minProbability: 0.8`、`minMargin: 0.2`；没有降低阈值，也没有为单个用例替换结果。
+
+### 最终同一组 20 条用例
+
+| 项目 | TypeSafe | OpenRouter |
+| --- | --- | --- |
+| 实际模型 | `jev-1.13.0` | `typesafe/jev-1.13-20260917` |
+| 真实请求 | 20 次，全部单次尝试 | 20 次，全部单次尝试 |
+| 整体验收 | 20/20 | 20/20 |
+| 明确指令（含 2 次等待） | 15/15 | 15/15 |
+| 模糊、不支持、空集合请求 | 5/5 正确不改数据 | 5/5 正确不改数据 |
+| 错误执行 | 0 | 0 |
+| 重放检查 | 20/20，无新增推理或执行 | 20/20，无新增推理或执行 |
+| SDK 端到端耗时 p50 / p95 / 最大值 | 288 / 405 / 925 ms | 354 / 771 / 1,203 ms |
+| 输入 / 输出 tokens | 37,220 / 4,462，覆盖 20/20 | 37,220 / 4,462，覆盖 20/20 |
+| 运行时间（UTC） | 07:34:24.071–07:34:30.841 | 07:34:30.967–07:34:39.974 |
+
+每次验收同时核对模型选择及磁盘效果。明确命令返回不确定算失败；文件操作必须只移动指定文件、所有内容摘要保持一致；工单操作必须只改指定字段并增加一次版本号。未关闭工单与启用团队动态生成候选，重复请求 ID 不重复调用模型，相同 ID 换文本返回冲突。预期答案仅用于验收，没有进入模型请求。
+
+### 保留的原始报告
+
+| 阶段 | 报告 |
+| --- | --- |
+| TypeSafe 初测 14 条 | `.artifacts/live-decisions-typesafe-O9Q1nT/report.json` |
+| TypeSafe 额外措辞 6 条 | `.artifacts/live-decisions-typesafe-fENV0F/report.json` |
+| OpenRouter 初次 19/20 | `.artifacts/live-decisions-openrouter-R9W2n3/report.json` |
+| TypeSafe 最终 20/20 | `.artifacts/live-decisions-typesafe-opjC0E/report.json` |
+| OpenRouter 最终 20/20 | `.artifacts/live-decisions-openrouter-6MK48i/report.json` |
+
+报告包含逐题原始答案、选中分支、策略、前后状态、真实请求跟踪、用量、失败和源码摘要。最终报告中的源码摘要已与当前对应源文件逐项核对。`holdout` 是预先划分的额外措辞组；本轮用于开发反馈后，不再视为独立统计留出集。
+
+另外通过两个实际 npm CLI 命令各发出一次真实推理，并独立回读磁盘确认结果：文件例把 `document-c.txt` 移至 `archive/meetings/`；工单例把 T-101 分给 billing、设为 high、版本增至 1，其他工单不变。生成目录分别为 `.artifacts/decision-examples/files-w2voXg`、`.artifacts/decision-examples/support-PgDrje`，其中 `run-*.json` 保存模型和执行记录。
+
+本轮含初测、修正后复测和两个 CLI 验收，共 82 次真实推理，无请求重试。最终结果是固定业务样例的集成验证，不代表生产任务准确率或稳定性能；延迟包含网络和客户端开销。Cloudflare 在此轮未进行真实调用。
+
+### 回归验证
+
+| 检查 | 结果 |
+| --- | --- |
+| `npm run check` | 严格类型、双格式构建、197 项 SDK 测试与 13 项新增执行器测试均通过；`.artifacts/check-decision-workflows.log` |
+| Node.js 20.20.2 | 合并运行 210 项，0 失败、0 跳过；`.artifacts/test-node20-decision-workflows.log` |
+| `npm run test:package` | 实际 tarball 安装、ESM/CJS 全入口、NodeNext 类型与导入隔离通过 |
+| 执行器边界 | 文件碰撞、推理中状态变化、重复 ID、保留优先级、低证据、候选更新、401、取消、非法文本均通过 |
+
+完整使用方法与本地串行执行边界见[决策业务示例](decision-workflows.zh-CN.md)。本轮为仓库示例和验证补充，版本号仍为 0.5.0，未发布新版本。
+
 ## Cloudflare 与默认配置增量验证（0.5.0）
 
 新增 `@system-one-ai/sdk/adapters/cloudflare`，按账户 ID 生成默认 REST 地址和模型。原有 adapter 已支持默认地址，本轮精简示例与环境模板，并增加所有内置 adapter 的统一默认值及覆盖优先级测试。原生问题编码由内部 helper 复用，核心和组合 API 保持兼容。

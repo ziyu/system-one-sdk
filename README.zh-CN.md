@@ -148,6 +148,29 @@ for (const item of report.items) {
 
 完整的类型、校验、快照、参数证据、取消及用量契约见 [组合模块文档](docs/composition.zh-CN.md)（[English](docs/composition.md)）。
 
+### 可直接运行的决策业务示例
+
+仓库提供文件收件箱归档和持久化客服工单两个流程：接受自己的自然语言指令，调用模型选择动作及参数，执行处理函数，并保存文件或工单修改。业务数据生成在新的本地目录中，模型请求和磁盘操作是真实的。
+
+```sh
+npm run example:decisions -- --message '把办公桌椅采购的发票放进财务发票目录。'
+npm run example:support -- --message '把登录故障工单交给平台值班组，设置为紧急。'
+npm run test:live:decisions -- --provider typesafe
+```
+
+通过 `--workspace` 复用命令输出的目录，`--request-id` 验证重复请求，`--provider openrouter` 切换接入。20 条真实联调用例同时检查动作、参数、落盘效果和重放。配置、实现结构、使用边界及实测结果见[决策业务示例](docs/decision-workflows.zh-CN.md)（[English](docs/decision-workflows.md)）。
+
+### 真实浏览器案例
+
+```sh
+# 打开 Chrome：搜索 MDN，再进入 AbortController 的 abort() 方法页。
+npm run example:browser
+# 同一个决策循环搜索 GitHub，进入 cloudflare/agents 的 examples 目录。
+npm run example:browser -- --task github-agents
+```
+
+命令发出真实模型请求并操作公开网页。每步读取当前 DOM，通过 `decisions` 选择动作和目标，再由 Playwright 执行。最终页面验收、截图和操作回放保存到 `.artifacts/`。可以用 `--url`、`--goal`、`--input` 配置其他任务，也可以切换 provider。Playwright 仅是开发依赖，SDK 运行时仍然零依赖。配置、实现及证据见[浏览器案例文档](docs/browser-decisions.zh-CN.md)（[English](docs/browser-decisions.md)）。
+
 ## 地址与协议
 
 | Adapter | 必需配置 | 默认模型 |
@@ -374,11 +397,13 @@ node --env-file=.env .examples/examples/realtime-agent.js
 
 也可以通过 shell 设置环境变量后执行 `npm run example` 或 `npm run example:agent`。
 
-新示例读取 `.env`：`npm run example:decisions` 检查动作与目标证据后调用本地处理函数；`npm run example:uncertainty` 将不明确请求交给应用回调；`npm run example:batch` 以有界并发评估三个独立代码片段。没有 `SLOW_THINK_URL` 时，转交示例只返回待转交状态，不调用慢模型。
+`npm run example:decisions` 运行上面的文件归档流程，`npm run example:support` 运行持久化工单流程，两者直接读取所选供应商的本地配置文件。`npm run example:uncertainty` 将不明确请求交给应用回调，`npm run example:batch` 以有界并发评估三个独立代码片段；这两个示例读取 `.env`。没有 `SLOW_THINK_URL` 时，转交示例只返回待转交状态，不调用慢模型。
 
 `npm run test:live:composition` 直接读取 `.env`，成功路径发出三次真实请求且不重试，将脱敏后的当前报告及时间戳报告写入 `.artifacts/`。它验证动态动作解析、概率策略及异构批量评估，不调用慢模型服务。
 
 `npm test` 保持离线，覆盖协议、取消、超时、重试、错误和真实本地 HTTP；`npm run typecheck` 检查 TypeScript 类型推断。打包测试会将 tarball 安装到独立临时项目，验证 ESM/CJS 的核心及可选入口、两种模块的声明解析，并确认核心加载时不包含 Vercel 模块。
+
+`npm run check` 还会执行 `test:scenarios`，编译业务示例并通过离线模型 fixture 验证真实本地执行器。`test:live:decisions` 是独立的主动联调命令，CI 不会调用付费模型。
 
 官方 API 联调使用单独的命令，读取当前项目的 `.env` 并发出四个真实请求：
 

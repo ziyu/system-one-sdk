@@ -123,4 +123,6 @@ for (const item of report.items) {
 
 `npm run check` 执行运行时测试与正反类型断言。`npm run test:package` 安装实际 tarball，核对 ESM/CJS 导出、NodeNext 声明和核心加载隔离。
 
-三个 `example:*` 新命令读取 `.env` 并发出真实模型请求。`npm run test:live:composition` 直接读取 `.env`，成功路径发出三次真实推理、不重试，记录脱敏后的当前报告和带时间戳报告。它验证动态动作与参数、概率策略及异构批量评估，不调用慢模型服务。普通测试始终保持离线。
+`example:uncertainty` 和 `example:batch` 读取 `.env` 并发出真实模型请求。`npm run test:live:composition` 直接读取 `.env`，成功路径发出三次真实推理、不重试，记录脱敏后的当前报告和带时间戳报告。它验证动态动作与参数、概率策略及异构批量评估，不调用慢模型服务。普通测试始终保持离线。
+
+`example:decisions` 现为文件收件箱归档流程，`example:support` 提供持久化工单处理；均支持自由指令和切换 provider。`test:live:decisions` 验证 20 个场景及实际执行效果。配置、执行器、重放、状态冲突与实测记录见[决策业务示例](decision-workflows.zh-CN.md)。

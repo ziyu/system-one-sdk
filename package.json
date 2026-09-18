@@ -57,24 +57,31 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.check.json",
     "test": "node --test tests/*.test.mjs",
-    "check": "npm run typecheck && npm run build && npm test",
+    "check": "npm run typecheck && npm run build && npm test && npm run test:scenarios",
+    "test:scenarios": "npm run examples:build && node --test tests/examples/*.test.mjs",
     "test:package": "node scripts/test-package.mjs",
     "test:live": "npm run build && node --env-file=.env scripts/test-live.mjs",
     "test:live:openrouter": "npm run build && node scripts/test-openrouter-live.mjs",
     "test:live:composition": "npm run build && node scripts/test-composition-live.mjs",
+    "test:live:decisions": "npm run examples:build && node scripts/test-decisions-live.mjs",
     "test:live:cloudflare": "npm run build && node scripts/test-cloudflare-live.mjs",
     "examples:build": "tsc -p tsconfig.examples.json",
     "example": "npm run examples:build && node .examples/examples/basic.js",
     "example:agent": "npm run examples:build && node .examples/examples/realtime-agent.js",
     "example:openrouter": "npm run examples:build && node --env-file=.env.openrouter .examples/examples/openrouter.js",
     "example:cloudflare": "npm run examples:build && node --env-file=.env.cloudflare .examples/examples/cloudflare.js",
-    "example:decisions": "npm run examples:build && node --env-file=.env .examples/examples/decisions.js",
+    "example:decisions": "npm run examples:build && node .examples/examples/decisions.js",
+    "example:support": "npm run examples:build && node .examples/examples/support.js",
+    "example:browser": "npm run examples:build && node .examples/examples/browser.js",
+    "test:live:browser": "npm run examples:build && node .examples/examples/browser.js --task github-agents --task mdn-abort --headless",
+    "test:browser": "npm run examples:build && node --test tests/browser/*.test.mjs",
     "example:uncertainty": "npm run examples:build && node --env-file=.env .examples/examples/uncertainty.js",
     "example:batch": "npm run examples:build && node --env-file=.env .examples/examples/batch.js",
     "prepack": "npm run build"
   },
   "devDependencies": {
     "@types/node": "22.20.3",
+    "playwright": "1.63.0",
     "typescript": "5.9.3"
   }
 }

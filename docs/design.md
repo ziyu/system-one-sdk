@@ -50,7 +50,7 @@ Cloudflare 按 Jev 模型页使用 `/ai/run` 与 `{ model, input }`，不猜测�
 
 协议 fixture 来源于官方契约。Vercel 固定请求格式曾与 `@ai-sdk/gateway@4.0.85` 对照通过，当前回归直接验证该格式，不再安装 Gateway SDK。真实本地 HTTP 测试覆盖原生 Fetch。类型测试包含负面断言，防止宽化为任意字符串或恢复已移除的核心导出。
 
-构建生成两套独立模块及声明：ESM 与 CommonJS。打包测试在临时消费项目安装真实 tarball，并检查两种模块的核心及可选入口运行、加载边界和 TypeScript NodeNext 声明解析。运行时零第三方依赖，开发依赖仅保留 TypeScript 与 Node 类型声明。
+构建生成两套独立模块及声明：ESM 与 CommonJS。打包测试在临时消费项目安装真实 tarball，并检查两种模块的核心及可选入口运行、加载边界和 TypeScript NodeNext 声明解析。运行时零第三方依赖；开发依赖包含 TypeScript、Node 类型声明，以及仅供浏览器案例使用的 Playwright。浏览器执行器位于 examples 中，不由 SDK 入口加载。
 
 `npm run test:live` 单独发出四组真实原生请求，正常测试不会读取密钥。联调保存经过 SDK 校验的答案、用量和耗时，结果是接口连通性与小样本语义检查，不代表大规模质量或性能评测。
 

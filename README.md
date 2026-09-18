@@ -148,6 +148,29 @@ The default concurrency is 4; this is client-side scheduling, not a provider bat
 
 See the [complete API contract](docs/composition.md) ([中文](docs/composition.zh-CN.md)) for types, validation, snapshots, parameter evidence, cancellation and usage semantics.
 
+### Runnable decision workflows
+
+The repository includes a file-inbox organizer and a persistent support queue. They accept your own natural-language instructions, call the selected model, execute handlers, and save the resulting files or ticket changes. Business data is seeded in a new local workspace; model calls and disk operations are real.
+
+```sh
+npm run example:decisions -- --message 'File the signed Cedar Studio contract in the legal folder.'
+npm run example:support -- --message '把登录故障工单交给平台值班组，设置为紧急。'
+npm run test:live:decisions -- --provider typesafe
+```
+
+Use `--workspace` to continue with the printed directory, `--request-id` to verify replay, and `--provider openrouter` to switch adapters. The 20-case live suite checks exact actions, parameter choices, disk effects and repeat requests. Setup, limits, code structure and recorded results are in [Decision workflows](docs/decision-workflows.md) ([中文](docs/decision-workflows.zh-CN.md)).
+
+### Real browser example
+
+```sh
+# Opens Chrome: search MDN, then open the AbortController abort() method page.
+npm run example:browser
+# Same decision loop: search GitHub, open cloudflare/agents, then enter examples.
+npm run example:browser -- --task github-agents
+```
+
+These commands use real model requests and actual public pages. Every step observes the current DOM, selects an action and its target through `decisions`, then executes it with Playwright. Final-state checks, screenshots and a Playwright trace are saved under `.artifacts/`. The example supports custom `--url`, `--goal` and `--input`, plus provider selection. Playwright is only a development dependency; the SDK runtime remains dependency-free. See [browser setup, implementation and evidence](docs/browser-decisions.md) ([中文](docs/browser-decisions.zh-CN.md)).
+
 ## URLs and protocols
 
 | Adapter | Required configuration | Default model |
@@ -374,11 +397,13 @@ node --env-file=.env .examples/examples/realtime-agent.js
 
 Alternatively, set environment variables in your shell and run `npm run example` or `npm run example:agent`.
 
-The new examples read `.env`: `npm run example:decisions` evaluates an action, checks action and target evidence, and executes a local handler; `npm run example:uncertainty` hands unclear requests to an application callback; `npm run example:batch` scores three independent code snippets with bounded concurrency. Without `SLOW_THINK_URL`, the uncertainty example reports a pending handoff rather than calling a slow model.
+`npm run example:decisions` runs the file-inbox workflow and `npm run example:support` runs the persistent support workflow described above. They read the selected provider's local configuration file. `npm run example:uncertainty` hands unclear requests to an application callback, and `npm run example:batch` scores three independent code snippets with bounded concurrency; those two examples read `.env`. Without `SLOW_THINK_URL`, the uncertainty example reports a pending handoff rather than calling a slow model.
 
 `npm run test:live:composition` directly reads `.env`, makes three real requests on success with no retries, and saves sanitized current and timestamped reports under `.artifacts/`. It verifies dynamic action resolution, policies and heterogeneous batch evaluations without calling a slow-model service.
 
 `npm test` stays offline, covering protocols, cancellation, timeouts, retries, errors, and actual local HTTP requests. `npm run typecheck` checks TypeScript inference. Package tests install the tarball into an isolated temporary project, verify the ESM/CommonJS core and optional entry points and their declarations, and confirm that importing the core does not load Vercel.
+
+`npm run check` also runs `test:scenarios`, which compiles the workflows and tests their actual local executors using offline model fixtures. `test:live:decisions` is separate and opt-in; CI never invokes paid models.
 
 Official API integration checks use a separate command that reads this project's `.env` and makes four real requests:
 
