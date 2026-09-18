@@ -86,7 +86,7 @@ try {
   // Bundle an installed consumer so workerd runs the published layout rather than TS sources.
   const fixture = await readFile(path.join(root, 'tests/workers/cloudflare-workers.mjs'), 'utf8');
   const bundled = await build({ stdin: { contents: fixture, resolveDir: temporary, sourcefile: 'binding-fixture.mjs', loader: 'js' }, bundle: true, write: false, format: 'esm', platform: 'browser', target: 'es2022' });
-  mf = new Miniflare({ modules: true, script: bundled.outputFiles[0].text, compatibilityDate: '2026-09-18', cf: false });
+  mf = new Miniflare({ cf: false, workers: [{ name: 'binding-fixture', modules: true, script: bundled.outputFiles[0].text, compatibilityDate: '2026-09-18' }] });
   for (const scenario of ['success', 'retry', 'cancel', 'timeout', 'invalid', 'oversized', 'parallel', 'composition']) {
     const response = await mf.dispatchFetch(`http://localhost/${scenario}`);
     const body = await response.text();
