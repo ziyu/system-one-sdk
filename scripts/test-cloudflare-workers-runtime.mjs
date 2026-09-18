@@ -53,8 +53,9 @@ try {
   run(process.execPath, ['package-smoke.mjs']);
   console.log('Installed tarball: ESM/CJS native entry and core isolation passed.');
 
-  await writeFile(path.join(temporary, 'worker.mjs'), 'export default { fetch() { return new Response("types"); } };\n');
-  await writeFile(path.join(temporary, 'wrangler.json'), JSON.stringify({ name: 'system-one-types-check', main: 'worker.mjs', compatibility_date: '2026-09-18', ai: { binding: 'AI' } }));
+  // Wrangler emits an extensionless import for this entry; use the normal .ts Worker layout.
+  await writeFile(path.join(temporary, 'worker.ts'), 'export default { fetch() { return new Response("types"); } };\n');
+  await writeFile(path.join(temporary, 'wrangler.json'), JSON.stringify({ name: 'system-one-types-check', main: 'worker.ts', compatibility_date: '2026-09-18', ai: { binding: 'AI' } }));
   run(process.execPath, [wrangler, 'types', 'worker-configuration.d.ts', '--config', 'wrangler.json']);
   const typeConsumer = `
     import { choice, type EvaluationClient } from '@system-one-ai/sdk';
@@ -77,7 +78,7 @@ try {
   // and extensionless generated Worker references while keeping declaration checks on.
   await writeFile(path.join(temporary, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
     target: 'ES2022', module: 'Preserve', moduleResolution: 'Bundler', lib: ['ESNext'], types: [],
-    allowJs: true, strict: true, skipLibCheck: false, noEmit: true,
+    strict: true, skipLibCheck: false, noEmit: true,
   }, files: ['worker-configuration.d.ts', 'consumer.mts', 'consumer.cts'] }));
   run(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', 'tsconfig.json']);
   console.log('Wrangler-generated Env.AI and Workers Web API types: bundled consumers passed without casts or DOM/Node globals.');
