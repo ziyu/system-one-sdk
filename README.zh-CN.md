@@ -6,6 +6,33 @@
 
 运行时代码零第三方依赖，使用标准 Fetch、AbortController、ReadableStream；提供 ESM、CommonJS 和 TypeScript 声明。Node.js 最低目标为 20。浏览器、Workers 等环境需要提供这些 Web API；长期模型密钥应放在服务端。
 
+## 当前能力矩阵
+
+SDK 入口包含在 npm 包中；仓库示例需要在源码目录运行，并由示例提供动作执行器。下表验证状态依据 **2026-09-18** 的已有运行记录，详细结果和边界见[验证记录](docs/validation.md)。
+
+| 能力 | 提供方式 / 入口 | 支持范围与验证状态 |
+| --- | --- | --- |
+| 类型化决策 | SDK 核心：`evaluate`、`choice`、`score`、`booleanQuestion` | 同一字符串或 JSON 状态回答多个问题，返回类型化选择项、小数评分和 P(true)；TypeSafe、OpenRouter 真实调用已验证。 |
+| 请求控制与校验 | SDK 核心：`SystemOne` | 整次调用期限、取消、重试、响应大小限制与类型化错误；已通过协议和本地 HTTP 回归。 |
+| 动态候选与动作参数 | 可选 `decisions`：`choiceFrom`、`defineDecision` | 候选快照、原业务对象映射、类型化动作分支及各参数证据；已用于真实工作流验证。 |
+| 不确定性策略 | 可选 `policies`：`gateChoice`、`gateBoolean` | 显式概率、差值和 confidence 阈值，返回接受、不确定或弃权；不会自动调用备用模型。 |
+| 批量评估 | 可选 `batch`：`evaluateMany` | 客户端有界并发、按输入顺序返回、部分失败、取消和已报告用量覆盖；已通过回归及真实联调。 |
+| 请求元数据 | SDK 评估结果 | 模型、尝试次数、耗时，以及供应商提供的 request ID、token 和元数据；缺失的上游统计保持缺省。 |
+| 浏览器操作 | 仓库示例：`examples/browser-use/` | DOM 与开放 Shadow DOM 观察，通过 Playwright 点击、填入给定文本、按 Enter、滚动和导航；MDN 已用 TypeSafe、OpenRouter 真实验证，保留截图、回放及最终页面验收。[使用说明](docs/browser-decisions.zh-CN.md)。 |
+| 文件与客服工作流 | 仓库示例：`examples/scenarios/` | 文件读取与移动、工单持久化、状态检查和请求重放；业务数据由示例生成，磁盘操作真实执行，已有 20 条用例在 TypeSafe、OpenRouter 均通过。[使用说明](docs/decision-workflows.zh-CN.md)。 |
+| 慢模型转交 | 应用回调示例：`examples/uncertainty.ts` | 通过 `SLOW_THINK_URL` 显式接入服务，未配置时返回待转交；没有内置规划器，也未验证真实慢模型调用。 |
+
+四个内置 adapter 均实现 choice、score、boolean 评估，并提供默认地址和模型。Cloudflare 另需账户 ID，配置方式见[地址与协议](#地址与协议)。
+
+| 供应商 | SDK 接入 | 已有验证状态 |
+| --- | --- | --- |
+| TypeSafe | 默认 `systemOneAdapter` | 真实模型请求与工作流已验证。 |
+| OpenRouter | 可选 `adapters/openrouter` | 真实请求、generation 后台记录回查与工作流已验证。 |
+| Vercel AI Gateway | 可选 `adapters/vercel` | Evaluation 协议和安装包测试通过；尚未验证真实推理。 |
+| Cloudflare | 可选 `adapters/cloudflare` | REST 协议、本地 HTTP 和安装包测试通过；因缺少凭据，尚未验证真实推理。未实现原生 `env.AI.run()` binding。 |
+
+ESM、CommonJS 和 TypeScript 声明已在 Node.js 验证。SDK 在浏览器、Workers、Bun、Deno 内运行尚未验证；浏览器操作示例是在 Node.js 中运行 SDK，再控制 Chrome。聊天/文本生成和模型响应流式输出未实现。浏览器示例目前面向公开网站搜索与阅读，输入文本由调用方提供，未实现 iframe/Canvas 操作和登录态持久化。GitHub 已有成功导航及后续 429 失败记录，npm 任务仍被浏览器安全验证阻断。
+
 ## 安装
 
 ```sh
@@ -22,7 +49,7 @@ npm run check
 npm run test:package
 ```
 
-其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.5.0.tgz`。例如两个项目同处一层目录时：
+其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.5.1.tgz`。例如两个项目同处一层目录时：
 
 ```sh
 npm install ../sytem-one-sdk

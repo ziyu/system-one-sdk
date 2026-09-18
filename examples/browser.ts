@@ -4,8 +4,8 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { chromium } from 'playwright';
 import { scenarioClient } from './scenarios/client.js';
-import { runBrowserTask, type BrowserTask } from './browser/agent.js';
-import { browserTasks, verifyBrowserTask } from './browser/tasks.js';
+import { runBrowserTask, type BrowserTask } from './browser-use/agent.js';
+import { browserTasks, verifyBrowserTask } from './browser-use/tasks.js';
 
 const { values } = parseArgs({ options: {
   task: { type: 'string', multiple: true }, provider: { type: 'string', default: 'typesafe' },
@@ -48,7 +48,7 @@ if (values.help) {
     await mkdir('.artifacts', { recursive: true });
     output = await mkdtemp(path.resolve('.artifacts', `browser-decisions-${values.provider}-`));
     const sourceHashes = Object.fromEntries(await Promise.all([
-      'examples/browser.ts', 'examples/browser/agent.ts', 'examples/browser/observe.ts', 'examples/browser/tasks.ts', 'src/decisions.ts',
+      'examples/browser.ts', 'examples/browser-use/agent.ts', 'examples/browser-use/observe.ts', 'examples/browser-use/tasks.ts', 'src/decisions.ts',
     ].map(async file => [file, createHash('sha256').update(await readFile(file)).digest('hex')])));
     browser = await chromium.launch({ ...(values.channel === 'chrome' ? { channel: 'chrome' } : {}), headless: values.headless!, timeout: 15000 });
     const summary: Record<string, unknown> = { startedAt: new Date().toISOString(), provider: values.provider, browser: browser.version(), headless: values.headless, sourceHashes, results: [] };

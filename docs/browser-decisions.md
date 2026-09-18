@@ -4,6 +4,8 @@
 
 This example opens Chrome, reads the current DOM, builds a decision with `choiceFrom()` and `defineDecision()`, and executes the selected action through Playwright. It visits public websites. The live command does not serve replacement pages, use model fixtures, or call a website's search API instead of interacting with its UI.
 
+The implementation lives in `examples/browser-use/`. The CLI entry point is `examples/browser.ts`, invoked by `npm run example:browser`; browser regression tests live in `tests/browser/`.
+
 ## Run
 
 From a checkout of this repository with the existing TypeSafe `.env` configured:
@@ -56,9 +58,9 @@ Custom tasks report `model-finished` when the model decides to stop. They do **n
 
 ## Execution loop
 
-`examples/browser/observe.ts` discovers visible controls, including controls in **open Shadow DOM**. Hidden, disabled, off-canvas and password/file controls are excluded. It retains references to the actual observed nodes. A replacement node, changed link destination, changed label or edited input invalidates that target.
+`examples/browser-use/observe.ts` discovers visible controls, including controls in **open Shadow DOM**. Hidden, disabled, off-canvas and password/file controls are excluded. It retains references to the actual observed nodes. A replacement node, changed link destination, changed label or edited input invalidates that target.
 
-`examples/browser/agent.ts` exposes `createBrowserDecision()` and `runBrowserTask()`. Every iteration builds a fresh candidate set and offers the actions the current page can support: `click`, `fill`, `enter`, `scroll`, `back`, `wait`, `finish`, and `blocked`. Filling and pressing Enter are different operations. There is no fixed site-specific sequence. For example, the MDN run can click a live autocomplete result directly rather than submitting a search first.
+`examples/browser-use/agent.ts` exposes `createBrowserDecision()` and `runBrowserTask()`. Every iteration builds a fresh candidate set and offers the actions the current page can support: `click`, `fill`, `enter`, `scroll`, `back`, `wait`, `finish`, and `blocked`. Filling and pressing Enter are different operations. There is no fixed site-specific sequence. For example, the MDN run can click a live autocomplete result directly rather than submitting a search first.
 
 The selection rule prefers clicking an already-displayed appropriate search result over submitting the same query again. Equivalent navigation controls use the described region/order preference; the model still selects the concrete current candidate.
 
@@ -70,7 +72,7 @@ Browser actions use bounded timeouts. The default run allows 14 model decisions;
 
 ## Independent verification and evidence
 
-`examples/browser/tasks.ts` contains tasks and separate final-state checks. The agent receives only the start URL, goal, input values and allowed origins. Expected final URL patterns and assertions are evaluated **after** the agent stops, never supplied to it as navigation instructions.
+`examples/browser-use/tasks.ts` contains tasks and separate final-state checks. The agent receives only the start URL, goal, input values and allowed origins. Expected final URL patterns and assertions are evaluated **after** the agent stops, never supplied to it as navigation instructions.
 
 Built-in checks require real input and clicking, multiple model decisions, the expected final URL and actual rendered content. GitHub checks the repository directory; MDN checks the method page and its syntax section; npm additionally checks that the package page was visited before the repository license.
 
@@ -84,6 +86,8 @@ Each run creates a fresh `.artifacts/browser-decisions-<provider>-.../` director
 | `<task>/*-before.png`, `final.png` | Actual browser screenshots |
 | `<task>/final-page.txt` | Text read from the final page |
 | `<task>/trace.zip` | Playwright actions, DOM snapshots and screenshots |
+
+New runs record source hashes using the `examples/browser-use/` paths. Reports from before the directory rename retain their original paths and hashes as historical evidence.
 
 Open an existing trace with:
 

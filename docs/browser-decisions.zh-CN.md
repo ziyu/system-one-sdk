@@ -4,6 +4,8 @@
 
 此示例打开实际 Chrome，读取当前页面的 DOM，用 `choiceFrom()` 和 `defineDecision()` 选择动作与目标，再通过 Playwright 执行。访问的是公开网站；真实运行命令没有替换网页、模拟模型响应或通过网站的搜索 API 代替界面操作。
 
+实现位于 `examples/browser-use/`。命令行入口为 `examples/browser.ts`，通过 `npm run example:browser` 运行；浏览器回归测试位于 `tests/browser/`。
+
 ## 直接运行
 
 在本仓库中，复用已经配置好的 TypeSafe `.env`：
@@ -56,9 +58,9 @@ npm run example:browser -- \
 
 ## 每一步如何执行
 
-`examples/browser/observe.ts` 收集可见控件，支持**开放的 Shadow DOM**，排除隐藏、禁用、屏幕外隐藏及密码/文件输入控件。观察器保留真实 DOM 节点引用；节点被替换、链接地址或文字变化、输入内容被修改，都会使旧目标失效。
+`examples/browser-use/observe.ts` 收集可见控件，支持**开放的 Shadow DOM**，排除隐藏、禁用、屏幕外隐藏及密码/文件输入控件。观察器保留真实 DOM 节点引用；节点被替换、链接地址或文字变化、输入内容被修改，都会使旧目标失效。
 
-`examples/browser/agent.ts` 提供 `createBrowserDecision()` 和 `runBrowserTask()`。每一步重新读取页面并构造候选，只提供当前页面可执行的 `click`、`fill`、`enter`、`scroll`、`back`、`wait`、`finish`、`blocked`。填入文本和按 Enter 是两个动作，没有为网站写死操作顺序；例如 MDN 的自动补全结果出现后，可以直接选择其中的目标文档。
+`examples/browser-use/agent.ts` 提供 `createBrowserDecision()` 和 `runBrowserTask()`。每一步重新读取页面并构造候选，只提供当前页面可执行的 `click`、`fill`、`enter`、`scroll`、`back`、`wait`、`finish`、`blocked`。填入文本和按 Enter 是两个动作，没有为网站写死操作顺序；例如 MDN 的自动补全结果出现后，可以直接选择其中的目标文档。
 
 选择规则优先点击已经显示的合适搜索结果，只有尚无目标时才提交查询。等价控件按照区域和顺序优先级处理，具体当前目标仍由模型选择。
 
@@ -70,7 +72,7 @@ npm run example:browser -- \
 
 ## 如何证明真的完成了
 
-`examples/browser/tasks.ts` 将任务描述与最终页面校验分开。运行循环只接收起始网址、目标、文本候选及允许站点；最终 URL 正则与断言在模型结束后执行，不参与指导下一步。
+`examples/browser-use/tasks.ts` 将任务描述与最终页面校验分开。运行循环只接收起始网址、目标、文本候选及允许站点；最终 URL 正则与断言在模型结束后执行，不参与指导下一步。
 
 内置验收要求实际输入和点击、多次模型决策、正确的最终 URL，以及真实页面内容。GitHub 核对目标仓库目录；MDN 核对方法页及 Syntax 段落；npm 还会检查是否先访问过包页面，再进入仓库 LICENSE。
 
@@ -84,6 +86,8 @@ npm run example:browser -- \
 | `<task>/*-before.png`、`final.png` | 浏览器真实截图 |
 | `<task>/final-page.txt` | 从最终页面读取的文本 |
 | `<task>/trace.zip` | Playwright 操作、DOM 快照和截图回放 |
+
+新的运行按 `examples/browser-use/` 路径记录源码摘要。目录改名前的报告保留原有路径和哈希，作为历史验证证据。
 
 打开已有回放：
 

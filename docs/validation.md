@@ -1,14 +1,20 @@
 # 验证记录
 
-日期：2026-09-18。本文件按版本保留验证历史，当前开发版本为 `0.5.0`。npm 包名为 `@system-one-ai/sdk`；旧版记录不与新请求合并统计。
+日期：2026-09-18。本文件按版本保留验证历史，当前版本为 `0.5.1`。npm 包名为 `@system-one-ai/sdk`；旧版记录不与新请求合并统计。
+
+## 0.5.1 变更范围
+
+浏览器示例实现迁至 `examples/browser-use/`，命令入口仍为 `examples/browser.ts`，继续使用 `npm run example:browser`。相关导入、测试和新运行的源码摘要路径已同步。中英文 README 在安装说明之前新增能力与供应商矩阵，区分 SDK 入口、仓库示例及已有真实验证范围。
+
+以下真实调用数据保留原始版本、时间和报告路径，不作为 0.5.1 新发起的模型请求。浏览器示例从仓库运行，npm 包继续提供核心及可选适配器、组合模块与文档。
 
 ## 真实浏览器示例验证（基于 0.5.0）
 
-本轮新增 `examples/browser.ts` 和 `examples/browser/`。实际启动本机 Google Chrome `153.0.8010.48`，使用未登录的独立浏览器环境访问公开网站；页面响应来自网站，模型响应来自 TypeSafe / OpenRouter。所有输入、点击和页面跳转由 `defineDecision()` 结果驱动，最终 URL 和页面正文由独立检查器验收。没有用本地网页或模型 fixture 替换真实运行。
+浏览器命令入口为 `examples/browser.ts`，实现现位于 `examples/browser-use/`。以下为目录改名前的真实调用记录：实际启动本机 Google Chrome `153.0.8010.48`，使用未登录的独立浏览器环境访问公开网站；页面响应来自网站，模型响应来自 TypeSafe / OpenRouter。所有输入、点击和页面跳转由 `defineDecision()` 结果驱动，最终 URL 和页面正文由独立检查器验收。没有用本地网页或模型 fixture 替换真实运行。
 
 ### 最终默认命令：MDN 搜索与文档导航
 
-`npm run example:browser` 使用 TypeSafe；加 `--provider openrouter` 使用 OpenRouter。默认任务先打开 MDN 首页，目标为搜索 AbortController 并阅读其 abort() 方法文档。两次最终运行的五个源码摘要已与当前源文件逐项核对一致。
+`npm run example:browser` 使用 TypeSafe；加 `--provider openrouter` 使用 OpenRouter。默认任务先打开 MDN 首页，目标为搜索 AbortController 并阅读其 abort() 方法文档。两次最终运行结束时，五个源码摘要均与当时源文件逐项核对一致。目录改名后，这些历史报告保留原路径和哈希；新的运行按新路径记录摘要。
 
 | 项目 | TypeSafe | OpenRouter |
 | --- | --- | --- |

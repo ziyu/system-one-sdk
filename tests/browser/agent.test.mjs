@@ -5,9 +5,9 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { SystemOne } from '../../.examples/src/index.js';
-import { observe } from '../../.examples/examples/browser/observe.js';
-import { runBrowserTask } from '../../.examples/examples/browser/agent.js';
-import { verifyBrowserTask } from '../../.examples/examples/browser/tasks.js';
+import { observe } from '../../.examples/examples/browser-use/observe.js';
+import { runBrowserTask } from '../../.examples/examples/browser-use/agent.js';
+import { verifyBrowserTask } from '../../.examples/examples/browser-use/tasks.js';
 
 // Offline model fixtures with a real browser and local HTTP server. Public-site tests use the CLI.
 let browser;

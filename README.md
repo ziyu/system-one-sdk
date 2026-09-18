@@ -6,6 +6,33 @@ A TypeScript SDK for decision models with a shared `evaluate({ state, questions 
 
 The runtime has no third-party dependencies and uses standard Fetch, AbortController, and ReadableStream APIs. The package includes ESM, CommonJS, and TypeScript declarations, with Node.js 20 as the minimum target. Browsers, Workers, and other environments need these Web APIs. Keep long-lived model API keys on the server.
 
+## Capability matrix
+
+SDK entries are included in the npm package. Repository examples run from a checkout and provide their own action executors. Verification below refers to the recorded runs on **2026-09-18**; details and limitations are in the [validation record](docs/validation.md).
+
+| Capability | Availability / entry point | Supported scope and verification |
+| --- | --- | --- |
+| Typed decisions | SDK core: `evaluate`, `choice`, `score`, `booleanQuestion` | Multiple questions over shared string or JSON state; typed choices, fractional scores and P(true). Live TypeSafe and OpenRouter calls verified. |
+| Request controls and validation | SDK core: `SystemOne` | Total deadlines, cancellation, retries, response-size limits and typed errors; protocol and local HTTP regression tests. |
+| Dynamic candidates and action parameters | Optional `decisions`: `choiceFrom`, `defineDecision` | Candidate snapshots, original-object resolution, typed action branches and per-parameter evidence; exercised in live workflows. |
+| Uncertainty policies | Optional `policies`: `gateChoice`, `gateBoolean` | Explicit probability, margin and confidence thresholds; accepted, uncertain or abstained results. No automatic fallback model. |
+| Batch evaluation | Optional `batch`: `evaluateMany` | Client-side bounded concurrency, ordered results, partial failures, cancellation and reported-usage coverage; regression and live integration checks. |
+| Request metadata | SDK evaluation result | Model, attempts, duration, request ID, token usage and provider metadata where supplied; missing upstream statistics remain absent. |
+| Browser use | Repository example: `examples/browser-use/` | DOM and open Shadow DOM observation, clicks, supplied-text input, Enter, scrolling and navigation through Playwright. MDN verified live with TypeSafe and OpenRouter; screenshots, traces and final-state checks retained. [Guide](docs/browser-decisions.md). |
+| File and support workflows | Repository examples: `examples/scenarios/` | File reads and moves, persistent ticket updates, state checks and request replay. Generated business data, real disk effects; the recorded 20-case suite passed on both TypeSafe and OpenRouter. [Guide](docs/decision-workflows.md). |
+| Slow-model handoff | Application callback example: `examples/uncertainty.ts` | Explicit service integration via `SLOW_THINK_URL`; without it, returns a pending handoff. No built-in planner or verified slow-model call. |
+
+All four built-in adapters implement choice, score and boolean evaluation and supply default URLs and models. Cloudflare also requires an account ID; configuration details are under [URLs and protocols](#urls-and-protocols).
+
+| Provider | SDK integration | Recorded verification |
+| --- | --- | --- |
+| TypeSafe | Default `systemOneAdapter` | Live model calls and workflows verified. |
+| OpenRouter | Optional `adapters/openrouter` | Live calls, generation-record lookup and workflows verified. |
+| Vercel AI Gateway | Optional `adapters/vercel` | Evaluation protocol and package tests passed; live inference not verified. |
+| Cloudflare | Optional `adapters/cloudflare` | REST protocol, local HTTP and package tests passed; live inference not verified because credentials were unavailable. Native `env.AI.run()` binding is not implemented. |
+
+ESM, CommonJS and TypeScript declarations are tested on Node.js. SDK execution inside browsers, Workers, Bun and Deno remains unverified; the browser-use example runs the SDK in Node.js and controls Chrome. Chat/text generation and model response streaming are not implemented. Browser use currently covers public search and reading with caller-supplied text; iframe/canvas interaction and persistent login sessions are not implemented. GitHub runs include successful navigation and a later 429 failure; the npm task remains blocked by browser verification.
+
 ## Installation
 
 ```sh
@@ -22,7 +49,7 @@ npm run check
 npm run test:package
 ```
 
-Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.5.0.tgz` package. For example, when the two projects are sibling directories:
+Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.5.1.tgz` package. For example, when the two projects are sibling directories:
 
 ```sh
 npm install ../sytem-one-sdk
