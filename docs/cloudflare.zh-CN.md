@@ -2,7 +2,7 @@
 
 [English](cloudflare.md) | **简体中文**
 
-`0.5.0` 源码新增可选入口 `@system-one-ai/sdk/adapters/cloudflare`。默认地址和模型由 adapter 提供，应用只需传入账户 ID 和 API token。
+`0.5.0` 起提供可选入口 `@system-one-ai/sdk/adapters/cloudflare`；AI runner 响应包装需要使用 `0.5.2+`。默认地址和模型由 adapter 提供，应用只需传入账户 ID 和 API token。
 
 ```ts
 import { SystemOne, choice } from '@system-one-ai/sdk';
@@ -51,11 +51,13 @@ Cloudflare 的接口属于具体账户，因此使用 `cloudflareAdapter({ accou
 
 [通用 AI REST 参考](https://developers.cloudflare.com/api/resources/ai/methods/run/) 还展示了 Cloudflare 响应 envelope。解码器既接受模型直接结果，也接受 `result` 包装；提供了 `success` 时必须为 true，提供了 `errors` 时必须为空数组。外层和内层错误都会拒绝处理；同时存在顶层答案和包装结果的歧义响应同样拒绝。HTTP 失败保留现有 `APIError`；HTTP 200 正文中的失败转换为不重试的 `ResponseValidationError`，错误中不附带可能回显凭据的响应正文。
 
+`0.5.2` 补上本次反馈的 AI runner 兼容结构：`{ success: true, result: { state: "Completed", result: modelResult } }`，也接受没有外层 REST envelope 的 runner。最多解开两层包装，每层在解包之前校验；存在 `state` 时必须严格为 `"Completed"` 且包含 `result`，不轮询失败或未完成任务。任何一层同时出现 `answers` 和 `result` 都会拒绝。最内层模型结果继续经过统一答案、概率和用量校验。runner fixture 用于兼容性回归；模型页本身展示的是内部模型结果，没有展示额外的 runner 包装。
+
 此 adapter 使用 Fetch 调用 REST。Workers 原生 `env.AI.run()` binding 属于独立接口，本入口尚未封装。账户和 token 配置参见 [REST 入门](https://developers.cloudflare.com/workers-ai/get-started/rest-api/)。SDK 不探测备用端点，也不自动切换供应商。
 
 ## 验证方式
 
-`tests/cloudflare-adapter.test.mjs` 使用独立协议 fixture 覆盖直接/包装结果、地址生成、账户校验、覆盖配置、非法响应、重试、取消，并通过原生 Fetch 访问真实本地 HTTP server。`tests/adapter-defaults.test.mjs` 验证所有内置 adapter 均可省略地址和模型，同时仍支持显式覆盖。这些测试保持离线，不代表模型推理成功。
+`tests/cloudflare-adapter.test.mjs` 使用独立 fixture 覆盖直接结果、REST 包装、runner 包装、地址生成、账户校验、覆盖配置、非法响应、重试、取消，并通过原生 Fetch 访问真实本地 HTTP server。即使包含看似有效的答案，也会检查失败/非法状态和内层错误。决策组合、批量评估及安装后的 ESM/CommonJS 检查同样覆盖 runner 响应。`tests/adapter-defaults.test.mjs` 验证所有内置 adapter 均可省略地址和模型，同时仍支持显式覆盖。这些测试保持离线，不代表模型推理成功。
 
 真实联调独立读取 `.env.cloudflare`，不会继承其他供应商凭据或自动选择别的地址。在仓库内运行：
 

@@ -49,7 +49,7 @@ npm run check
 npm run test:package
 ```
 
-Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.5.1.tgz` package. For example, when the two projects are sibling directories:
+Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.5.2.tgz` package. For example, when the two projects are sibling directories:
 
 ```sh
 npm install ../sytem-one-sdk
@@ -294,6 +294,8 @@ console.log(result.answers.refund.probability);
 The factory constructs the account-specific URL and selects `typesafe/jev`. It implements the model page's REST protocol: `POST /client/v4/accounts/{accountId}/ai/run` with `{ model, input: { state, questions } }`. It maps `boolean` to native `noul`, preserves probabilities and confidence, and normalizes token usage. Explicit `baseURL` overrides support API roots or proxy endpoints ending in `/ai/run`; `model` overrides are sent unchanged.
 
 This is a REST adapter using the existing Fetch transport; native Workers `env.AI.run()` bindings are a separate interface. No Cloudflare SDK dependency is added. The existing `decisions`, `policies`, and `batch` modules work with this client unchanged.
+
+Use 0.5.2+ for Cloudflare AI runner responses containing `state: "Completed"` and a nested `result`. The adapter unwraps the REST and runner envelopes, validates each layer, and preserves the model's answers and usage. Failed, pending, malformed or ambiguous results raise `ResponseValidationError` without retrying. Direct model results and simple `result` envelopes remain supported.
 
 ```sh
 cp .env.cloudflare.example .env.cloudflare

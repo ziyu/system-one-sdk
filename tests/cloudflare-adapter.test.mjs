@@ -11,11 +11,13 @@ const accountId = '0123456789abcdef0123456789abcdef';
 const adapter = cloudflareAdapter({ accountId });
 const expectedURL = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run`;
 const envelope = result => ({ success: true, errors: [], messages: [], result });
+const runnerResult = result => ({ state: 'Completed', result, gatewayMetadata: { keySource: 'Unified' } });
+const runnerEnvelope = result => envelope(runnerResult(result));
 
-// Wire shape comes from the Cloudflare Jev model page, not from adapter.prepare().
+// Native answers follow the model page; runner fixtures cover the reported compatibility fix.
 // Fixtures remain offline; they do not establish access to a Cloudflare account.
-for (const wrapped of [false, true]) {
-  test(`Cloudflare uses its default endpoint/model and normalizes ${wrapped ? 'wrapped' : 'raw'} native results`, async () => {
+for (const [wrapped, wrap] of [['raw', value => value], ['wrapped', envelope], ['runner', runnerEnvelope], ['raw runner', runnerResult]]) {
+  test(`Cloudflare uses its default endpoint/model and normalizes ${wrapped} native results`, async () => {
     let calls = 0;
     const input = structuredClone(request);
     const client = new SystemOne({ adapter, apiKey: 'cloudflare-fixture', fetch: async (url, init) => {
@@ -30,7 +32,8 @@ for (const wrapped of [false, true]) {
         model: 'typesafe/jev',
         input: { state: request.state, questions: { ...request.questions, interrupt: { ...request.questions.interrupt, type: 'noul' } } },
       });
-      return jsonResponse(wrapped ? envelope(nativePayload()) : nativePayload(), { headers: { 'x-request-id': 'cf-fixture-request' } });
+      const payload = wrap(nativePayload());
+      return jsonResponse(payload, { headers: { 'x-request-id': 'cf-fixture-request' } });
     } });
     const result = await client.evaluate(input);
     assert.equal(calls, 1);
@@ -47,6 +50,47 @@ for (const wrapped of [false, true]) {
     assert.deepEqual(input, request);
   });
 }
+
+test('runner states are checked before unwrapping at every level', async () => {
+  for (const state of ['Failed', 'Running', 'Pending', 'Cancelled', '', null, 1, {}, ['Completed']]) {
+    for (const wrap of [value => value, envelope]) {
+      let calls = 0;
+      const client = new SystemOne({ adapter, apiKey: null, fetch: async () => {
+        calls++;
+        return jsonResponse(wrap({ state, result: nativePayload() }));
+      } });
+      await assert.rejects(client.evaluate(request), ResponseValidationError, `must reject runner state ${JSON.stringify(state)}`);
+      assert.equal(calls, 1);
+    }
+  }
+});
+
+test('runner contents cannot hide errors, ambiguous answers or additional envelopes', async () => {
+  const malformed = [
+    { ...runnerResult(nativePayload()), answers: nativePayload().answers },
+    runnerResult({ ...nativePayload(), result: nativePayload() }),
+    runnerResult({ ...nativePayload(), state: 'Failed' }),
+    runnerResult({ ...nativePayload(), error: { message: 'secret-echo' } }),
+    runnerResult({ ...nativePayload(), errors: [{ message: 'secret-echo' }] }),
+    runnerResult({ ...nativePayload(), success: false }),
+    { state: 'Completed' },
+    runnerResult(null),
+    runnerResult([]),
+    runnerResult('secret-echo'),
+    runnerResult({}),
+  ];
+  for (const payload of malformed) {
+    for (const wrap of [value => value, envelope]) {
+      let calls = 0;
+      const client = new SystemOne({ adapter, apiKey: null, fetch: async () => { calls++; return jsonResponse(wrap(payload)); } });
+      await assert.rejects(client.evaluate(request), error => error instanceof ResponseValidationError
+        && !error.message.includes('secret-echo') && !JSON.stringify(error).includes('secret-echo'));
+      assert.equal(calls, 1);
+    }
+  }
+  const tooDeep = new SystemOne({ adapter, apiKey: null, fetch: async () => jsonResponse(envelope(runnerResult(runnerResult(nativePayload())))) });
+  await assert.rejects(tooDeep.evaluate(request), ResponseValidationError);
+});
 
 for (const [baseURL, expected] of [
   ['https://api.cloudflare.com', expectedURL],
@@ -124,6 +168,8 @@ for (const [label, payload] of [
   ['in-band nested error', () => envelope({ ...nativePayload(), error: { message: 'secret-echo' } })],
   ['nested failure', () => envelope({ ...nativePayload(), success: false })],
   ['nested errors', () => envelope({ ...nativePayload(), errors: ['secret-echo'] })],
+  ['runner not completed', () => envelope({ state: 'Failed', result: nativePayload() })],
+  ['runner missing result', () => envelope({ state: 'Completed' })],
   ['ambiguous raw and wrapped result', () => ({ ...nativePayload(), result: nativePayload() })],
   ['undeclared action', () => { const raw = nativePayload(); raw.answers.action.choice = 'fly'; return envelope(raw); }],
   ['invalid probability', () => { const raw = nativePayload(); raw.answers.interrupt.noul = 1.1; return raw; }],
@@ -151,7 +197,7 @@ test('Jev rounding is preserved while future model statistics remain explicit', 
 test('missing optional statistics stay missing, including through the batch scheduler', async () => {
   const client = new SystemOne({ adapter, apiKey: null, fetch: async (_, init) => {
     const { input } = JSON.parse(init.body);
-    return jsonResponse({ answers: { on: { type: 'noul', noul: input.state.on ? 0.99 : 0.01 } } });
+    return jsonResponse(runnerEnvelope({ answers: { on: { type: 'noul', noul: input.state.on ? 0.99 : 0.01 } } }));
   } });
   const report = await evaluateMany(client, [true, false].map(on => ({ id: String(on), request: { state: { on }, questions: { on: booleanQuestion('Is it on?') } } })), { concurrency: 2 });
   assert.equal(report.summary.succeeded, 2);
@@ -199,7 +245,7 @@ test('Cloudflare uses native Fetch against a real local HTTP server with the com
     for await (const chunk of req) chunks.push(chunk);
     received = { url: req.url, method: req.method, authorization: req.headers.authorization, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) };
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(envelope(nativePayload())));
+    res.end(JSON.stringify(runnerEnvelope(nativePayload())));
   });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');

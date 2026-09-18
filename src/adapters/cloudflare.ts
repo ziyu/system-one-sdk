@@ -57,6 +57,25 @@ function successfulPayload(payload: unknown, path: string): Record<string, unkno
   return root;
 }
 
+function decisionPayload(payload: unknown, path: string): Record<string, unknown> {
+  // At most a REST envelope and an AI runner envelope precede the model result.
+  // Validate each layer before unwrapping so a failed runner cannot look successful.
+  for (let depth = 0; ; depth++) {
+    const root = successfulPayload(payload, path);
+    const wrapped = hasOwn(root, 'result');
+    if (hasOwn(root, 'state') && (root.state !== 'Completed' || !wrapped)) {
+      throw new ResponseValidationError(`${path}.state`, 'expected a completed Cloudflare AI runner result');
+    }
+    if (!wrapped) return root;
+    if (hasOwn(root, 'answers')) {
+      throw new ResponseValidationError(path, 'expected either a Cloudflare result envelope or a model result, not both');
+    }
+    if (depth === 2) throw new ResponseValidationError(path, 'expected a model result after Cloudflare envelopes');
+    payload = root.result;
+    path += '.result';
+  }
+}
+
 /** Cloudflare AI REST codec. The factory supplies the account-specific URL and Jev model. */
 export function cloudflareAdapter(options: CloudflareAdapterOptions): SystemOneAdapter {
   const accountId = accountIdOf(options);
@@ -75,12 +94,7 @@ export function cloudflareAdapter(options: CloudflareAdapterOptions): SystemOneA
       };
     },
     decode(payload: unknown, context: AdapterContext) {
-      const root = successfulPayload(payload, 'response');
-      if (hasOwn(root, 'result') && hasOwn(root, 'answers')) {
-        throw new ResponseValidationError('response', 'expected either a Cloudflare result envelope or a model result, not both');
-      }
-      // Model documentation shows the result itself; REST gateways may wrap it in result.
-      const result = hasOwn(root, 'result') ? successfulPayload(root.result, 'response.result') : root;
+      const result = decisionPayload(payload, 'response');
       const normalized = responseRecord(systemOneAdapter.decode(result, context), 'response');
       const model = result.model ?? context.model;
       const jev = typeof model === 'string' && /^(?:typesafe\/)?jev(?:-|$)/.test(model);

@@ -1,6 +1,14 @@
 # 验证记录
 
-日期：2026-09-18。本文件按版本保留验证历史，当前版本为 `0.5.1`。npm 包名为 `@system-one-ai/sdk`；旧版记录不与新请求合并统计。
+日期：2026-09-18。本文件按版本保留验证历史，当前版本为 `0.5.2`。npm 包名为 `@system-one-ai/sdk`；旧版记录不与新请求合并统计。
+
+## 0.5.2 Cloudflare runner 修正
+
+接纳原有未提交的 Cloudflare runner 修正，支持 REST `result` 内的 `{ state: "Completed", result: modelResult }`。审查时先用新增回归复现了两处遗漏：裸 runner 的顶层失败状态可能被解包跳过；内层同时存在答案和包装结果可能被接受。现在每层先校验，再解包，最多处理 REST 和 runner 两层。所有错误、非 Completed 状态及歧义结果都作为不重试的响应错误返回。
+
+直接模型结果、普通 REST 包装继续兼容，原始答案、概率、评分、用量和实际模型 ID 仍由已有公共逻辑处理。决策组合、批量调度、本地 HTTP 及实际安装包检查均覆盖 runner 响应。本次检查确认项目和进程仍未提供 Cloudflare 凭据，因此未新增真实 Cloudflare 推理；下方历史真实结果保持原版本和时间。
+
+发布前在 Node.js 26.5.0 执行 `npm run check`：严格类型检查、ESM/CommonJS 构建、示例编译通过，203 项 SDK 回归与 13 项业务执行器回归全部通过，0 失败、0 跳过；日志为 `.artifacts/check-0.5.2.log`。其中新增回归先在原修正上复现失败，再用逐层校验实现通过。安装包检查同时要求 Completed runner 正常解码、Failed runner 抛出响应错误，覆盖 ESM 和 CommonJS 两种入口。
 
 ## 0.5.1 变更范围
 

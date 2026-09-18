@@ -49,7 +49,7 @@ npm run check
 npm run test:package
 ```
 
-其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.5.1.tgz`。例如两个项目同处一层目录时：
+其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.5.2.tgz`。例如两个项目同处一层目录时：
 
 ```sh
 npm install ../sytem-one-sdk
@@ -294,6 +294,8 @@ console.log(result.answers.refund.probability);
 工厂自动生成账户地址并选用 `typesafe/jev`。实现模型页的 REST 协议：`POST /client/v4/accounts/{accountId}/ai/run`，请求体为 `{ model, input: { state, questions } }`。适配器将 `boolean` 映射为原生 `noul`，保留概率和 confidence，并统一 token 用量字段。需要代理时，`baseURL` 可覆盖为 API 根地址或以 `/ai/run` 结尾的代理端点；显式模型名原样发送。
 
 此入口通过现有 Fetch transport 调用 REST API；Workers 原生 `env.AI.run()` binding 是另一种接口。没有新增 Cloudflare SDK 依赖，现有 `decisions`、`policies`、`batch` 模块可直接复用。
+
+包含 `state: "Completed"` 和嵌套 `result` 的 Cloudflare AI runner 响应需要使用 0.5.2+。adapter 逐层校验并解开 REST 与 runner 包装，保留模型答案和用量；失败、待完成、格式错误或有歧义的结果会抛出 `ResponseValidationError`，不重试。模型直接结果和普通 `result` 包装继续兼容。
 
 ```sh
 cp .env.cloudflare.example .env.cloudflare

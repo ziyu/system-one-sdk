@@ -2,7 +2,7 @@
 
 **English** | [简体中文](cloudflare.zh-CN.md)
 
-The optional `@system-one-ai/sdk/adapters/cloudflare` entry point is available in the 0.5.0 source version. It supplies the REST URL and model; the application supplies an account ID and API token.
+The optional `@system-one-ai/sdk/adapters/cloudflare` entry point is available since 0.5.0. Use 0.5.2+ for AI runner response envelopes. It supplies the REST URL and model; the application supplies an account ID and API token.
 
 ```ts
 import { SystemOne, choice } from '@system-one-ai/sdk';
@@ -51,11 +51,13 @@ The model page shows native `choice`, `score`, and `noul` primitives. Its output
 
 The [general AI REST reference](https://developers.cloudflare.com/api/resources/ai/methods/run/) also documents Cloudflare response envelopes. The decoder accepts either the model result directly or a `result` wrapper. Any supplied `success` must be true and any supplied `errors` must be an empty array; root and nested errors are rejected. An ambiguous response containing both top-level answers and a wrapped result is rejected. HTTP errors retain the existing `APIError` semantics; errors inside an HTTP 200 response become non-retryable `ResponseValidationError` values without copying the upstream body.
 
+Version 0.5.2 adds the reported AI runner compatibility shape: `{ success: true, result: { state: "Completed", result: modelResult } }`. A runner without the outer REST envelope is also accepted. Unwrapping is limited to two envelopes, and every layer is checked before it is removed. A supplied `state` must be exactly `"Completed"` with a `result`; failed or unfinished states are not polled. Simultaneous `answers` and `result` are rejected at any layer. The model result still passes the common answer, probability and usage validation. Runner fixtures are compatibility regression coverage; the model page itself illustrates the inner model result, not this additional runner envelope.
+
 This adapter calls REST through Fetch. Cloudflare's native Workers `env.AI.run()` binding is a separate interface and is not implemented by this entry point. The [REST setup guide](https://developers.cloudflare.com/workers-ai/get-started/rest-api/) explains Cloudflare account and token setup. No automatic endpoint fallback or provider substitution takes place.
 
 ## Local verification
 
-`tests/cloudflare-adapter.test.mjs` contains independent protocol fixtures for raw and wrapped results, URL construction, account validation, explicit overrides, malformed responses, retries, cancellation, and a real local HTTP server using native Fetch. `tests/adapter-defaults.test.mjs` checks omitted URLs/models and explicit overrides for every built-in adapter. These are offline checks, not model inference.
+`tests/cloudflare-adapter.test.mjs` contains independent fixtures for raw, REST-wrapped and runner results, URL construction, account validation, explicit overrides, malformed responses, retries, cancellation, and a real local HTTP server using native Fetch. It checks failed/malformed states and nested errors even when valid-looking answers are present. Composition, batch and installed ESM/CommonJS package checks also exercise runner responses. `tests/adapter-defaults.test.mjs` checks omitted URLs/models and explicit overrides for every built-in adapter. These are offline checks, not model inference.
 
 The opt-in integration command reads `.env.cloudflare` directly. It does not inherit credentials from another provider or silently use another endpoint. In the repository:
 

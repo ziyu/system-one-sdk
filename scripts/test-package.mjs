@@ -91,19 +91,22 @@ try {
     const cloudflareESM = await import('@system-one-ai/sdk/adapters/cloudflare');
     const cloudflareCJS = require('@system-one-ai/sdk/adapters/cloudflare');
     for (const [sdk, optional] of [[esm, cloudflareESM], [cjs, cloudflareCJS]]) {
+      let runnerState = 'Completed';
       const client = new sdk.SystemOne({
         adapter: optional.cloudflareAdapter({ accountId: 'package-test-account' }),
         apiKey: 'package-fixture',
         fetch: async (url, init) => {
           assert.equal(url, 'https://api.cloudflare.com/client/v4/accounts/package-test-account/ai/run');
           assert.deepEqual(JSON.parse(init.body), {model:'typesafe/jev',input:{state:'on',questions:{on:{type:'noul',instructions:'Is the light on?'}}}});
-          return new Response(JSON.stringify({success:true,errors:[],result:{model:'jev-1.13.0',answers:{on:{type:'noul',noul:0.9}},usage:{input_tokens:10,output_tokens:2}}}));
+          return new Response(JSON.stringify({success:true,errors:[],result:{state:runnerState,result:{model:'jev-1.13.0',answers:{on:{type:'noul',noul:0.9}},usage:{input_tokens:10,output_tokens:2}}}}));
         },
       });
       const result = await client.evaluate({state:'on',questions:{on:sdk.booleanQuestion('Is the light on?')}});
       assert.equal(result.model, 'jev-1.13.0');
       assert.equal(result.answers.on.probability, 0.9);
       assert.equal(result.usage.totalTokens, 12);
+      runnerState = 'Failed';
+      await assert.rejects(client.evaluate({state:'on',questions:{on:sdk.booleanQuestion('Is the light on?')}}), sdk.ResponseValidationError);
     }
     const compositionESM = [await import('@system-one-ai/sdk/decisions'), await import('@system-one-ai/sdk/policies'), await import('@system-one-ai/sdk/batch')];
     const compositionCJS = [require('@system-one-ai/sdk/decisions'), require('@system-one-ai/sdk/policies'), require('@system-one-ai/sdk/batch')];

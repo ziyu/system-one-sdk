@@ -72,7 +72,8 @@ for (const [name, adapter, native] of [['native', undefined, true], ['vercel', v
       assert.equal(body.questions.parameter_0_3.type, native ? 'noul' : 'boolean');
       assert.deepEqual(body.state, { request: 'Turn on the desk lamp' });
       const usage = native ? { input_tokens: 10, output_tokens: 2 } : { inputTokens: 10, outputTokens: 2 };
-      return jsonResponse({ answers: answers(native), usage, ...(name === 'openrouter' ? { id: 'gen-dec-test', provider: 'TypeSafe', model: 'typesafe/jev-1.13' } : {}) }, { headers: { 'x-request-id': 'test-decision' } });
+      const payload = { answers: answers(native), usage, ...(name === 'openrouter' ? { id: 'gen-dec-test', provider: 'TypeSafe', model: 'typesafe/jev-1.13' } : {}) };
+      return jsonResponse(name === 'cloudflare' ? { success: true, errors: [], result: { state: 'Completed', result: payload } } : payload, { headers: { 'x-request-id': 'test-decision' } });
     } });
     const result = await definition.evaluate(client, { state: { request: 'Turn on the desk lamp' } }, { maxRetries: 0 });
     assert.equal(calls, 1);
