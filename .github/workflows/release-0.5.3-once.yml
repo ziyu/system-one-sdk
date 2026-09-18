@@ -1,0 +1,82 @@
+name: Initiate 0.5.3 release
+
+# One-time entry for the explicitly requested release. Remove after dispatch.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release-0.5.3-once.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: initiate-system-one-0.5.3
+  cancel-in-progress: false
+
+jobs:
+  initiate:
+    if: github.repository == 'ziyu/sytem-one-sdk' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: b2cc7ee490b3a2b0df6eac07089b3e7c6a29ce3c
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Verify source and CI, create tag, and dispatch existing release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          import { readFile } from 'node:fs/promises';
+          import { validateRelease } from './scripts/release.mjs';
+          const repository = 'ziyu/sytem-one-sdk';
+          const sha = 'b2cc7ee490b3a2b0df6eac07089b3e7c6a29ce3c';
+          const tag = 'v0.5.3';
+          assert.equal(process.env.GITHUB_REPOSITORY, repository);
+          assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), sha);
+          execFileSync('git', ['merge-base', '--is-ancestor', sha, 'origin/main']);
+          validateRelease(tag, JSON.parse(await readFile('package.json', 'utf8')), JSON.parse(await readFile('package-lock.json', 'utf8')));
+          async function api(path, method = 'GET', body, allowMissing = false) {
+            const response = await fetch(`https://api.github.com/repos/${repository}/${path}`, {
+              method,
+              headers: {
+                authorization: `Bearer ${process.env.GH_TOKEN}`,
+                accept: 'application/vnd.github+json',
+                'content-type': 'application/json',
+              },
+              ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+              signal: AbortSignal.timeout(15000),
+              redirect: 'error',
+            });
+            if (allowMissing && response.status === 404) { await response.body?.cancel(); return null; }
+            assert.ok(response.ok, `${method} ${path} returned HTTP ${response.status}`);
+            return response.status === 204 ? null : response.json();
+          }
+          const { workflow_runs: runs } = await api(`actions/runs?head_sha=${sha}&event=push&per_page=20`);
+          for (const path of ['.github/workflows/ci.yml', '.github/workflows/cloudflare-workers.yml']) {
+            const run = runs.find(run => run.path === path && run.head_sha === sha);
+            assert.ok(run && run.status === 'completed' && run.conclusion === 'success', `${path} must pass on the release commit`);
+          }
+          const existing = await api(`git/ref/tags/${tag}`, 'GET', undefined, true);
+          if (existing) {
+            assert.equal(existing.object.type, 'commit', 'Existing tag must be a lightweight tag to the verified commit');
+            assert.equal(existing.object.sha, sha, 'Never move an existing version tag');
+          } else {
+            await api('git/refs', 'POST', { ref: `refs/tags/${tag}`, sha });
+          }
+          // GITHUB_TOKEN-created tag pushes do not trigger workflows; dispatch explicitly.
+          // The existing release.yml retains its npm environment, OIDC and package checks.
+          await api('actions/workflows/release.yml/dispatches', 'POST', { ref: tag, inputs: { tag } });
+          console.log(`Verified ${tag} at ${sha}; dispatched the existing Release workflow.`);
+          JS
