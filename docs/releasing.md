@@ -57,7 +57,7 @@ gh workflow run release.yml --repo ziyu/sytem-one-sdk --ref main -f tag=v0.3.0
 
 The tag must already exist; the workflow never creates or moves tags. If npm already has the same version, the workflow verifies that its integrity matches the newly tested tarball and skips the publish command. It then completes the GitHub Release and uploads the matching assets. An existing npm version with different contents stops the workflow; release a new version instead of overwriting or moving the old tag.
 
-If npm publication succeeds but registry metadata is not yet available, the verification step fails after bounded retries. Rerunning uses the same integrity check. A GitHub Release is not created until npm publication is verified.
+If npm accepts a publication but is still processing it, the current release script checks public metadata up to 61 times with five-second delays (five minutes of scheduled waiting, plus bounded request time). It never repeats `npm publish` during that wait. If metadata is still unavailable, the verification step fails; wait until the version is publicly readable before rerunning the workflow. Rerunning uses the same integrity check. A GitHub Release is not created until npm publication is verified. The original `v0.3.0` tag retains its shorter verification window; rerunning that release after the package becomes visible completes the same checks without moving the tag.
 
 ## Live model tests
 

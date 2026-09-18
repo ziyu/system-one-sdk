@@ -92,12 +92,16 @@ async function publish(release) {
     console.log(`${artifact.name}@${artifact.version} already contains this exact package; resuming the release.`);
   }
   let confirmed = false;
-  for (let attempt = 0; attempt < 10; attempt++) {
+  // npm can accept a publish before asynchronous processing exposes its metadata.
+  // Allow five minutes of polling delays; never repeat npm publish while waiting.
+  const verificationAttempts = 61;
+  for (let attempt = 0; attempt < verificationAttempts; attempt++) {
     const metadata = await getJSON(versionURL(release));
     if (registryState(metadata, artifact) === 'identical') { confirmed = true; break; }
-    if (attempt < 9) await delay(5000);
+    if (attempt % 12 === 0) console.log(`npm accepted the package; waiting for public metadata (${attempt + 1}/${verificationAttempts}).`);
+    if (attempt < verificationAttempts - 1) await delay(5000);
   }
-  assert.ok(confirmed, 'npm has not exposed the published version yet. Rerun the workflow to verify it and finish the GitHub Release.');
+  assert.ok(confirmed, 'npm has not exposed the published version yet. Once the version is publicly readable, rerun this workflow to verify it and finish the GitHub Release.');
   await writeFile(new URL('../.artifacts/release-manifest.json', import.meta.url), JSON.stringify({ ...artifact, npmVerified: true }, null, 2) + '\n');
   console.log(`Verified ${artifact.name}@${artifact.version} on npm with matching SHA-512 integrity.`);
 }
