@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.examples/
+.artifacts/
+.research/
+.env
+.env.*
+!.env.example
+*.tgz
+*.tsbuildinfo
+.DS_Store
