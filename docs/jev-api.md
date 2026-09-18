@@ -1,6 +1,6 @@
 # Jev 与 API 调研
 
-核对日期：2026-09-18。资料来自 TypeSafe 官方文档、Vercel 官方文档及官方 SDK；不把厂商宣传的速度、成本或准确率当成本项目的实测结果。
+核对日期：2026-09-18。资料来自 TypeSafe、Vercel、OpenRouter、Cloudflare 官方文档及官方 SDK；不把厂商宣传的速度、成本或准确率当成本项目的实测结果。
 
 ## 模型定位
 
@@ -16,7 +16,7 @@ TypeSafe 的三个原语是 Choice、Score、Noul。Noul 返回 P(true)；Choice
 
 参考：[Advanced: structure](https://docs.typesafe.ai/primitives/advanced)。
 
-## 两种实际协议
+## 原生与 Vercel 协议
 
 | 项目 | TypeSafe 原生 | Vercel Gateway Evaluation |
 | --- | --- | --- |
@@ -49,4 +49,6 @@ Vercel 文档要求 AI SDK 7+ 的 Evaluation 能力，明确不支持通过 Open
 
 ## 兼容边界
 
-System One 是能力类别，不代表所有供应商已经遵循同一个 HTTP 标准。本项目默认支持 TypeSafe-compatible，Vercel Evaluation 与 OpenRouter Decisions 通过可选入口提供，也支持用户自定义适配器。其他模型需要具备相应问题能力；不同 wire protocol 接入后可复用同一业务接口。TypeSafe 真实调用记录见 `validation.md`；OpenRouter 的独立真实请求及后台记录核验见 [openrouter.md](openrouter.md)。Vercel 尚未进行真实调用验证。
+System One 是能力类别，不代表所有供应商已经遵循同一个 HTTP 标准。本项目默认支持 TypeSafe-compatible，Vercel Evaluation、OpenRouter Decisions 与 Cloudflare Jev REST 通过可选入口提供，也支持用户自定义适配器。其他模型需要具备相应问题能力；不同 wire protocol 接入后可复用同一业务接口。TypeSafe 真实调用记录见 `validation.md`；OpenRouter 的独立真实请求及后台记录核验见 [openrouter.md](openrouter.md)。Vercel 与 Cloudflare 尚未进行真实调用验证。
+
+Cloudflare 的 [Jev 模型页](https://developers.cloudflare.com/ai/models/typesafe/jev/) 使用账户下 `/ai/run` 端点，请求体为 `{ model: 'typesafe/jev', input: { state, questions } }`。0.5.0 增加 `cloudflareAdapter({ accountId })`，自动提供地址及模型，不要求用户手写端点。协议转换、代理覆盖及验证范围见 [Cloudflare 接入](cloudflare.zh-CN.md)。

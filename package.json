@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/sdk",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Dependency-free, typed System One decisions for Jev and compatible models, with optional protocol adapters.",
   "license": "MIT",
   "repository": {
@@ -33,6 +33,10 @@
       "import": { "types": "./dist/esm/adapters/openrouter.d.ts", "default": "./dist/esm/adapters/openrouter.js" },
       "require": { "types": "./dist/cjs/adapters/openrouter.d.ts", "default": "./dist/cjs/adapters/openrouter.js" }
     },
+    "./adapters/cloudflare": {
+      "import": { "types": "./dist/esm/adapters/cloudflare.d.ts", "default": "./dist/esm/adapters/cloudflare.js" },
+      "require": { "types": "./dist/cjs/adapters/cloudflare.d.ts", "default": "./dist/cjs/adapters/cloudflare.js" }
+    },
     "./decisions": {
       "import": { "types": "./dist/esm/decisions.d.ts", "default": "./dist/esm/decisions.js" },
       "require": { "types": "./dist/cjs/decisions.d.ts", "default": "./dist/cjs/decisions.js" }
@@ -58,10 +62,12 @@
     "test:live": "npm run build && node --env-file=.env scripts/test-live.mjs",
     "test:live:openrouter": "npm run build && node scripts/test-openrouter-live.mjs",
     "test:live:composition": "npm run build && node scripts/test-composition-live.mjs",
+    "test:live:cloudflare": "npm run build && node scripts/test-cloudflare-live.mjs",
     "examples:build": "tsc -p tsconfig.examples.json",
     "example": "npm run examples:build && node .examples/examples/basic.js",
     "example:agent": "npm run examples:build && node .examples/examples/realtime-agent.js",
     "example:openrouter": "npm run examples:build && node --env-file=.env.openrouter .examples/examples/openrouter.js",
+    "example:cloudflare": "npm run examples:build && node --env-file=.env.cloudflare .examples/examples/cloudflare.js",
     "example:decisions": "npm run examples:build && node --env-file=.env .examples/examples/decisions.js",
     "example:uncertainty": "npm run examples:build && node --env-file=.env .examples/examples/uncertainty.js",
     "example:batch": "npm run examples:build && node --env-file=.env .examples/examples/batch.js",

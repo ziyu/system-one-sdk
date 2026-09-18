@@ -1,8 +1,15 @@
 import { UnsupportedFeatureError } from '../errors.js';
-import type { AdapterContext, SystemOneAdapter } from '../types.js';
+import type { AdapterContext, Questions, SystemOneAdapter } from '../types.js';
 import { isRecord, parseBaseURL, responseRecord } from '../validation.js';
 
 const questionTypes = Object.freeze(['choice', 'score', 'boolean'] as const);
+
+/** Shared wire encoding for native System One question primitives. */
+export function nativeQuestions(questions: Questions) {
+  return Object.fromEntries(Object.entries(questions).map(([id, question]) => [
+    id, question.type === 'boolean' ? { ...question, type: 'noul' as const } : question,
+  ]));
+}
 
 function endpoint(baseURL: string): string {
   const url = parseBaseURL(baseURL);
@@ -23,9 +30,7 @@ export const systemOneAdapter: SystemOneAdapter = Object.freeze({
       throw new UnsupportedFeatureError('The TypeSafe System One protocol does not define providerOptions. Use an adapter that supports them.');
     }
     // Per-model upper limits belong to the service; do not freeze current Jev limits into a portable codec.
-    const questions = Object.fromEntries(Object.entries(request.questions).map(([id, question]) => [
-      id, question.type === 'boolean' ? { ...question, type: 'noul' } : question,
-    ]));
+    const questions = nativeQuestions(request.questions);
     return { url: endpoint(baseURL), body: { model, state: request.state, questions } };
   },
   decode(payload: unknown) {

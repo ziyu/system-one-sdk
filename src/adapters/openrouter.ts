@@ -1,7 +1,7 @@
 import { ResponseValidationError, UnsupportedFeatureError, ValidationError } from '../errors.js';
 import type { AdapterContext, JsonObject, SystemOneAdapter } from '../types.js';
 import { hasOwn, isRecord, parseBaseURL, responseRecord } from '../validation.js';
-import { systemOneAdapter } from './system-one.js';
+import { nativeQuestions, systemOneAdapter } from './system-one.js';
 
 function endpoint(baseURL: string): string {
   const url = parseBaseURL(baseURL);
@@ -46,9 +46,7 @@ export const openRouterAdapter: SystemOneAdapter = Object.freeze({
   supportedQuestionTypes: Object.freeze(['choice', 'score', 'boolean'] as const),
   prepare({ baseURL, model, request }: AdapterContext) {
     const options = requestOptions(request.providerOptions);
-    const questions = Object.fromEntries(Object.entries(request.questions).map(([id, question]) => [
-      id, question.type === 'boolean' ? { ...question, type: 'noul' } : question,
-    ]));
+    const questions = nativeQuestions(request.questions);
     return {
       url: endpoint(baseURL),
       body: { ...options, model, state: request.state, questions },

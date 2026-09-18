@@ -9,12 +9,10 @@ import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
 const client = new SystemOne({
   adapter: openRouterAdapter,
   apiKey: process.env.SYSTEM_ONE_API_KEY!,
-  baseURL: 'https://openrouter.ai/api/alpha',
-  model: '~typesafe/jev-latest',
 });
 ```
 
-The core entry point does not load this adapter. There is no OpenRouter SDK dependency, and the existing native TypeSafe and optional Vercel interfaces stay unchanged.
+The adapter supplies the OpenRouter URL and `~typesafe/jev-latest` model. `baseURL` and `model` are optional overrides for proxies or explicit model selection. The core entry point does not load this adapter. There is no OpenRouter SDK dependency, and the existing native TypeSafe and optional Vercel interfaces stay unchanged.
 
 ## Verified wire contract
 

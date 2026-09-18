@@ -4,6 +4,7 @@ import { SystemOne, choice, score, booleanQuestion, ValidationError, ResponseVal
 import { choiceFrom, defineDecision } from '../dist/esm/decisions.js';
 import { vercelAdapter } from '../dist/esm/adapters/vercel.js';
 import { openRouterAdapter } from '../dist/esm/adapters/openrouter.js';
+import { cloudflareAdapter } from '../dist/esm/adapters/cloudflare.js';
 import { jsonResponse } from './fixtures.mjs';
 
 test('choiceFrom snapshots membership and descriptions, but preserves business object identity', () => {
@@ -57,13 +58,14 @@ function answers(native = false, selected = 'adjust') {
   };
 }
 
-for (const [name, adapter, native] of [['native', undefined, true], ['vercel', vercelAdapter, false], ['openrouter', openRouterAdapter, true]]) {
+for (const [name, adapter, native] of [['native', undefined, true], ['vercel', vercelAdapter, false], ['openrouter', openRouterAdapter, true], ['cloudflare', cloudflareAdapter({ accountId: 'composition-test' }), true]]) {
   test(`one evaluation resolves typed action parameters through ${name} while retaining metadata`, async () => {
     const { target, definition } = scenario();
     let calls = 0;
     const client = new SystemOne({ apiKey: null, ...(adapter ? { adapter } : {}), fetch: async (_, init) => {
       calls++;
-      const body = JSON.parse(init.body);
+      const wire = JSON.parse(init.body);
+      const body = name === 'cloudflare' ? wire.input : wire;
       assert.equal(Object.keys(body.questions).length, 6);
       assert.equal(body.questions.parameter_0_0.instructions.action.id, 'adjust');
       assert.equal(body.questions.parameter_0_0.criteria.desk, 'Desk lamp');

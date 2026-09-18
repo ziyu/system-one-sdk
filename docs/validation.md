@@ -1,6 +1,27 @@
 # 验证记录
 
-日期：2026-09-18。本文件按版本保留验证历史，当前开发版本为 `0.4.0`。npm 包名为 `@system-one-ai/sdk`；旧版记录不与新请求合并统计。
+日期：2026-09-18。本文件按版本保留验证历史，当前开发版本为 `0.5.0`。npm 包名为 `@system-one-ai/sdk`；旧版记录不与新请求合并统计。
+
+## Cloudflare 与默认配置增量验证（0.5.0）
+
+新增 `@system-one-ai/sdk/adapters/cloudflare`，按账户 ID 生成默认 REST 地址和模型。原有 adapter 已支持默认地址，本轮精简示例与环境模板，并增加所有内置 adapter 的统一默认值及覆盖优先级测试。原生问题编码由内部 helper 复用，核心和组合 API 保持兼容。
+
+| 检查 | 结果 |
+| --- | --- |
+| 严格类型检查、ESM/CJS 构建、示例编译 | 通过；包含 Cloudflare 工厂参数、可选入口和选择项联合类型 |
+| Node.js 26.5.0 全量测试 | 197 通过，0 失败、0 跳过；`.artifacts/check-0.5.0.log` |
+| Node.js 20.20.2 同一测试集 | 197 通过，0 失败、0 跳过；`.artifacts/test-node20-0.5.0.log` |
+| tarball 独立安装 | ESM/CJS 全部入口、Cloudflare 模拟请求、NodeNext 声明和核心导入隔离通过 |
+| 四个内置 adapter 默认配置 | 省略地址/模型可用；客户端覆盖和单次模型覆盖优先级通过 |
+| Cloudflare 协议 fixture | `/ai/run`、`model + input`、原生原语、直接及 result 包装结果均通过 |
+| 地址和失败语义 | 账户快照、错误账户/路径、非法配置/响应、HTTP 错误、Retry-After、取消与总期限通过 |
+| 原生 Fetch 与本地 HTTP | 真实本地 server 验证完整请求、Bearer 鉴权和响应解码通过；未连接 Cloudflare |
+| 组合能力复用 | 动态动作/参数和批量评估通过 Cloudflare adapter 的离线回归 |
+| Cloudflare 真实推理 | 未执行：缺少 `.env.cloudflare`，配置阶段退出，推理请求数为 0 |
+
+本轮新增 41 项运行时测试。`node scripts/test-cloudflare-live.mjs` 的实际诊断记录为 `.artifacts/live-cloudflare.json`，完成于 `2026-09-18T06:35:30.676Z`，错误类别为 `missing-config-file`，没有将 fixture 当作真实模型结果。脚本在凭据齐备时将发出三次真实请求、不重试，保留脱敏结果。
+
+当前覆盖 Cloudflare REST 接口，未封装或验证 Workers 原生 `env.AI.run()` binding，也未在 Workers、浏览器、Bun、Deno 运行。本地安装包为 `.artifacts/system-one-ai-sdk-0.5.0.tgz`；本轮未提交、推送或发布 0.5.0。完整协议来源见 [Cloudflare 文档](cloudflare.zh-CN.md)。
 
 ## 通用组合增量验证（0.4.0）
 

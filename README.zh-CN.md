@@ -22,7 +22,7 @@ npm run check
 npm run test:package
 ```
 
-其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.4.0.tgz`。例如两个项目同处一层目录时：
+其他项目可以安装构建后的本地目录，或者安装 `.artifacts/system-one-ai-sdk-0.5.0.tgz`。例如两个项目同处一层目录时：
 
 ```sh
 npm install ../sytem-one-sdk
@@ -32,7 +32,6 @@ npm install ../sytem-one-sdk
 import { SystemOne, choice, booleanQuestion } from '@system-one-ai/sdk';
 
 const client = new SystemOne({
-  baseURL: 'https://api.typesafe.ai/v1',
   apiKey: process.env.SYSTEM_ONE_API_KEY!,
 });
 
@@ -55,11 +54,10 @@ result.answers.interrupt.probability;   // number，P(true)
 result.usage.inputTokens;               // number | undefined
 ```
 
-兼容原生协议的服务只需修改 `baseURL` 和 `apiKey`，业务调用保持一致。默认模型为 `jev-latest`；切换到其他模型时，可在客户端配置或单次请求中指定准确的 `model`。客户端不会根据 hostname 猜测供应商或修改协议。
+内置 adapter 自带默认地址和模型。选择 adapter 并提供对应凭据即可使用；Cloudflare 还需要账户 ID。正常接入无需查找 `baseURL` 或模型名称。`baseURL` 保留为代理和兼容服务的可选覆盖项；`model` 可用于固定版本或选择其他受支持的决策模型。客户端不会根据 hostname 猜测供应商。
 
 ```ts
 const direct = new SystemOne({
-  baseURL: 'https://api.typesafe.ai/v1',
   apiKey: process.env.TYPESAFE_API_KEY!,
 });
 
@@ -152,6 +150,17 @@ for (const item of report.items) {
 
 ## 地址与协议
 
+| Adapter | 必需配置 | 默认模型 |
+| --- | --- | --- |
+| 不填写，或 `systemOneAdapter` | TypeSafe `apiKey` | `jev-latest` |
+| `openRouterAdapter` | OpenRouter `apiKey` | `~typesafe/jev-latest` |
+| `vercelAdapter` | Vercel AI Gateway `apiKey` | `typesafe-ai/jev` |
+| `cloudflareAdapter({ accountId })`（0.5.0+） | Cloudflare 账户 ID，API token 作为 `apiKey` | `typesafe/jev` |
+
+客户端显式配置覆盖 adapter 的默认值，单次请求的 `model` 再覆盖客户端模型。自定义 adapter 同样可以提供 `defaultBaseURL` 和 `defaultModel`；只有没有默认地址的 adapter 才需要调用方填写 `baseURL`。需要账户或租户的地址可以通过工厂生成，Cloudflare 就采用这种方式。
+
+默认原生协议下，自定义地址按以下规则处理：
+
 | `baseURL` | 默认协议 | 请求地址 |
 | --- | --- | --- |
 | 未设置 | TypeSafe-compatible | `https://api.typesafe.ai/v1/systemone` |
@@ -171,8 +180,6 @@ import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
 const openrouter = new SystemOne({
   adapter: openRouterAdapter,
   apiKey: process.env.SYSTEM_ONE_API_KEY!,
-  baseURL: 'https://openrouter.ai/api/alpha',
-  model: '~typesafe/jev-latest',
 });
 
 const result = await openrouter.evaluate({
@@ -199,8 +206,6 @@ console.log(result.providerMetadata?.openrouter); // 服务端提供的 generati
 真实联调使用独立 `.env.openrouter`：
 
 ```dotenv
-SYSTEM_ONE_BASE_URL=https://openrouter.ai/api/alpha/decisions
-SYSTEM_ONE_MODEL=~typesafe/jev-latest
 SYSTEM_ONE_API_KEY=your-openrouter-key
 ```
 
@@ -217,6 +222,37 @@ node scripts/test-openrouter-live.mjs --verify-only
 ```
 
 `npm run example:openrouter` 会用同一环境文件运行 `examples/openrouter.ts`。真实命令会产生 API 用量；普通测试保持离线。
+
+## 可选 Cloudflare 适配器（0.5.0+）
+
+```ts
+import { SystemOne, booleanQuestion } from '@system-one-ai/sdk';
+import { cloudflareAdapter } from '@system-one-ai/sdk/adapters/cloudflare';
+
+const cloudflare = new SystemOne({
+  adapter: cloudflareAdapter({ accountId: process.env.CLOUDFLARE_ACCOUNT_ID! }),
+  apiKey: process.env.CLOUDFLARE_API_TOKEN!,
+});
+
+const result = await cloudflare.evaluate({
+  state: '请退回重复扣除的钱。',
+  questions: { refund: booleanQuestion('用户是否请求退款？') },
+});
+console.log(result.answers.refund.probability);
+```
+
+工厂自动生成账户地址并选用 `typesafe/jev`。实现模型页的 REST 协议：`POST /client/v4/accounts/{accountId}/ai/run`，请求体为 `{ model, input: { state, questions } }`。适配器将 `boolean` 映射为原生 `noul`，保留概率和 confidence，并统一 token 用量字段。需要代理时，`baseURL` 可覆盖为 API 根地址或以 `/ai/run` 结尾的代理端点；显式模型名原样发送。
+
+此入口通过现有 Fetch transport 调用 REST API；Workers 原生 `env.AI.run()` binding 是另一种接口。没有新增 Cloudflare SDK 依赖，现有 `decisions`、`policies`、`batch` 模块可直接复用。
+
+```sh
+cp .env.cloudflare.example .env.cloudflare
+# 填写 CLOUDFLARE_ACCOUNT_ID 和 CLOUDFLARE_API_TOKEN，然后：
+npm run example:cloudflare
+npm run test:live:cloudflare
+```
+
+主动运行联调命令会发出三次真实请求，不重试，脱敏报告保存在 `.artifacts/`。该命令需要 Cloudflare 凭据，普通测试和 CI 不会调用。协议 fixture 和本地 HTTP 测试不代表已取得真实账户访问权限。完整契约和验证范围见 [Cloudflare 接入文档](docs/cloudflare.zh-CN.md)（[English](docs/cloudflare.md)）。
 
 ## 可选 Vercel 适配器
 

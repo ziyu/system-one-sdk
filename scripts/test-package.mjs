@@ -15,7 +15,7 @@ assert.ok(pack.files.some(file => file.path === 'dist/esm/adapters/vercel.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/cjs/adapters/vercel.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/esm/adapters/openrouter.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/cjs/adapters/openrouter.js'));
-for (const entry of ['decisions', 'policies', 'batch']) {
+for (const entry of ['decisions', 'policies', 'batch', 'adapters/cloudflare']) {
   for (const format of ['esm', 'cjs']) {
     assert.ok(pack.files.some(file => file.path === `dist/${format}/${entry}.js`));
     assert.ok(pack.files.some(file => file.path === `dist/${format}/${entry}.d.ts`));
@@ -42,11 +42,13 @@ try {
     assert.equal('vercelAdapter' in cjs, false);
     assert.equal('openRouterAdapter' in esm, false);
     assert.equal('openRouterAdapter' in cjs, false);
+    assert.equal('cloudflareAdapter' in esm, false);
+    assert.equal('cloudflareAdapter' in cjs, false);
     for (const name of ['choiceFrom', 'defineDecision', 'gateChoice', 'gateBoolean', 'evaluateMany']) {
       assert.equal(name in esm, false);
       assert.equal(name in cjs, false);
     }
-    assert.ok(!Object.keys(require.cache).some(path => path.endsWith('/adapters/vercel.js') || path.endsWith('/adapters/openrouter.js')), 'Core import must not load optional adapters');
+    assert.ok(!Object.keys(require.cache).some(path => ['/adapters/vercel.js', '/adapters/openrouter.js', '/adapters/cloudflare.js'].some(suffix => path.endsWith(suffix))), 'Core import must not load optional adapters');
     assert.ok(!Object.keys(require.cache).some(path => ['/decisions.js', '/policies.js', '/batch.js'].some(suffix => path.endsWith(suffix))), 'Core import must not load composition modules');
     for (const sdk of [esm, cjs]) {
       const client = new sdk.SystemOne({
@@ -86,6 +88,23 @@ try {
       assert.equal(result.providerMetadata.openrouter.generationId, 'gen-dec-package');
       assert.equal(result.providerMetadata.openrouter.cost, 0);
     }
+    const cloudflareESM = await import('@system-one-ai/sdk/adapters/cloudflare');
+    const cloudflareCJS = require('@system-one-ai/sdk/adapters/cloudflare');
+    for (const [sdk, optional] of [[esm, cloudflareESM], [cjs, cloudflareCJS]]) {
+      const client = new sdk.SystemOne({
+        adapter: optional.cloudflareAdapter({ accountId: 'package-test-account' }),
+        apiKey: 'package-fixture',
+        fetch: async (url, init) => {
+          assert.equal(url, 'https://api.cloudflare.com/client/v4/accounts/package-test-account/ai/run');
+          assert.deepEqual(JSON.parse(init.body), {model:'typesafe/jev',input:{state:'on',questions:{on:{type:'noul',instructions:'Is the light on?'}}}});
+          return new Response(JSON.stringify({success:true,errors:[],result:{model:'jev-1.13.0',answers:{on:{type:'noul',noul:0.9}},usage:{input_tokens:10,output_tokens:2}}}));
+        },
+      });
+      const result = await client.evaluate({state:'on',questions:{on:sdk.booleanQuestion('Is the light on?')}});
+      assert.equal(result.model, 'jev-1.13.0');
+      assert.equal(result.answers.on.probability, 0.9);
+      assert.equal(result.usage.totalTokens, 12);
+    }
     const compositionESM = [await import('@system-one-ai/sdk/decisions'), await import('@system-one-ai/sdk/policies'), await import('@system-one-ai/sdk/batch')];
     const compositionCJS = [require('@system-one-ai/sdk/decisions'), require('@system-one-ai/sdk/policies'), require('@system-one-ai/sdk/batch')];
     for (const [sdk, [decisions, policies, batch]] of [[esm, compositionESM], [cjs, compositionCJS]]) {
@@ -114,6 +133,7 @@ try {
     import { SystemOne, choice } from '@system-one-ai/sdk';
     import { vercelAdapter } from '@system-one-ai/sdk/adapters/vercel';
     import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
+    import { cloudflareAdapter, type CloudflareAdapterOptions } from '@system-one-ai/sdk/adapters/cloudflare';
     import { choiceFrom, defineDecision } from '@system-one-ai/sdk/decisions';
     import { gateChoice } from '@system-one-ai/sdk/policies';
     import { evaluateMany } from '@system-one-ai/sdk/batch';
@@ -121,6 +141,8 @@ try {
     import { vercelAdapter as removedRootExport } from '@system-one-ai/sdk';
     // @ts-expect-error OpenRouter is an optional subpath, never a core export.
     import { openRouterAdapter as absentRootExport } from '@system-one-ai/sdk';
+    // @ts-expect-error Cloudflare is only exported from its explicit subpath.
+    import { cloudflareAdapter as absentCloudflare } from '@system-one-ai/sdk';
     const client = new SystemOne({apiKey: null});
     const target = choiceFrom({instructions:'Target',items:[{id:'lamp',on:false}],id:item=>item.id,describe:()=>null});
     const definition = defineDecision({instructions:'Action',actions:{
@@ -128,11 +150,21 @@ try {
     }});
     new SystemOne({apiKey: 'fixture', adapter: vercelAdapter});
     new SystemOne({apiKey: 'fixture', adapter: openRouterAdapter});
+    const cloudflareOptions: CloudflareAdapterOptions = {accountId:'package-test-account'};
+    const cloudflareClient = new SystemOne({apiKey:'fixture',adapter:cloudflareAdapter(cloudflareOptions)});
+    // @ts-expect-error The factory's account ID is required in the installed declarations.
+    cloudflareAdapter({});
     // @ts-expect-error The former protocol string must not silently persist in declarations.
     new SystemOne({apiKey: 'fixture', protocol: 'vercel'});
     void removedRootExport;
     void absentRootExport;
+    void absentCloudflare;
     async function run() {
+      const cf = await cloudflareClient.evaluate({state:'water',questions:{action:choice('Next?',{drink:null,rest:null})}});
+      const cfAction: 'drink' | 'rest' = cf.answers.action.choice;
+      // @ts-expect-error Cloudflare must preserve the same closed answer types.
+      const invalidCFAction: 'fly' = cf.answers.action.choice;
+      void [cfAction, invalidCFAction];
       const result = await client.evaluate({state:'water',questions:{action:choice('Next?',{drink:null,rest:null})}});
       const action: 'drink' | 'rest' = result.answers.action.choice;
       // @ts-expect-error The packaged declaration must retain the choice union.

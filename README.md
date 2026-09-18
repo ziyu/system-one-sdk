@@ -22,7 +22,7 @@ npm run check
 npm run test:package
 ```
 
-Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.4.0.tgz` package. For example, when the two projects are sibling directories:
+Other projects can install the built local directory or the `.artifacts/system-one-ai-sdk-0.5.0.tgz` package. For example, when the two projects are sibling directories:
 
 ```sh
 npm install ../sytem-one-sdk
@@ -32,7 +32,6 @@ npm install ../sytem-one-sdk
 import { SystemOne, choice, booleanQuestion } from '@system-one-ai/sdk';
 
 const client = new SystemOne({
-  baseURL: 'https://api.typesafe.ai/v1',
   apiKey: process.env.SYSTEM_ONE_API_KEY!,
 });
 
@@ -55,11 +54,10 @@ result.answers.interrupt.probability;   // number, P(true)
 result.usage.inputTokens;               // number | undefined
 ```
 
-For services compatible with the native protocol, change `baseURL` and `apiKey` while keeping the application calls unchanged. The default model is `jev-latest`; use the exact `model` ID in the client configuration or an individual request when selecting another model. The client does not infer a provider or switch protocols based on the hostname.
+Built-in adapters supply their default URL and model. Choose an adapter and provide its credentials; Cloudflare also needs your account ID. Normal use does not require looking up a `baseURL` or model ID. `baseURL` remains an optional override for proxies and compatible services, and `model` can pin a version or select another supported decision model. The client does not infer a provider from the hostname.
 
 ```ts
 const direct = new SystemOne({
-  baseURL: 'https://api.typesafe.ai/v1',
   apiKey: process.env.TYPESAFE_API_KEY!,
 });
 
@@ -152,6 +150,17 @@ See the [complete API contract](docs/composition.md) ([中文](docs/composition.
 
 ## URLs and protocols
 
+| Adapter | Required configuration | Default model |
+| --- | --- | --- |
+| Omitted, or `systemOneAdapter` | TypeSafe `apiKey` | `jev-latest` |
+| `openRouterAdapter` | OpenRouter `apiKey` | `~typesafe/jev-latest` |
+| `vercelAdapter` | Vercel AI Gateway `apiKey` | `typesafe-ai/jev` |
+| `cloudflareAdapter({ accountId })` (0.5.0+) | Cloudflare account ID and API token as `apiKey` | `typesafe/jev` |
+
+Explicit client settings override adapter defaults. A request's `model` overrides the client's model. Custom adapters can supply `defaultBaseURL` and `defaultModel`, too; only adapters without a default URL require `baseURL`. Account-specific defaults can be built in an adapter factory, as Cloudflare does.
+
+For the default native protocol, custom addresses are resolved as follows:
+
 | `baseURL` | Default protocol | Request URL or path |
 | --- | --- | --- |
 | Omitted | TypeSafe-compatible | `https://api.typesafe.ai/v1/systemone` |
@@ -171,8 +180,6 @@ import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
 const openrouter = new SystemOne({
   adapter: openRouterAdapter,
   apiKey: process.env.SYSTEM_ONE_API_KEY!,
-  baseURL: 'https://openrouter.ai/api/alpha',
-  model: '~typesafe/jev-latest',
 });
 
 const result = await openrouter.evaluate({
@@ -199,8 +206,6 @@ Use `providerOptions.openrouter` for the API-native `provider`, `session_id`, `t
 For a live check, configure a separate `.env.openrouter`:
 
 ```dotenv
-SYSTEM_ONE_BASE_URL=https://openrouter.ai/api/alpha/decisions
-SYSTEM_ONE_MODEL=~typesafe/jev-latest
 SYSTEM_ONE_API_KEY=your-openrouter-key
 ```
 
@@ -217,6 +222,37 @@ node scripts/test-openrouter-live.mjs --verify-only
 ```
 
 `npm run example:openrouter` runs the smaller example in `examples/openrouter.ts` with the same environment file. Live commands consume API usage; ordinary tests remain offline.
+
+## Optional Cloudflare adapter (0.5.0+)
+
+```ts
+import { SystemOne, booleanQuestion } from '@system-one-ai/sdk';
+import { cloudflareAdapter } from '@system-one-ai/sdk/adapters/cloudflare';
+
+const cloudflare = new SystemOne({
+  adapter: cloudflareAdapter({ accountId: process.env.CLOUDFLARE_ACCOUNT_ID! }),
+  apiKey: process.env.CLOUDFLARE_API_TOKEN!,
+});
+
+const result = await cloudflare.evaluate({
+  state: 'Please refund the duplicate charge.',
+  questions: { refund: booleanQuestion('Does the customer request a refund?') },
+});
+console.log(result.answers.refund.probability);
+```
+
+The factory constructs the account-specific URL and selects `typesafe/jev`. It implements the model page's REST protocol: `POST /client/v4/accounts/{accountId}/ai/run` with `{ model, input: { state, questions } }`. It maps `boolean` to native `noul`, preserves probabilities and confidence, and normalizes token usage. Explicit `baseURL` overrides support API roots or proxy endpoints ending in `/ai/run`; `model` overrides are sent unchanged.
+
+This is a REST adapter using the existing Fetch transport; native Workers `env.AI.run()` bindings are a separate interface. No Cloudflare SDK dependency is added. The existing `decisions`, `policies`, and `batch` modules work with this client unchanged.
+
+```sh
+cp .env.cloudflare.example .env.cloudflare
+# Fill in CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, then:
+npm run example:cloudflare
+npm run test:live:cloudflare
+```
+
+The opt-in live check makes three real requests with no retries and saves sanitized reports under `.artifacts/`. It requires Cloudflare credentials and is never run by ordinary tests or CI. Protocol fixtures and local HTTP tests do not establish live account access. See the [Cloudflare contract and verification scope](docs/cloudflare.md) ([中文](docs/cloudflare.zh-CN.md)).
 
 ## Optional Vercel adapter
 

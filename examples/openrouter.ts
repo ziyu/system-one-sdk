@@ -6,11 +6,13 @@ import { openRouterAdapter } from '../src/adapters/openrouter.js';
 try {
   const apiKey = process.env.SYSTEM_ONE_API_KEY ?? process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('Configure SYSTEM_ONE_API_KEY in .env.openrouter.');
+  const baseURL = process.env.SYSTEM_ONE_BASE_URL;
+  const model = process.env.SYSTEM_ONE_MODEL;
   const client = new SystemOne({
     adapter: openRouterAdapter,
     apiKey,
-    baseURL: process.env.SYSTEM_ONE_BASE_URL ?? 'https://openrouter.ai/api/alpha',
-    model: process.env.SYSTEM_ONE_MODEL ?? '~typesafe/jev-latest',
+    ...(baseURL ? { baseURL } : {}),
+    ...(model ? { model } : {}),
   });
   const result = await client.evaluate({
     state: { userMessage: 'Please get me a glass of water.', currentAction: 'rest' },

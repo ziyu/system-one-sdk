@@ -17,7 +17,8 @@ try {
   apiKey = env.SYSTEM_ONE_API_KEY ?? '';
   assert.ok(apiKey, 'SYSTEM_ONE_API_KEY is required.');
   const client = new SystemOne({
-    apiKey, baseURL: env.SYSTEM_ONE_BASE_URL ?? 'https://api.typesafe.ai/v1',
+    apiKey,
+    ...(env.SYSTEM_ONE_BASE_URL ? { baseURL: env.SYSTEM_ONE_BASE_URL } : {}),
     ...(env.SYSTEM_ONE_MODEL ? { model: env.SYSTEM_ONE_MODEL } : {}),
     timeoutMs: 15_000, maxRetries: 0,
     fetch: (url, init) => { requests++; return fetch(url, init); },

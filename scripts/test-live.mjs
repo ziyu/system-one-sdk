@@ -63,7 +63,7 @@ const scenarios = [
 try {
   if (!apiKey) throw new Error('SYSTEM_ONE_API_KEY is required.');
   const client = new SystemOne({
-    baseURL: process.env.SYSTEM_ONE_BASE_URL ?? 'https://api.typesafe.ai/v1',
+    ...(process.env.SYSTEM_ONE_BASE_URL ? { baseURL: process.env.SYSTEM_ONE_BASE_URL } : {}),
     apiKey,
     ...(process.env.SYSTEM_ONE_MODEL ? { model: process.env.SYSTEM_ONE_MODEL } : {}),
     timeoutMs: 15_000,

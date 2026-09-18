@@ -14,6 +14,7 @@
 | `src/adapters/system-one.ts` | 默认原生协议转换 |
 | `src/adapters/vercel.ts` | 显式子路径导入的可选 Evaluation v4 适配器 |
 | `src/adapters/openrouter.ts` | 显式子路径导入的可选 Decisions 适配器，保留 generation ID 和费用 |
+| `src/adapters/cloudflare.ts` | 可选 Cloudflare REST 适配器，按账户生成默认地址、包装 input 并解开响应 envelope |
 | `src/transport.ts` | Fetch、鉴权、总期限、取消、受限读取及 HTTP 错误 |
 | `src/validation.ts` | 输入与输出边界验证，概率和评分的一致性检查 |
 | `src/errors.ts` | 调用方可以分支处理的稳定错误类型 |
@@ -23,7 +24,7 @@
 
 运行时代码不依赖 Node API。环境变量读取只出现在示例和主动运行的联调脚本中，不让共享 SDK 隐式读取宿主凭据。SDK 没有进程级全局配置，客户端之间不会共享请求状态。
 
-主入口不引用 Vercel 或 OpenRouter 模块，不进行 hostname 自动识别，不保留 `protocol` 字符串选项。适配器差异只由 `adapter` 对象表达。可选适配器与核心一同打包，但仅在调用方显式导入相应的 `@system-one-ai/sdk/adapters/*` 子路径时加载。
+主入口不引用 Vercel、OpenRouter 或 Cloudflare 模块，不进行 hostname 自动识别，不保留 `protocol` 字符串选项。适配器差异只由 `adapter` 对象表达。可选适配器与核心一同打包，但仅在调用方显式导入相应的 `@system-one-ai/sdk/adapters/*` 子路径时加载。
 
 ## 统一接口与供应商差异
 
@@ -32,6 +33,10 @@
 选择和评分的概率分布、confidence 都是可选字段，以兼容将来能力不同的供应商。存在的值需要通过校验；没有的值保持缺省。供应商原始 metadata 会保留。业务不应假定所有供应商的置信定义相同。
 
 `SystemOneAdapter` 声明支持的原语，把请求编码成 JSON、把响应映射成 `ProviderResponse`。公共 transport 拥有网络生命周期。新的鉴权头可通过 `authenticate` 定义，跨 origin 请求会被阻止。
+
+所有内置 adapter 提供 `defaultBaseURL` 和 `defaultModel`，正常使用不需要显式填写地址和模型。客户端 `baseURL`/`model` 是可选覆盖，单次请求模型优先级最高。自定义 adapter 可按相同约定提供默认值。Cloudflare 使用 `cloudflareAdapter({ accountId })` 工厂建立账户配置快照；账户专属信息保留在 adapter 内，不在通用客户端增加供应商字段。原生问题编码由内部 `nativeQuestions` 共用。
+
+Cloudflare 按 Jev 模型页使用 `/ai/run` 与 `{ model, input }`，不猜测或轮询备用端点。当前覆盖 REST 调用，未封装 Workers 原生 binding。完整契约和来源见 [Cloudflare 接入文档](cloudflare.zh-CN.md)。
 
 ## 调用生命周期
 

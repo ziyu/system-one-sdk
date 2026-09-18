@@ -118,7 +118,9 @@ export interface ProviderResponse {
 }
 export interface SystemOneAdapter {
   readonly id: string;
+  /** Used when SystemOneOptions.baseURL is omitted. Factories can include an account or tenant. */
   readonly defaultBaseURL?: string;
+  /** Used when neither the client nor the evaluation explicitly selects a model. */
   readonly defaultModel?: string;
   readonly supportedQuestionTypes: readonly QuestionType[];
   /** Synchronous codec. Network I/O, cancellation, and retries belong to the client. */
@@ -131,9 +133,11 @@ export interface SystemOneAdapter {
 export type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export type ApiKey = string | null | (() => string | null | Promise<string | null>);
 export interface SystemOneOptions {
+  /** Optional override for a proxy or compatible service. Built-in adapters supply their own URL. */
   readonly baseURL?: string;
   /** Explicit null supports an unauthenticated local server or same-origin application proxy. */
   readonly apiKey: ApiKey;
+  /** Optional override of the adapter's default model. */
   readonly model?: string;
   /** Defaults to the native System One protocol. Other protocols are explicit, optional imports. */
   readonly adapter?: SystemOneAdapter;
