@@ -1,6 +1,6 @@
 # @system-one-ai/adapter-openrouter
 
-openrouter decision protocol adapter. Install this package alongside core and transport-fetch; other adapters are not required.
+Call System One models through OpenRouter Decisions and convert answers, usage and cost metadata into this library’s results. Install this package with `@system-one-ai/core` and `@system-one-ai/transport-fetch`.
 
 ```ts
 import { createSystemOne } from '@system-one-ai/core';

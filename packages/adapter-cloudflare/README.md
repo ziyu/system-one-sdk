@@ -1,6 +1,6 @@
 # @system-one-ai/adapter-cloudflare
 
-cloudflare decision protocol adapter. Install this package alongside core and transport-fetch; other adapters are not required.
+Run System One models on Cloudflare through its REST API or the native `env.AI` binding inside Workers. Install this package with `@system-one-ai/core` and `@system-one-ai/transport-fetch`.
 
 ```ts
 import { createSystemOne } from '@system-one-ai/core';
