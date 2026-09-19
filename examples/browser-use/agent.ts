@@ -1,9 +1,9 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Page } from 'playwright';
-import { choice, RequestAbortedError, SystemOneError, type EvaluationClient, type JsonObject } from '../../src/index.js';
-import { choiceFrom, defineDecision } from '../../src/decisions.js';
-import { gateChoice } from '../../src/policies.js';
+import { choice, RequestAbortedError, SystemOneError, type EvaluationClient, type JsonObject } from '@system-one-ai/core';
+import { choiceFrom, defineDecision } from '@system-one-ai/decisions';
+import { gateChoice } from '@system-one-ai/policies';
 import { observe, settle, type BrowserTarget, type PageSnapshot } from './observe.js';
 
 export interface BrowserTask {

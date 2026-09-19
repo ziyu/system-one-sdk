@@ -1,10 +1,11 @@
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parseEnv } from 'node:util';
-import { SystemOne, SystemOneError, choice, score, booleanQuestion } from '../dist/esm/index.js';
-import { openRouterAdapter } from '../dist/esm/adapters/openrouter.js';
+import { SystemOne, SystemOneError, choice, score, booleanQuestion } from '@system-one-ai/core';
+import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
 
 // Explicit opt-in. Read this file directly so inherited shell variables cannot select another key.
 // The wrapper below delegates every request to native Fetch; there are no mock responses.
@@ -74,7 +75,7 @@ try {
   const client = new SystemOne({
     adapter: openRouterAdapter, baseURL, apiKey, model, timeoutMs: 15000, maxRetries: 0,
     headers: { 'HTTP-Referer': 'https://github.com/ziyu/sytem-one-sdk', 'X-OpenRouter-Title': 'System One SDK integration test' },
-    fetch: async (input, init) => {
+    transport: createFetchTransport(async (input, init) => {
       const url = String(input);
       assert.equal(url, 'https://openrouter.ai/api/alpha/decisions');
       assert.equal(init.method, 'POST');
@@ -90,7 +91,7 @@ try {
         return value === null ? [] : [[name, value]];
       }));
       return response;
-    },
+    }),
   });
   const scenarios = [
     {

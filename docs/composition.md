@@ -2,20 +2,20 @@
 
 **English** | [简体中文](composition.zh-CN.md)
 
-Available in SDK 0.4.0 through optional subpaths. The existing `evaluate` API and provider adapters are unchanged. The new runtime modules have no third-party dependencies and use Web APIs. TypeScript consumers need TypeScript 5.4 or newer for the published composition declarations.
+Available as independently installed workspace packages. The existing `evaluate` API and provider adapters are unchanged. The new runtime modules have no third-party dependencies and use Web APIs. TypeScript consumers need TypeScript 5.4 or newer for the published composition declarations.
 
 | Entry point | Exports | Responsibility |
 | --- | --- | --- |
-| `@system-one-ai/sdk/decisions` | `choiceFrom`, `defineDecision` | Candidate mapping and action/parameter composition |
-| `@system-one-ai/sdk/policies` | `gateChoice`, `gateBoolean` | Explicit acceptance, uncertainty and abstention |
-| `@system-one-ai/sdk/batch` | `evaluateMany` | Bounded client-side concurrency across independent states |
+| `@system-one-ai/decisions` | `choiceFrom`, `defineDecision` | Candidate mapping and action/parameter composition |
+| `@system-one-ai/policies` | `gateChoice`, `gateBoolean` | Explicit acceptance, uncertainty and abstention |
+| `@system-one-ai/batch` | `evaluateMany` | Bounded client-side concurrency across independent states |
 
 Composition accepts the structural `EvaluationClient` interface exported as a type by the core. `SystemOne` implements it, as can application wrappers. A wrapper must preserve the normalized response contract and honor request controls. No composition module selects a provider, resolves credentials or reads environment variables. Importing the core does not load these modules.
 
 ## Dynamic candidates
 
 ```ts
-import { choiceFrom } from '@system-one-ai/sdk/decisions';
+import { choiceFrom } from '@system-one-ai/decisions';
 
 const devices = [{ id: 'desk', label: 'Desk lamp', on: false }];
 const targets = choiceFrom({
@@ -42,9 +42,9 @@ Empty arrays reject unless an explicit `none: { id, description }` option is sup
 ## Typed action branches
 
 ```ts
-import { choice, booleanQuestion } from '@system-one-ai/sdk';
-import { defineDecision } from '@system-one-ai/sdk/decisions';
-import { gateChoice } from '@system-one-ai/sdk/policies';
+import { choice, booleanQuestion } from '@system-one-ai/core';
+import { defineDecision } from '@system-one-ai/decisions';
+import { gateChoice } from '@system-one-ai/policies';
 
 const definition = defineDecision({
   instructions: 'Choose the next action. Ask when the request is unclear.',
@@ -114,7 +114,7 @@ There is no default threshold. Example values are illustrative and should be che
 ## Independent evaluations with bounded concurrency
 
 ```ts
-import { evaluateMany } from '@system-one-ai/sdk/batch';
+import { evaluateMany } from '@system-one-ai/batch';
 
 const report = await evaluateMany(client, [
   { id: 'first', request: { state: 'Turn on the desk lamp.', questions: definition.questions } },

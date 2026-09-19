@@ -1,10 +1,12 @@
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import { before, after, test } from 'node:test';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { SystemOne } from '../../.examples/src/index.js';
+import { SystemOne } from '@system-one-ai/core';
 import { observe } from '../../.examples/examples/browser-use/observe.js';
 import { runBrowserTask } from '../../.examples/examples/browser-use/agent.js';
 import { verifyBrowserTask } from '../../.examples/examples/browser-use/tasks.js';
@@ -51,7 +53,7 @@ const task = () => ({ id: 'local', startURL: origin, goal: 'Search for the given
 
 function fixtureClient(plans, inspect = () => {}) {
   let calls = 0;
-  const client = new SystemOne({ apiKey: null, maxRetries: 0, fetch: async (_, init) => {
+  const client = new SystemOne({ adapter: systemOneAdapter, apiKey: null, maxRetries: 0, transport: createFetchTransport(async (_, init) => {
     const request = JSON.parse(init.body);
     inspect(request, calls);
     const plan = plans[calls++];
@@ -65,7 +67,7 @@ function fixtureClient(plans, inspect = () => {}) {
       return [id, { type: 'choice', choice: selected, probabilities: Object.fromEntries(Object.keys(question.criteria).map(key => [key, key === selected ? 1 : 0])) }];
     }));
     return Response.json({ answers });
-  } });
+  }) });
   return { client, calls: () => calls };
 }
 
@@ -151,11 +153,11 @@ test('pre-cancelled runs neither navigate nor invoke a model', async () => withP
 test('cancellation during real SDK waiting prevents the planned browser action', async () => withPage(async page => {
   const controller = new AbortController();
   let calls = 0;
-  const client = new SystemOne({ apiKey: null, fetch: async () => {
+  const client = new SystemOne({ adapter: systemOneAdapter, apiKey: null, transport: createFetchTransport(async () => {
     calls++;
     controller.abort();
     return new Promise(() => {});
-  } });
+  }) });
   const result = await runBrowserTask(client, page, task(), { output: await output(), signal: controller.signal });
   assert.equal(result.status, 'cancelled');
   assert.equal(calls, 1);

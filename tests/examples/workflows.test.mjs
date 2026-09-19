@@ -1,8 +1,10 @@
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { SystemOne, APIError, RequestAbortedError } from '../../.examples/src/index.js';
+import { SystemOne, APIError, RequestAbortedError } from '@system-one-ai/core';
 import { listDocuments, runFileCommand, seedFiles } from '../../.examples/examples/scenarios/files.js';
 import { runSupportCommand, seedSupport } from '../../.examples/examples/scenarios/support.js';
 import { loadJournal, saveJournal } from '../../.examples/examples/scenarios/workspace.js';
@@ -16,7 +18,7 @@ async function workspace(t, kind) {
 // Offline protocol fixtures exercise the real application executors. Live semantics are a separate suite.
 function fixture(action, parameters = {}, { probability = 1, parameterProbabilities = {}, beforeResponse, inspect, failureStatus } = {}) {
   let calls = 0;
-  const client = new SystemOne({ apiKey: null, maxRetries: 0, fetch: async (_, init) => {
+  const client = new SystemOne({ adapter: systemOneAdapter, apiKey: null, maxRetries: 0, transport: createFetchTransport(async (_, init) => {
     calls++;
     const body = JSON.parse(init.body);
     inspect?.(body);
@@ -34,7 +36,7 @@ function fixture(action, parameters = {}, { probability = 1, parameterProbabilit
       return [id, { type: 'choice', choice: selected, probabilities }];
     }));
     return new Response(JSON.stringify({ model: 'jev-1.13.0', answers }));
-  } });
+  }) });
   return { client, get calls() { return calls; } };
 }
 

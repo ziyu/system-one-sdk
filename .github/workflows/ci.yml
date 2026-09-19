@@ -32,5 +32,4 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run check
-      - run: npm run examples:build
       - run: npm run test:package

@@ -1,7 +1,8 @@
-import { SystemOne, choice, score, booleanQuestion } from '../src/index.js';
-import { openRouterAdapter } from '../src/adapters/openrouter.js';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { SystemOne, choice, score, booleanQuestion } from '@system-one-ai/core';
+import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
 
-// In a consuming app, import from @system-one-ai/sdk and @system-one-ai/sdk/adapters/openrouter.
+// In a consuming app, import from @system-one-ai/core and @system-one-ai/adapter-openrouter.
 // Run with npm run example:openrouter to load this project's .env.openrouter.
 try {
   const apiKey = process.env.SYSTEM_ONE_API_KEY ?? process.env.OPENROUTER_API_KEY;
@@ -9,6 +10,7 @@ try {
   const baseURL = process.env.SYSTEM_ONE_BASE_URL;
   const model = process.env.SYSTEM_ONE_MODEL;
   const client = new SystemOne({
+    transport: createFetchTransport(),
     adapter: openRouterAdapter,
     apiKey,
     ...(baseURL ? { baseURL } : {}),

@@ -1,3 +1,4 @@
+import { buildOrder } from './workspaces.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -19,12 +20,35 @@ function run(command, args, cwd = temporary) {
 let mf;
 try {
   await writeFile(path.join(temporary, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
-  const [pack] = JSON.parse(run(npm, ['pack', '--ignore-scripts', '--json', '--pack-destination', temporary], root));
-  for (const format of ['esm', 'cjs']) for (const extension of ['js', 'd.ts']) {
-    assert.ok(pack.files.some(file => file.path === `dist/${format}/cloudflare-workers.${extension}`));
+  const selected = new Map();
+  for (const name of ['adapter-cloudflare', 'decisions', 'policies', 'batch']) {
+    for (const workspace of buildOrder(name)) selected.set(workspace.manifest.name, workspace);
   }
-  console.log('Installing Wrangler 4.135.0 and the built SDK tarball in an isolated consumer.');
-  run(npm, ['install', '--ignore-scripts', '--no-audit', '--no-fund', 'wrangler@4.135.0', path.join(temporary, pack.filename)]);
+  const tarballs = [];
+  const manifestArg = process.argv.indexOf('--manifest');
+  const testedPackages = manifestArg < 0 ? null : JSON.parse(await readFile(path.resolve(process.argv[manifestArg + 1]), 'utf8')).packages;
+  if (testedPackages) {
+    assert.ok(testedPackages.some(pkg => pkg.name === '@system-one-ai/adapter-cloudflare'), 'Manifest must include the Workers package.');
+    for (const pkg of testedPackages) tarballs.push(pkg.filename ? path.resolve('.artifacts', pkg.filename) : `${pkg.name}@${pkg.version}`);
+  }
+  for (const workspace of testedPackages ? [] : selected.values()) {
+    const [pack] = JSON.parse(run(npm, ['pack', '--ignore-scripts', '--json', '--pack-destination', temporary], workspace.cwd));
+    if (workspace.directory === 'adapter-cloudflare') {
+      for (const format of ['esm', 'cjs']) for (const extension of ['js', 'd.ts']) {
+        assert.ok(pack.files.some(file => file.path === `dist/${format}/workers.${extension}`));
+      }
+    }
+    tarballs.push(path.join(temporary, pack.filename));
+  }
+  console.log('Installing Wrangler 4.135.0 and independent package tarballs in an isolated consumer.');
+  run(npm, ['install', '--ignore-scripts', '--no-audit', '--no-fund', 'wrangler@4.135.0', ...tarballs]);
+  if (testedPackages) {
+    const lock = JSON.parse(await readFile(path.join(temporary, 'package-lock.json'), 'utf8'));
+    for (const pkg of testedPackages) {
+      assert.equal(lock.packages[`node_modules/${pkg.name}`]?.version, pkg.version);
+      assert.equal(lock.packages[`node_modules/${pkg.name}`]?.integrity, pkg.integrity);
+    }
+  }
   const consumerRequire = createRequire(path.join(temporary, 'package.json'));
   const wranglerPackage = consumerRequire.resolve('wrangler/package.json');
   const tooling = createRequire(wranglerPackage);
@@ -36,14 +60,14 @@ try {
   await writeFile(path.join(temporary, 'package-smoke.mjs'), `
     import assert from 'node:assert/strict';
     import { createRequire } from 'node:module';
-    import * as esmCore from '@system-one-ai/sdk';
+    import * as esmCore from '@system-one-ai/core';
     const require = createRequire(import.meta.url);
-    const cjsCore = require('@system-one-ai/sdk');
+    const cjsCore = require('@system-one-ai/core');
     assert.equal('CloudflareWorkers' in esmCore, false);
     assert.equal('CloudflareWorkers' in cjsCore, false);
-    assert.ok(!Object.keys(require.cache).some(file => file.endsWith('/cloudflare-workers.js')));
-    const esm = await import('@system-one-ai/sdk/cloudflare-workers');
-    const cjs = require('@system-one-ai/sdk/cloudflare-workers');
+    assert.ok(!Object.keys(require.cache).some(file => file.endsWith('/workers.js')));
+    const esm = await import('@system-one-ai/adapter-cloudflare/workers');
+    const cjs = require('@system-one-ai/adapter-cloudflare/workers');
     for (const [core, native] of [[esmCore, esm], [cjsCore, cjs]]) {
       const client = native.createCloudflareWorkers({ binding: { run: async () => Response.json({ answers: { yes: { type: 'noul', noul: 0.9 } } }) } });
       const result = await client.evaluate({ state: {}, questions: { yes: core.booleanQuestion('Yes?') } });
@@ -58,8 +82,8 @@ try {
   await writeFile(path.join(temporary, 'wrangler.json'), JSON.stringify({ name: 'system-one-types-check', main: 'worker.ts', compatibility_date: '2026-09-18', ai: { binding: 'AI' } }));
   run(process.execPath, [wrangler, 'types', 'worker-configuration.d.ts', '--config', 'wrangler.json']);
   const typeConsumer = `
-    import { choice, type EvaluationClient } from '@system-one-ai/sdk';
-    import { createCloudflareWorkers } from '@system-one-ai/sdk/cloudflare-workers';
+    import { choice, type EvaluationClient } from '@system-one-ai/core';
+    import { createCloudflareWorkers } from '@system-one-ai/adapter-cloudflare/workers';
     declare const env: Env;
     // Env.AI and all Web APIs below come from Wrangler's actual generated runtime types.
     const client = createCloudflareWorkers({ binding: env.AI, timeoutMs: 1500, maxRetries: 0 });

@@ -1,4 +1,5 @@
-import { SystemOne, booleanQuestion, ResponseValidationError, type SystemOneAdapter } from '../src/index.js';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { SystemOne, booleanQuestion, ResponseValidationError, type SystemOneAdapter } from '@system-one-ai/core';
 
 /** An illustrative wire protocol for a future vendor; not a claim about an existing service. */
 const futureAdapter: SystemOneAdapter = {
@@ -18,7 +19,7 @@ const futureAdapter: SystemOneAdapter = {
 };
 
 export function futureClient(baseURL: string, apiKey: string): SystemOne {
-  return new SystemOne({ baseURL, apiKey, adapter: futureAdapter });
+  return new SystemOne({ transport: createFetchTransport(), baseURL, apiKey, adapter: futureAdapter });
 }
 
 // The application interface stays unchanged after registering a different protocol once.

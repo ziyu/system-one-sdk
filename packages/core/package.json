@@ -1,0 +1,91 @@
+{
+  "name": "@system-one-ai/core",
+  "version": "0.5.2",
+  "description": "Core contracts and evaluation client for System One decisions.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json",
+    "./validation": {
+      "import": {
+        "types": "./dist/esm/validation.d.ts",
+        "default": "./dist/esm/validation.js"
+      },
+      "require": {
+        "types": "./dist/cjs/validation.d.ts",
+        "default": "./dist/cjs/validation.js"
+      }
+    },
+    "./composition": {
+      "import": {
+        "types": "./dist/esm/composition.d.ts",
+        "default": "./dist/esm/composition.js"
+      },
+      "require": {
+        "types": "./dist/cjs/composition.d.ts",
+        "default": "./dist/cjs/composition.js"
+      }
+    },
+    "./http": {
+      "import": {
+        "types": "./dist/esm/http.d.ts",
+        "default": "./dist/esm/http.js"
+      },
+      "require": {
+        "types": "./dist/cjs/http.d.ts",
+        "default": "./dist/cjs/http.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ziyu/sytem-one-sdk.git",
+    "directory": "packages/core"
+  },
+  "typesVersions": {
+    "*": {
+      "validation": [
+        "dist/esm/validation.d.ts"
+      ],
+      "composition": [
+        "dist/esm/composition.d.ts"
+      ],
+      "http": [
+        "dist/esm/http.d.ts"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs core",
+    "typecheck": "node ../../scripts/build-packages.mjs core --check",
+    "test": "node ../../scripts/test-workspace.mjs core",
+    "prepack": "npm run build"
+  }
+}

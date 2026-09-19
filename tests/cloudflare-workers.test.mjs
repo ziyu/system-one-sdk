@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 import test from 'node:test';
-import { APIError, BindingError, ConfigurationError, RequestAbortedError, ResponseValidationError, TimeoutError, UnsupportedFeatureError, ValidationError, booleanQuestion, choice, score } from '../dist/esm/index.js';
-import { CloudflareWorkers, createCloudflareWorkers } from '../dist/esm/cloudflare-workers.js';
-import { choiceFrom, defineDecision } from '../dist/esm/decisions.js';
-import { gateChoice } from '../dist/esm/policies.js';
-import { evaluateMany } from '../dist/esm/batch.js';
+import { APIError, BindingError, ConfigurationError, RequestAbortedError, ResponseValidationError, TimeoutError, UnsupportedFeatureError, ValidationError, booleanQuestion, choice, score } from '@system-one-ai/core';
+import { CloudflareWorkers, createCloudflareWorkers } from '@system-one-ai/adapter-cloudflare/workers';
+import { choiceFrom, defineDecision } from '@system-one-ai/decisions';
+import { gateChoice } from '@system-one-ai/policies';
+import { evaluateMany } from '@system-one-ai/batch';
 
 const request = () => ({ state: { message: 'Route this' }, questions: { route: choice('Where?', { a: 'Team A', b: 'Team B' }) } });
 const payload = () => ({ model: 'jev-1.13.0', answers: { route: { type: 'choice', choice: 'a', probabilities: { a: 0.9, b: 0.1 }, confidence: 0.53 } }, usage: { input_tokens: 10, output_tokens: 2 } });
@@ -298,11 +298,11 @@ test('batch cancellation stops queued work and aborts active native calls', asyn
 
 test('optional ESM/CJS entries work while core avoids loading the binding client', async () => {
   const require = createRequire(import.meta.url);
-  const core = require('@system-one-ai/sdk');
+  const core = require('@system-one-ai/core');
   assert.equal('CloudflareWorkers' in core, false);
-  assert.ok(!Object.keys(require.cache).some(file => file.endsWith('/cloudflare-workers.js')));
-  const esm = await import('@system-one-ai/sdk/cloudflare-workers');
-  const cjs = require('@system-one-ai/sdk/cloudflare-workers');
+  assert.ok(!Object.keys(require.cache).some(file => file.endsWith('/workers.js')));
+  const esm = await import('@system-one-ai/adapter-cloudflare/workers');
+  const cjs = require('@system-one-ai/adapter-cloudflare/workers');
   for (const entry of [esm, cjs]) {
     const result = await entry.createCloudflareWorkers({ binding: { run: async () => response() } }).evaluate(request());
     assert.equal(result.answers.route.choice, 'a');

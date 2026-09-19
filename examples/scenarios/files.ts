@@ -1,9 +1,9 @@
 import { link, lstat, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { isUtf8 } from 'node:buffer';
 import path from 'node:path';
-import type { EvaluationClient, RequestOptions } from '../../src/index.js';
-import { choiceFrom, defineDecision } from '../../src/decisions.js';
-import { gateChoice } from '../../src/policies.js';
+import type { EvaluationClient, RequestOptions } from '@system-one-ai/core';
+import { choiceFrom, defineDecision } from '@system-one-ai/decisions';
+import { gateChoice } from '@system-one-ai/policies';
 import { choicePolicy, createWorkspace, digest, gatedOutcome, loadJournal, remember, replay, saveJournal, withLock } from './workspace.js';
 import type { CommandResult, Gate, Journal } from './workspace.js';
 

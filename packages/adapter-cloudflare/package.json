@@ -1,0 +1,63 @@
+{
+  "name": "@system-one-ai/adapter-cloudflare",
+  "version": "0.5.2",
+  "description": "Cloudflare AI runner adapter.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json",
+    "./workers": {
+      "import": {
+        "types": "./dist/esm/workers.d.ts",
+        "default": "./dist/esm/workers.js"
+      },
+      "require": {
+        "types": "./dist/cjs/workers.d.ts",
+        "default": "./dist/cjs/workers.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@system-one-ai/core": "^0.5.2",
+    "@system-one-ai/protocol-system-one": "^0.5.2",
+    "@system-one-ai/transport-fetch": "^0.5.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ziyu/sytem-one-sdk.git",
+    "directory": "packages/adapter-cloudflare"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs adapter-cloudflare",
+    "typecheck": "node ../../scripts/build-packages.mjs adapter-cloudflare --check",
+    "test": "node ../../scripts/test-workspace.mjs adapter-cloudflare",
+    "prepack": "npm run build"
+  }
+}

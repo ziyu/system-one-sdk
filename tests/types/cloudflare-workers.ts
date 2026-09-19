@@ -1,9 +1,9 @@
-import { choice, type EvaluationClient } from '../../src/index.js';
-import { CloudflareWorkers, createCloudflareWorkers, type CloudflareAiBinding } from '../../src/cloudflare-workers.js';
-import { defineDecision } from '../../src/decisions.js';
-import { evaluateMany } from '../../src/batch.js';
+import { choice, type EvaluationClient } from '@system-one-ai/core';
+import { CloudflareWorkers, createCloudflareWorkers, type CloudflareAiBinding } from '@system-one-ai/adapter-cloudflare/workers';
+import { defineDecision } from '@system-one-ai/decisions';
+import { evaluateMany } from '@system-one-ai/batch';
 // @ts-expect-error Native binding is an optional entry, not a core export.
-import { CloudflareWorkers as absentRootExport } from '../../src/index.js';
+import { CloudflareWorkers as absentRootExport } from '@system-one-ai/core';
 
 declare const binding: CloudflareAiBinding;
 const native = createCloudflareWorkers({ binding, timeoutMs: 1500, maxRetries: 0 });

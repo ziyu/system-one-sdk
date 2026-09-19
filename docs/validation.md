@@ -1,6 +1,72 @@
 # 验证记录
 
-日期：2026-09-18。本文件按版本保留验证历史，当前版本为 `0.5.2`。npm 包名为 `@system-one-ai/sdk`；旧版记录不与新请求合并统计。
+本文件保留当前 workspace 验证及历史 SDK 发布记录；不同版本的真实请求分别记录。
+
+## 2026-09-19 规范发布流程与 RC 产物演练
+
+Changesets 2.31.1 在仓库外的临时 checkout 实际生成 11 个 `0.6.0-rc.0` 包、逐包 changelog、内部 RC 依赖、lockfile 和批次清单；退出预发布模式后生成 `0.6.0` 及稳定依赖。演练候选提交为 `6630425a01012dfdcafdbb73ed4e274f592db0f5`，属于临时仓库，不是远端已发布 tag。主工作区保留初始 changeset，由 Release PR 正式生成版本。
+
+使用 Node 24.21.0 / npm 11.17.0 构建并冻结同一批 tarball：230 项回归、13 项场景、类型检查和 ESM/CJS 构建通过；11 个包在 Node 20.20.2、22.23.2、24.21.0 分别隔离安装，ESM/CJS 契约与声明推导检查全部通过。Wrangler 4.135.0 的真实生成类型与 workerd 的 8 项场景也通过，使用的仍是这批固定 tarball。GitHub Actions 配置通过 actionlint 1.7.12。
+
+发布离线测试覆盖整批预检、依赖顺序、中途失败后的幂等续跑、已发布依赖使用 registry 原始摘要、最低兼容依赖、RC 范围、循环依赖、版本/仓库/锁文件保护、失败时禁止稳定 tag 提升，以及不降级已有 latest。演练另外实测篡改 tarball 被拒绝、dry-run 清单不能发布。
+
+实际从上述 tarball 安装到仓库外的消费项目，再使用主分支 `.env` 和用户提供的 LLM 文件调用真实服务：
+
+| 服务 | 请求 | 结果 |
+| --- | --- | --- |
+| TypeSafe `jev-1.13.0` | 4 项 choice/score/boolean + 3 项 decisions/policies/batch | 7 次 HTTP 200，无重试；已知语义、分布、评分和原对象映射断言全部通过 |
+| DeepSeek `deepseek-flash` | probabilities、discrete | 2 次 HTTP 200，无重试；choice/boolean/score 断言全部通过 |
+
+首次并发启动的 live 测试进程在输出结果前以 137 退出；单独重跑后上述 9 次调用全部通过。Cloudflare 仅验证 workerd fixture，未声称真实 Cloudflare 推理。GitHub 远端工作流、scope 发布权限和 OIDC 尚未实际执行；未发布 npm 包、推送或创建远端 tag。
+
+完整候选包、清单、SHA256SUMS、脱敏模型报告与验证日志保存在 `.artifacts/release-rc.0-rehearsal/`；`release-live.json` 绑定候选提交、manifest SHA-256 和每个包的 SHA-512。密钥未写入源码、报告或 tarball。
+
+## 2026-09-19 主分支配置的原生 System One 实测
+
+配置直接读取主分支工作目录 /Users/ziyu/Work/projs/sytem-one-sdk/.env；测试执行的是当前拆分后的独立包。配置模型为 jev-latest，服务为 TypeSafe 官方接口，7 次响应均返回实际模型 jev-1.13.0、HTTP 200，均只尝试 1 次，未重试。
+
+运行命令：
+
+```sh
+node scripts/test-live.mjs /Users/ziyu/Work/projs/sytem-one-sdk/.env
+node scripts/test-composition-live.mjs /Users/ziyu/Work/projs/sytem-one-sdk/.env
+```
+
+| 用例 | 实际结果 | 验收 |
+| --- | --- | --- |
+| 中文倒水请求、紧急程度和打断判断 | drink 概率 1；普通请求评分 1；打断概率 0.96 | 通过 |
+| 重复扣款分类 | billing 概率 1 | 通过 |
+| Safari 导出故障且 Chrome 可用 | 有替代方案，评分 1，等级 1 概率 1 | 通过 |
+| 关灯、开门真假判断 | 灯亮概率 0.01，门开概率 0.99 | 通过 |
+| 动态动作和候选参数 | turn_on + desk，概率均为 1；映射原设备对象，仅桌灯状态变为 on | 通过 |
+| 并发批量：关灯 | 灯亮概率 0.01，策略接受 false | 通过 |
+| 并发批量：故障评分 | 评分 1.09；等级 1 概率 0.91、等级 2 概率 0.09，与加权均值一致 | 通过 |
+
+基础用例完成时间 2026-09-19T05:55:29.603Z；组合用例完成时间 2026-09-19T05:56:16.641Z（UTC）。单请求耗时 331–1360 ms，合计 2601 input tokens + 267 output tokens = 2868 tokens。答案通过公共类型、概率分布、评分范围和舍入一致性校验，并额外断言了业务选择、评分最高概率等级和动态对象映射。
+
+联调脚本支持显式 env 文件路径，未指定时读取本仓库 .env；文件配置不会被 shell 环境变量覆盖。新增语义断言与路径参数均通过此次真实调用验证，11 个包重新构建和 2 项架构检查通过。本次未修改运行时代码。
+
+脱敏报告：.artifacts/live-typesafe-main-env.json、.artifacts/live-composition-main-env.json；配置与密钥未复制到仓库或写入报告。验证范围为上述 7 个用例，不是模型整体质量评测。
+
+## 2026-09-19 独立包清理（未发布）
+
+删除旧根目录 src、SDK 转导出、默认客户端、根包构建与发布入口。根目录改为私有 workspace；示例、类型测试、回归与联调脚本直接使用独立包。LLM 保持单包。旧 protocol 配置的迁移分支及对应旧 API 测试一并删除，新增根目录不能恢复运行时入口的架构检查。
+
+在 Node.js v26.5.0 执行完整检查：类型、11 个包的 ESM/CJS 构建及示例编译通过；211 项回归和 13 项工作流测试全部通过。随后新增的根目录架构检查与依赖边界检查共 2 项通过；当前完整回归计 212 项。真实 Chrome 与本地 HTTP 的浏览器示例检查 7 项全部通过。无跳过项。
+
+11 个真实 tarball 各自安装到仓库外的临时项目，只安装目标包的依赖闭包，ESM/CJS 契约及 NodeNext 声明检查均通过；所有类型推导和负面断言还在安装全部独立包的消费项目中，对 ESM/CJS 声明再次通过。11 个包的发布 tag、manifest 和 lockfile 配置校验通过，未实际发布。
+
+使用用户指定的测试配置调用 DeepSeek deepseek-flash。每种环境分别测试 probabilities 和 discrete，两种模式均检查 choice、boolean 和 score 的已知答案。共 4 次真实请求全部 HTTP 200，均仅尝试 1 次：
+
+| 环境 | UTC 时间 | 概率模式耗时 | 离散模式耗时 |
+| --- | --- | --- | --- |
+| workspace 独立包 | 2026-09-19T05:44:02.443Z | 1073 ms | 794 ms |
+| 仓库外实际安装的 core + transport-fetch + adapter-llm tarball | 2026-09-19T05:45:26.290Z | 1030 ms | 872 ms |
+
+第二组没有仓库 workspace 链接，只使用打包安装后的模块。脱敏结果保存在 .artifacts/live-llm.json、.artifacts/live-llm-installed.json；后者同时记录三个实际安装包的 SHA-512。构建、打包、浏览器日志为 .artifacts/check-modular.log、packages-modular.log、browser-modular.log。凭据和这些本地产物均不提交。
+
+本轮真实外部验证仅覆盖所提供的 OpenAI-compatible Chat Completions 服务，未重新验证 TypeSafe、OpenRouter、Cloudflare、Vercel、OpenAI Responses 或 Anthropic 外部接口；对应协议仍有离线回归。以下为 2026-09-18 的旧 @system-one-ai/sdk 发布历史，不代表当前独立包已发布。
+
 
 ## 0.5.2 Cloudflare runner 修正
 

@@ -1,0 +1,43 @@
+name: Version packages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+concurrency:
+  group: changesets-version
+  cancel-in-progress: false
+jobs:
+  version:
+    if: github.repository == 'ziyu/sytem-one-sdk' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d
+        id: changesets
+        with:
+          version: npm run version:packages
+          title: 'chore: release packages'
+          commit: 'chore: version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # GITHUB_TOKEN-created PRs do not emit automatic CI events; dispatch explicitly.
+      - name: Check the Release PR
+        if: steps.changesets.outputs.pullRequestNumber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
+        run: |
+          pr_branch=$(gh pr view "$PR_NUMBER" --json headRefName --jq .headRefName)
+          gh workflow run ci.yml --ref "$pr_branch"
+          gh workflow run cloudflare-workers.yml --ref "$pr_branch"

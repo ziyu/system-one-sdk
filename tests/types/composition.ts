@@ -1,11 +1,13 @@
-import { SystemOne, choice, score, booleanQuestion, type EvaluationClient } from '../../src/index.js';
-import { choiceFrom, defineDecision } from '../../src/decisions.js';
-import { gateBoolean, gateChoice } from '../../src/policies.js';
-import { evaluateMany } from '../../src/batch.js';
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { SystemOne, choice, score, booleanQuestion, type EvaluationClient } from '@system-one-ai/core';
+import { choiceFrom, defineDecision } from '@system-one-ai/decisions';
+import { gateBoolean, gateChoice } from '@system-one-ai/policies';
+import { evaluateMany } from '@system-one-ai/batch';
 // @ts-expect-error Optional composition modules stay out of the core entry point.
-import { defineDecision as absent } from '../../src/index.js';
+import { defineDecision as absent } from '@system-one-ai/core';
 
-const client: EvaluationClient = new SystemOne({ apiKey: null });
+const client: EvaluationClient = new SystemOne({ adapter: systemOneAdapter, transport: createFetchTransport(), apiKey: null });
 const objects = [{ id: 'lamp', brightness: 42 }];
 const targets = choiceFrom({ instructions: 'Target', items: objects, id: item => item.id, describe: item => ({ brightness: item.brightness }) });
 const optional = choiceFrom({ instructions: 'Target', items: objects, id: item => item.id, describe: () => null, none: { id: 'none', description: null } });

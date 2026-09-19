@@ -1,8 +1,8 @@
-import { choice, booleanQuestion, score } from '@system-one-ai/sdk';
-import { createCloudflareWorkers } from '@system-one-ai/sdk/cloudflare-workers';
-import { defineDecision, choiceFrom } from '@system-one-ai/sdk/decisions';
-import { evaluateMany } from '@system-one-ai/sdk/batch';
-import { gateChoice } from '@system-one-ai/sdk/policies';
+import { choice, booleanQuestion, score } from '@system-one-ai/core';
+import { createCloudflareWorkers } from '@system-one-ai/adapter-cloudflare/workers';
+import { defineDecision, choiceFrom } from '@system-one-ai/decisions';
+import { evaluateMany } from '@system-one-ai/batch';
+import { gateChoice } from '@system-one-ai/policies';
 
 function check(condition, message) { if (!condition) throw new Error(message); }
 async function rejects(operation, code) {

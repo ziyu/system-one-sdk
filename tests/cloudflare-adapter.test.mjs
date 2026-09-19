@@ -1,10 +1,11 @@
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { APIError, ConfigurationError, RequestAbortedError, ResponseValidationError, SystemOne, TimeoutError, UnsupportedFeatureError, booleanQuestion } from '../dist/esm/index.js';
-import { cloudflareAdapter } from '../dist/esm/adapters/cloudflare.js';
-import { evaluateMany } from '../dist/esm/batch.js';
+import { APIError, ConfigurationError, RequestAbortedError, ResponseValidationError, SystemOne, TimeoutError, UnsupportedFeatureError, booleanQuestion } from '@system-one-ai/core';
+import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
+import { evaluateMany } from '@system-one-ai/batch';
 import { request, nativePayload, jsonResponse } from './fixtures.mjs';
 
 const accountId = '0123456789abcdef0123456789abcdef';
@@ -20,7 +21,7 @@ for (const [wrapped, wrap] of [['raw', value => value], ['wrapped', envelope], [
   test(`Cloudflare uses its default endpoint/model and normalizes ${wrapped} native results`, async () => {
     let calls = 0;
     const input = structuredClone(request);
-    const client = new SystemOne({ adapter, apiKey: 'cloudflare-fixture', fetch: async (url, init) => {
+    const client = new SystemOne({ adapter, apiKey: 'cloudflare-fixture', transport: createFetchTransport(async (url, init) => {
       calls++;
       assert.equal(url, expectedURL);
       assert.equal(init.method, 'POST');
@@ -34,7 +35,7 @@ for (const [wrapped, wrap] of [['raw', value => value], ['wrapped', envelope], [
       });
       const payload = wrap(nativePayload());
       return jsonResponse(payload, { headers: { 'x-request-id': 'cf-fixture-request' } });
-    } });
+    }) });
     const result = await client.evaluate(input);
     assert.equal(calls, 1);
     assert.equal(result.model, 'jev-1.13.0');
@@ -55,10 +56,10 @@ test('runner states are checked before unwrapping at every level', async () => {
   for (const state of ['Failed', 'Running', 'Pending', 'Cancelled', '', null, 1, {}, ['Completed']]) {
     for (const wrap of [value => value, envelope]) {
       let calls = 0;
-      const client = new SystemOne({ adapter, apiKey: null, fetch: async () => {
+      const client = new SystemOne({ adapter, apiKey: null, transport: createFetchTransport(async () => {
         calls++;
         return jsonResponse(wrap({ state, result: nativePayload() }));
-      } });
+      }) });
       await assert.rejects(client.evaluate(request), ResponseValidationError, `must reject runner state ${JSON.stringify(state)}`);
       assert.equal(calls, 1);
     }
@@ -82,13 +83,13 @@ test('runner contents cannot hide errors, ambiguous answers or additional envelo
   for (const payload of malformed) {
     for (const wrap of [value => value, envelope]) {
       let calls = 0;
-      const client = new SystemOne({ adapter, apiKey: null, fetch: async () => { calls++; return jsonResponse(wrap(payload)); } });
+      const client = new SystemOne({ adapter, apiKey: null, transport: createFetchTransport(async () => { calls++; return jsonResponse(wrap(payload)); }) });
       await assert.rejects(client.evaluate(request), error => error instanceof ResponseValidationError
         && !error.message.includes('secret-echo') && !JSON.stringify(error).includes('secret-echo'));
       assert.equal(calls, 1);
     }
   }
-  const tooDeep = new SystemOne({ adapter, apiKey: null, fetch: async () => jsonResponse(envelope(runnerResult(runnerResult(nativePayload())))) });
+  const tooDeep = new SystemOne({ adapter, apiKey: null, transport: createFetchTransport(async () => jsonResponse(envelope(runnerResult(runnerResult(nativePayload()))))) });
   await assert.rejects(tooDeep.evaluate(request), ResponseValidationError);
 });
 
@@ -105,10 +106,10 @@ for (const [baseURL, expected] of [
   ['https://proxy.example/team/ai/run', 'https://proxy.example/team/ai/run'],
 ]) {
   test(`Cloudflare URL override preserves the selected origin and prefix: ${baseURL}`, async () => {
-    const client = new SystemOne({ adapter, baseURL, apiKey: 'fixture', fetch: async url => {
+    const client = new SystemOne({ adapter, baseURL, apiKey: 'fixture', transport: createFetchTransport(async url => {
       assert.equal(url, expected);
       return jsonResponse(nativePayload());
-    } });
+    }) });
     await client.evaluate(request);
   });
 }
@@ -135,22 +136,22 @@ test('a conflicting account or legacy model URL is rejected before credential re
     `${expectedURL}/typesafe/jev`,
     `https://api.cloudflare.com/client/v4/accounts/${accountId}/unexpected`,
   ]) {
-    const client = new SystemOne({ adapter, baseURL, apiKey: () => assert.fail('must not resolve credentials'), fetch: () => assert.fail('must not send requests') });
+    const client = new SystemOne({ adapter, baseURL, apiKey: () => assert.fail('must not resolve credentials'), transport: createFetchTransport(() => assert.fail('must not send requests')) });
     await assert.rejects(client.evaluate(request), ConfigurationError);
   }
 });
 
 test('Cloudflare does not forward undocumented options or silently replace model IDs', async () => {
-  const denied = new SystemOne({ adapter, apiKey: () => assert.fail('must fail before authentication') });
+  const denied = new SystemOne({ transport: createFetchTransport(), adapter, apiKey: () => assert.fail('must fail before authentication') });
   for (const providerOptions of [{ cloudflare: { model: 'other' } }, { cloudflare: { stream: true } }, { cloudflare: {} }, { openrouter: {} }]) {
     await assert.rejects(denied.evaluate({ ...request, providerOptions }), UnsupportedFeatureError);
   }
   const sent = [];
-  const client = new SystemOne({ adapter, apiKey: null, model: 'vendor/decision-1', fetch: async (_, init) => {
+  const client = new SystemOne({ adapter, apiKey: null, model: 'vendor/decision-1', transport: createFetchTransport(async (_, init) => {
     const body = JSON.parse(init.body);
     sent.push(body.model);
     return jsonResponse({ ...nativePayload(), model: body.model });
-  } });
+  }) });
   assert.equal((await client.evaluate({ ...request, providerOptions: {} })).model, 'vendor/decision-1');
   assert.equal((await client.evaluate({ ...request, model: 'vendor/decision-2' })).model, 'vendor/decision-2');
   assert.deepEqual(sent, ['vendor/decision-1', 'vendor/decision-2']);
@@ -177,7 +178,7 @@ for (const [label, payload] of [
 ]) {
   test(`Cloudflare rejects ${label} without retrying or exposing the error body`, async () => {
     let calls = 0;
-    const client = new SystemOne({ adapter, apiKey: null, fetch: async () => { calls++; return jsonResponse(payload()); } });
+    const client = new SystemOne({ adapter, apiKey: null, transport: createFetchTransport(async () => { calls++; return jsonResponse(payload()); }) });
     await assert.rejects(client.evaluate(request), error => error instanceof ResponseValidationError && !JSON.stringify(error).includes('secret-echo'));
     assert.equal(calls, 1);
   });
@@ -186,7 +187,7 @@ for (const [label, payload] of [
 test('Jev rounding is preserved while future model statistics remain explicit', async () => {
   const raw = nativePayload();
   raw.answers.urgency = { type: 'score', score: 1.05, probabilities: { '0': 0, '1': 0.94, '2': 0.06 } };
-  const client = new SystemOne({ adapter, apiKey: null, fetch: async () => jsonResponse(envelope(raw)) });
+  const client = new SystemOne({ adapter, apiKey: null, transport: createFetchTransport(async () => jsonResponse(envelope(raw))) });
   assert.equal((await client.evaluate(request)).answers.urgency.score, 1.05);
   raw.model = 'future/decision';
   await assert.rejects(client.evaluate(request), ResponseValidationError);
@@ -195,10 +196,10 @@ test('Jev rounding is preserved while future model statistics remain explicit', 
 });
 
 test('missing optional statistics stay missing, including through the batch scheduler', async () => {
-  const client = new SystemOne({ adapter, apiKey: null, fetch: async (_, init) => {
+  const client = new SystemOne({ adapter, apiKey: null, transport: createFetchTransport(async (_, init) => {
     const { input } = JSON.parse(init.body);
     return jsonResponse(runnerEnvelope({ answers: { on: { type: 'noul', noul: input.state.on ? 0.99 : 0.01 } } }));
-  } });
+  }) });
   const report = await evaluateMany(client, [true, false].map(on => ({ id: String(on), request: { state: { on }, questions: { on: booleanQuestion('Is it on?') } } })), { concurrency: 2 });
   assert.equal(report.summary.succeeded, 2);
   assert.deepEqual(report.items.map(item => item.value.answers.on.probability), [0.99, 0.01]);
@@ -209,13 +210,13 @@ test('missing optional statistics stay missing, including through the batch sche
 });
 
 test('Cloudflare HTTP failures retain status and Retry-After while response bodies stay private', async () => {
-  const failed = new SystemOne({ adapter, apiKey: null, fetch: async () => jsonResponse({ errors: [{ message: 'secret-echo' }] }, { status: 401, headers: { 'x-request-id': 'cf-failed' } }) });
+  const failed = new SystemOne({ adapter, apiKey: null, transport: createFetchTransport(async () => jsonResponse({ errors: [{ message: 'secret-echo' }] }, { status: 401, headers: { 'x-request-id': 'cf-failed' } })) });
   await assert.rejects(failed.evaluate(request), error => error instanceof APIError && error.statusCode === 401 && error.requestId === 'cf-failed' && !JSON.stringify(error).includes('secret-echo'));
   let attempts = 0;
-  const retrying = new SystemOne({ adapter, apiKey: null, maxRetries: 1, fetch: async () => {
+  const retrying = new SystemOne({ adapter, apiKey: null, maxRetries: 1, transport: createFetchTransport(async () => {
     attempts++;
     return attempts === 1 ? jsonResponse({}, { status: 429, headers: { 'retry-after': '0' } }) : jsonResponse(envelope(nativePayload()));
-  } });
+  }) });
   assert.equal((await retrying.evaluate(request)).response.attempts, 2);
   assert.equal(attempts, 2);
 });
@@ -223,12 +224,12 @@ test('Cloudflare HTTP failures retain status and Retry-After while response bodi
 test('Cloudflare cancellation and total deadlines also bound non-cooperative transports', async () => {
   const cancelled = new AbortController();
   cancelled.abort();
-  const notStarted = new SystemOne({ adapter, apiKey: () => assert.fail('no authentication after cancellation') });
+  const notStarted = new SystemOne({ transport: createFetchTransport(), adapter, apiKey: () => assert.fail('no authentication after cancellation') });
   await assert.rejects(notStarted.evaluate(request, { signal: cancelled.signal }), RequestAbortedError);
   let signal;
   let started;
   const ready = new Promise(resolve => { started = resolve; });
-  const client = new SystemOne({ adapter, apiKey: null, fetch: (_url, init) => { signal = init.signal; started(); return new Promise(() => {}); } });
+  const client = new SystemOne({ adapter, apiKey: null, transport: createFetchTransport((_url, init) => { signal = init.signal; started(); return new Promise(() => {}); }) });
   const controller = new AbortController();
   const pending = client.evaluate(request, { signal: controller.signal });
   await ready;
@@ -250,7 +251,7 @@ test('Cloudflare uses native Fetch against a real local HTTP server with the com
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
-  const client = new SystemOne({ adapter, apiKey: 'local-fixture', baseURL: `http://127.0.0.1:${server.address().port}/client/v4`, maxRetries: 0 });
+  const client = new SystemOne({ transport: createFetchTransport(), adapter, apiKey: 'local-fixture', baseURL: `http://127.0.0.1:${server.address().port}/client/v4`, maxRetries: 0 });
   const result = await client.evaluate(request);
   assert.equal(received.url, `/client/v4/accounts/${accountId}/ai/run`);
   assert.equal(received.method, 'POST');

@@ -2,21 +2,21 @@
 
 [English](composition.md) | **简体中文**
 
-SDK 0.4.0 新增三个可选入口，原有 `evaluate` 与供应商协议保持兼容。运行时零第三方依赖，使用 Web API；新的组合模块声明要求 TypeScript 5.4 或更高版本。
+三个独立包通过 `EvaluationClient` 组合评估能力。运行时零第三方依赖，使用 Web API；新的组合模块声明要求 TypeScript 5.4 或更高版本。
 
 | 入口 | API | 职责 |
 | --- | --- | --- |
-| `@system-one-ai/sdk/decisions` | `choiceFrom`、`defineDecision` | 动态候选对象映射及动作参数组合 |
-| `@system-one-ai/sdk/policies` | `gateChoice`、`gateBoolean` | 显式接受、不确定和弃权 |
-| `@system-one-ai/sdk/batch` | `evaluateMany` | 多个独立状态的客户端有界并发 |
+| `@system-one-ai/decisions` | `choiceFrom`、`defineDecision` | 动态候选对象映射及动作参数组合 |
+| `@system-one-ai/policies` | `gateChoice`、`gateBoolean` | 显式接受、不确定和弃权 |
+| `@system-one-ai/batch` | `evaluateMany` | 多个独立状态的客户端有界并发 |
 
 组合模块只依赖核心导出的 `EvaluationClient` 类型。`SystemOne` 可以直接使用，应用也可实现符合相同返回契约、保留请求控制的包装器。模块不选择供应商，不读取环境变量，也不管理凭据。核心入口不会加载这些可选模块。
 
 ## 动态候选
 
 ```ts
-import { choiceFrom, defineDecision } from '@system-one-ai/sdk/decisions';
-import { gateChoice } from '@system-one-ai/sdk/policies';
+import { choiceFrom, defineDecision } from '@system-one-ai/decisions';
+import { gateChoice } from '@system-one-ai/policies';
 
 const devices = [{ id: 'desk', label: '台灯', on: false }];
 const targets = choiceFrom({
@@ -90,7 +90,7 @@ if (actionGate.status === 'accepted' && decision.action === 'turn_on') {
 ## 有界并发批量评估
 
 ```ts
-import { evaluateMany } from '@system-one-ai/sdk/batch';
+import { evaluateMany } from '@system-one-ai/batch';
 
 const report = await evaluateMany(client, [
   { id: 'a', request: { state: '打开台灯。', questions: definition.questions } },

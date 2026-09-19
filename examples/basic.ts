@@ -1,5 +1,5 @@
-// In a consuming project, import from '@system-one-ai/sdk'.
-import { booleanQuestion, choice, score } from '../src/index.js';
+// In a consuming project, import from '@system-one-ai/core'.
+import { booleanQuestion, choice, score } from '@system-one-ai/core';
 import { exampleClient } from './config.js';
 
 try {

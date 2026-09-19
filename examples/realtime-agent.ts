@@ -1,4 +1,4 @@
-import { choice, defineQuestions } from '../src/index.js';
+import { choice, defineQuestions } from '@system-one-ai/core';
 import { exampleClient } from './config.js';
 
 const questions = defineQuestions({

@@ -1,12 +1,12 @@
-import { SystemOne, choice, score, booleanQuestion, defineQuestions, type Questions, type SystemOneAdapter } from '../../src/index.js';
-import { vercelAdapter } from '../../src/adapters/vercel.js';
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { SystemOne, choice, score, booleanQuestion, defineQuestions, type Questions, type SystemOneAdapter } from '@system-one-ai/core';
+import { vercelAdapter } from '@system-one-ai/adapter-vercel';
 // @ts-expect-error Optional providers must not be re-exported by the core entry point.
-import { vercelAdapter as removedRootExport } from '../../src/index.js';
+import { vercelAdapter as removedRootExport } from '@system-one-ai/core';
 
-const client = new SystemOne({ apiKey: 'compile-time-only' });
-new SystemOne({ apiKey: 'compile-time-only', adapter: vercelAdapter });
-// @ts-expect-error Protocol strings were replaced by explicit adapter imports.
-new SystemOne({ apiKey: 'compile-time-only', protocol: 'vercel' });
+const client = new SystemOne({ adapter: systemOneAdapter, transport: createFetchTransport(), apiKey: 'compile-time-only' });
+new SystemOne({ transport: createFetchTransport(), apiKey: 'compile-time-only', adapter: vercelAdapter });
 void removedRootExport;
 const questions = defineQuestions({
   action: choice('Choose an action', { drink: null, rest: { description: 'Sit down' } }),

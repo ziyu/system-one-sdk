@@ -1,10 +1,12 @@
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { SystemOne, SystemOneError, choice, score, booleanQuestion } from '../dist/esm/index.js';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { parseEnv } from 'node:util';
+import { SystemOne, SystemOneError, choice, score, booleanQuestion } from '@system-one-ai/core';
 
-// Explicit opt-in only: npm run test:live loads this project's .env. Normal tests stay offline.
+// Explicit opt-in only: read the supplied env file, or this project's .env.
 // Four short sequential requests, no retries, and no logging of headers or credentials.
-const apiKey = process.env.SYSTEM_ONE_API_KEY;
 const rows = [];
 let activeScenario = 'configuration';
 
@@ -24,6 +26,8 @@ const scenarios = [
       assert.ok(result.answers.action.probabilities);
       assert.ok(result.answers.urgency.probabilities);
       assert.ok(result.answers.urgency.legend);
+      assert.ok(result.answers.urgency.probabilities['1'] > result.answers.urgency.probabilities['0']);
+      assert.ok(result.answers.urgency.probabilities['1'] > result.answers.urgency.probabilities['2']);
       assert.ok(result.answers.interrupt.probability > 0.5);
     },
   },
@@ -45,6 +49,8 @@ const scenarios = [
       assert.ok(result.answers.severity.score >= 0 && result.answers.severity.score <= 2);
       assert.ok(result.answers.severity.probabilities);
       assert.ok(result.answers.severity.legend);
+      assert.ok(result.answers.severity.probabilities['1'] > result.answers.severity.probabilities['0']);
+      assert.ok(result.answers.severity.probabilities['1'] > result.answers.severity.probabilities['2']);
     },
   },
   {
@@ -61,11 +67,15 @@ const scenarios = [
 ];
 
 try {
+  const env = parseEnv(await readFile(process.argv[2] ?? new URL('../.env', import.meta.url), 'utf8'));
+  const apiKey = env.SYSTEM_ONE_API_KEY;
   if (!apiKey) throw new Error('SYSTEM_ONE_API_KEY is required.');
   const client = new SystemOne({
-    ...(process.env.SYSTEM_ONE_BASE_URL ? { baseURL: process.env.SYSTEM_ONE_BASE_URL } : {}),
+    adapter: systemOneAdapter,
+    transport: createFetchTransport(),
+    ...(env.SYSTEM_ONE_BASE_URL ? { baseURL: env.SYSTEM_ONE_BASE_URL } : {}),
     apiKey,
-    ...(process.env.SYSTEM_ONE_MODEL ? { model: process.env.SYSTEM_ONE_MODEL } : {}),
+    ...(env.SYSTEM_ONE_MODEL ? { model: env.SYSTEM_ONE_MODEL } : {}),
     timeoutMs: 15_000,
     maxRetries: 0,
   });

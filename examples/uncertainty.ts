@@ -1,5 +1,5 @@
-import { choice, SystemOneError, type State, type EvaluationClient } from '../src/index.js';
-import { gateChoice, type UncertaintyReason } from '../src/policies.js';
+import { choice, SystemOneError, type State, type EvaluationClient } from '@system-one-ai/core';
+import { gateChoice, type UncertaintyReason } from '@system-one-ai/policies';
 import { exampleClient } from './config.js';
 
 interface Handoff {

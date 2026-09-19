@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { EvaluationResult, JsonObject, Questions } from '../../src/index.js';
-import type { PolicyResult } from '../../src/policies.js';
+import type { EvaluationResult, JsonObject, Questions } from '@system-one-ai/core';
+import type { PolicyResult } from '@system-one-ai/policies';
 
 export type EffectStatus = 'executed' | 'clarification' | 'uncertain' | 'no-op' | 'conflict';
 export interface Outcome {

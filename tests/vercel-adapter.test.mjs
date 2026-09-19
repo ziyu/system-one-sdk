@@ -1,7 +1,8 @@
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { SystemOne } from '../dist/esm/index.js';
-import { vercelAdapter } from '../dist/esm/adapters/vercel.js';
+import { SystemOne } from '@system-one-ai/core';
+import { vercelAdapter } from '@system-one-ai/adapter-vercel';
 import { request, gatewayPayload, jsonResponse } from './fixtures.mjs';
 
 // Wire values recorded from the previously passing @ai-sdk/gateway@4.0.85 comparison.
@@ -13,7 +14,7 @@ test('optional Vercel adapter preserves the recorded Evaluation v4 wire contract
     return jsonResponse(gatewayPayload());
   };
   const providerOptions = { gateway: { order: ['typesafe'] } };
-  const client = new SystemOne({ adapter: vercelAdapter, apiKey: 'contract-fixture', fetch });
+  const client = new SystemOne({ adapter: vercelAdapter, apiKey: 'contract-fixture', transport: createFetchTransport(fetch) });
   const result = await client.evaluate({ ...request, providerOptions });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model');

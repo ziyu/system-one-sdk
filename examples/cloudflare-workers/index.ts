@@ -1,5 +1,5 @@
-import { APIError, SystemOneError, booleanQuestion, choice, score } from '../../src/index.js';
-import { createCloudflareWorkers, type CloudflareAiBinding } from '../../src/cloudflare-workers.js';
+import { APIError, SystemOneError, booleanQuestion, choice, score } from '@system-one-ai/core';
+import { createCloudflareWorkers, type CloudflareAiBinding } from '@system-one-ai/adapter-cloudflare/workers';
 
 interface Env { AI: CloudflareAiBinding }
 

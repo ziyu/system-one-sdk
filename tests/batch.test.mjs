@@ -1,8 +1,10 @@
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
-import { SystemOne, APIError, RequestAbortedError, ValidationError, ConfigurationError } from '../dist/esm/index.js';
-import { evaluateMany } from '../dist/esm/batch.js';
+import { SystemOne, APIError, RequestAbortedError, ValidationError, ConfigurationError } from '@system-one-ai/core';
+import { evaluateMany } from '@system-one-ai/batch';
 import { booleanRequest, booleanPayload, jsonResponse } from './fixtures.mjs';
 
 const input = (id, request = booleanRequest) => ({ id, request });
@@ -176,11 +178,11 @@ test('cancellation preserves completed results and removes its external listener
 
 test('batch requests retain the existing native client validation and retry controls', async () => {
   let attempts = 0;
-  const client = new SystemOne({ apiKey: null, maxRetries: 2, fetch: async (_, init) => {
+  const client = new SystemOne({ adapter: systemOneAdapter, apiKey: null, maxRetries: 2, transport: createFetchTransport(async (_, init) => {
     attempts++;
     if (JSON.parse(init.body).state === 'reject') return jsonResponse({}, { status: 503 });
     return jsonResponse(booleanPayload);
-  } });
+  }) });
   const report = await evaluateMany(client, [input('valid'), input('failed', { ...booleanRequest, state: 'reject' })], { requestOptions: { maxRetries: 0 } });
   assert.equal(attempts, 2);
   assert.equal(report.items[0].value.answers.on.probability, 0.97);

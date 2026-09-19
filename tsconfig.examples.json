@@ -3,7 +3,11 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": ".examples",
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["examples/**/*.ts", "src/**/*.ts"]
+  "include": [
+    "examples/**/*.ts"
+  ]
 }
