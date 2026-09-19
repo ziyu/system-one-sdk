@@ -1,12 +1,12 @@
 # 下一次发布规划
 
-状态：P0–P2 已实施并完成本地演练，2026-09-19。Changesets RC/稳定版本转换、整批发布与恢复保护、固定产物的 Node 20/22/24 消费检查、230 项回归、13 项场景和 8 项 workerd 检查通过；候选包的 7 次 TypeSafe 与 2 次 LLM 真实调用通过。尚未发布 npm 包或运行远端发布工作流。操作说明见 [releasing.md](releasing.md)，证据见 [validation.md](validation.md)。
+状态（2026-09-19）：P0–P2 已完成；P3 的 11 个 `0.6.0-rc.0` 包已发布到 npm `next`，远端发布工作流和 npm 安装后的 7 次 TypeSafe、2 次 LLM 真实调用全部通过。npm 首次创建包时自动添加的 `latest` 仍待清理，P3 尚有该收尾项；P4 稳定版未开始。操作说明见 [releasing.md](releasing.md)，证据见 [validation.md](validation.md)。
 
 ## 1. 本次发布的定位与基线
 
 本次交付以独立包、清晰契约和可重复发布为核心。保留现有业务能力，完成单包用户到独立包的迁移。LLM 保持一个 adapter 包。
 
-发布前核对到的事实：
+以下是规划时的历史基线，当前 RC 发布状态见上文：
 
 | 位置 | 状态 |
 | --- | --- |
@@ -103,7 +103,7 @@ Changesets Release PR 成为统一入口后，停止通过任意 package tag 直
 
 新稳定包全部可用后，再给旧 `@system-one-ai/sdk` 添加 npm deprecation 提示与迁移链接。保留历史版本可安装。正式版发现问题时发布修复版本；有上一稳定版时可恢复 `latest` 指向，已发布版本和 Git tag 保持不变。
 
-首次发布前逐包确认 npm scope 权限、名称、Trusted Publisher 与 GitHub environment。若空包尚不能配置 OIDC，则将首次 bootstrap 作为单独的一次操作，复用已验证产物，之后统一走 CI。当前只确认了公开 registry 无这些包，尚未完成权限配置检查。
+首次发布前逐包确认 npm scope 权限、名称、Trusted Publisher 与 GitHub environment。若空包尚不能配置 OIDC，则将首次 bootstrap 作为单独的一次操作，复用已验证产物，之后统一走 CI。本批已确认 scope owner 权限，完成 11 个包的精确产物 bootstrap 和 Trusted Publisher 配置；首次上传无 provenance。`npm` environment 已创建，稳定发布前仍需配置审批保护，并实际验证后续新版本的 OIDC 上传与 dist-tag 鉴权。
 
 ## 7. 实施批次及完成标准
 
@@ -117,4 +117,4 @@ Changesets Release PR 成为统一入口后，停止通过任意 package tag 直
 
 后续开发统一要求：明确代码所属包；说明公开契约和兼容影响；附可复现验证；按需提供 changeset 和迁移说明。发布流程维护与库运行时改动分别提交，便于审查。
 
-下一步进入 P3：先确认逐包 npm scope/名称权限、Trusted Publisher 和 GitHub npm environment，再合并实现与 Release PR，发布 RC 到 next 并执行 registry 消费及真实模型验收。P0–P2 的实现和 dry-run 已完成；真实发布、稳定提升、公告和旧 SDK deprecation 尚未执行。
+P3 的实现 PR 与 Release PR 已合并，RC 已完成 npm 发布、registry 消费和真实模型验收；剩余收尾是移除新包自动生成的 `latest`。P4 仍需独立授权、生成稳定产物并验收，补齐 environment 保护和标签鉴权；稳定提升、迁移公告和旧 SDK deprecation 均未执行。

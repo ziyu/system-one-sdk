@@ -2,6 +2,24 @@
 
 本文件保留当前 workspace 验证及历史 SDK 发布记录；不同版本的真实请求分别记录。
 
+## 2026-09-19 已发布 RC 的安装与真实模型验收
+
+11 个独立包均已发布 `0.6.0-rc.0`，`next` 指向本批 RC；源码为 `09d4a2ead1e26dbc9804468b267303e6dd8ca22e`（[Release PR #3](https://github.com/ziyu/sytem-one-sdk/pull/3)）。[Release 工作流第 3 次执行](https://github.com/ziyu/sytem-one-sdk/actions/runs/35430490022)成功：构建和冻结产物、Node 20/22/24 消费检查、registry 完整性与 ESM/CJS/声明验收通过，生成 11 个逐包 prerelease。各 release 附有原始 tarball、manifest、checksums 和 registry 验证报告，例如 [core RC](https://github.com/ziyu/sytem-one-sdk/releases/tag/core-v0.6.0-rc.0)。
+
+发布后的真实测试从公共 npm registry 匿名安装这批包到仓库外的消费项目，再读取本地配置调用服务；报告确认 `fromRegistry: true`，结束时间为 `2026-09-19T08:16:03.980Z`。TypeSafe `jev-1.13.0` 的 7 次调用覆盖 choice、score、boolean、decisions、policies、batch；DeepSeek `deepseek-flash` 的 2 次调用覆盖 probabilities 与 discrete。9 次均 HTTP 200，无重试，语义与结果结构断言通过。Cloudflare 验证范围仍为 workerd fixture；本轮未实测其他外部供应商。
+
+复现命令（在该发布源码的干净 checkout 中使用原始 manifest）：
+
+```sh
+node scripts/test-release-live.mjs /path/to/typesafe.env /path/to/llm.env --registry
+```
+
+本地脱敏完整报告与原始产物位于 `.artifacts/rc-release/`，未公开上传模型报告或凭据。真实测试与 CI registry 报告绑定同一 manifest SHA-256：`586285fee00f41e0466acddddcc82f712441f525e01d3795cafb780913904696`。
+
+首次创建包时尚不能预配置 Trusted Publisher，因此本批使用已验证的 CI tarball 完成一次本地 bootstrap，SHA-512 与清单一致；这次上传没有 npm provenance。随后 11 个包均已配置并回读 GitHub Trusted Publisher（`ziyu/sytem-one-sdk`、`release.yml`、`npm` environment）。成功重跑核验并复用已存在版本，没有再次上传；后续新版本的 OIDC 上传仍需首次执行验证。首次 metadata 可见早于安装索引，曾导致 registry 安装 404；索引同步后原批次恢复成功。
+
+npm 为首次创建的包自动添加了 `latest`，即使上传指定 `next`。该自动标签仍待安全密钥授权清理；目前不将这批 RC 标记为稳定版。旧 `@system-one-ai/sdk@latest` 保持 `0.5.3`，没有 deprecation。GitHub `npm` environment 已创建，但尚未配置审批保护；稳定发布前需完成保护设置和 dist-tag 鉴权验收。
+
 ## 2026-09-19 规范发布流程与 RC 产物演练
 
 Changesets 2.31.1 在仓库外的临时 checkout 实际生成 11 个 `0.6.0-rc.0` 包、逐包 changelog、内部 RC 依赖、lockfile 和批次清单；退出预发布模式后生成 `0.6.0` 及稳定依赖。演练候选提交为 `6630425a01012dfdcafdbb73ed4e274f592db0f5`，属于临时仓库，不是远端已发布 tag。主工作区保留初始 changeset，由 Release PR 正式生成版本。

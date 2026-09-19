@@ -18,7 +18,7 @@ Merging a Release PR changes `release.json` and starts one Release workflow for 
 2. `release:prepare` verifies clean source on main, lockfile/versions/changelogs, receipt and hashes. It installs unchanged dependencies from npm at compatible minimum versions and tests combinations with the new artifacts. If a changed dependency's range also allows an older version, that lower-bound combination is checked separately.
 3. `.artifacts/release-manifest.json` freezes commit, lock digest, Node/npm versions, package dependency graphs, SHA-512/SHA-256, changelog notes and verification receipt. Tarballs and manifest are saved for 90 days.
 4. Node 20/22/24 install and verify that exact artifact set, with no rebuild.
-5. The protected `npm` job downloads those artifacts, preflights every existing version/tag and publishes missing packages in dependency order using OIDC/provenance. All uploads initially use `next`.
+5. The job targeting the `npm` environment downloads those artifacts, preflights every existing version/tag and publishes missing packages in dependency order using OIDC/provenance. All uploads initially use `next`.
 6. All packages are installed from the public registry at the recorded exact versions, integrity checked, and exercised as ESM/CJS/type consumers. Only then are stable versions promoted to `latest`; an already newer `latest` is never downgraded. RCs stay on `next`.
 7. Per-package tags are created at the source commit and GitHub releases use that package's changelog. The matching tarball, manifest, checksums and registry verification report are attached.
 
@@ -32,6 +32,10 @@ Enable GitHub Actions to create pull requests. Create a protected GitHub environ
 
 Check scope ownership and package-name permissions separately. Public registry 404 is not evidence of publish permission. If a first package cannot configure OIDC before it exists, a maintainer must bootstrap it once using the exact verified tarball and `next`, then enable Trusted Publishing and resume the same batch. This first publication remains a separate authorized operation. See [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/).
 
+The `0.6.0-rc.0` batch used this bootstrap exception without provenance. All 11 Trusted Publisher configurations have been read back, but uploading a new version through OIDC has not yet been exercised. The `npm` environment exists without approval protection; configure that protection before the stable release.
+
+For a new package, npm can initialize `latest` even when publication requests `next`. Inspect every package's dist-tags after bootstrap. If `latest` equals the RC, remove only that tag with `npm dist-tag rm PACKAGE latest`, then confirm `next` still resolves to the RC. Do not remove an existing stable or newer version's tag. npm may require separate security-key authentication for tag changes; the publish/trust authentication cooldown does not cover them. Before stable promotion, verify authentication for `npm dist-tag` separately: npm CLI's automatic OIDC exchange for `npm publish` does not authenticate tag mutations.
+
 ## Recovery
 
 Prefer **Re-run failed jobs**: successful prepare jobs retain the original artifact. If manually resuming, supply both the original full commit and original run ID:
@@ -43,7 +47,7 @@ gh workflow run release.yml --repo ziyu/sytem-one-sdk --ref main \
 
 The workflow downloads `release-FULL_SOURCE_SHA`, verifies its source, receipt and hashes, and never rebuilds it in the publisher. Existing candidate versions are reused only if npm SHA-512 matches. Unchanged dependencies use their registry SHA-512; their locally rebuilt bytes are irrelevant. A conflicting version or Git tag blocks the entire batch before new uploads. Never replace a published version or move a tag.
 
-An npm upload can succeed before metadata appears. The job polls bounded requests for up to 61 attempts with five-second delays, never repeating publication during that wait. A later retry rechecks metadata. A failed consumer check leaves `latest` unchanged and creates no new package tags. Partial stable promotion/tag creation is safe to resume. npm has no atomic multi-package publish or tag update; announce completion only after the workflow succeeds. Preserve the original artifacts beyond retention if recovery is still needed.
+An npm upload can succeed before metadata appears. The job polls bounded requests for up to 61 attempts with five-second delays, never repeating publication during that wait. Installation indexes may lag even after exact-version metadata appears; an installation 404 after a successful upload is a reason to retry verification against the same artifacts once indexes synchronize, not to republish. A later retry rechecks metadata. A failed consumer check does not promote stable tags or create new package tags; separately inspect npm's automatic `latest` initialization for new packages. Partial stable promotion/tag creation is safe to resume. npm has no atomic multi-package publish or tag update; announce completion only after the workflow succeeds and dist-tags match the intended channel. Preserve the original artifacts beyond retention if recovery is still needed.
 
 ## Real model checks and migration
 

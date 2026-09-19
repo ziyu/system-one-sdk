@@ -26,18 +26,10 @@ Core imports no concrete adapter or transport. Each package provides ESM, Common
 
 ## Install and use
 
-**Independent packages are not yet published.** Build and verify local tarballs first:
+**`0.6.0-rc.0` is available on npm under `next`.** Install only the packages your application uses; npm resolves their dependencies. This is a prerelease; see the [migration guide](docs/migration-0.6.md) and [published-package verification](docs/validation.md).
 
 ```sh
-npm ci --ignore-scripts
-npm run check
-npm run test:package
-```
-
-In a consuming project, install only the chosen package closure from `.artifacts/`. For example, LLM requires `system-one-ai-core-<version>.tgz`, `system-one-ai-transport-fetch-<version>.tgz` and `system-one-ai-adapter-llm-<version>.tgz`. Native TypeSafe also requires the `protocol-system-one` tarball. After independent publication, the equivalent installation is:
-
-```sh
-npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-system-one
+npm install @system-one-ai/core@next @system-one-ai/transport-fetch@next @system-one-ai/adapter-system-one@next
 ```
 
 ```ts
@@ -69,6 +61,10 @@ Adapters supply native endpoint/model defaults. `baseURL` and `model` override t
 ## LLM adapter
 
 Install `adapter-llm` with core and transport-fetch. LLM protocols, prompts, schemas, authentication mapping and answer conversion stay together in this package.
+
+```sh
+npm install @system-one-ai/core@next @system-one-ai/transport-fetch@next @system-one-ai/adapter-llm@next
+```
 
 ```ts
 import { createSystemOne } from '@system-one-ai/core';
@@ -117,6 +113,7 @@ Core validates answer types, declared choices, probabilities, distributions, sco
 ## Development and verification
 
 ```sh
+npm ci --ignore-scripts
 npm run check                         # types, builds, regression and workflow tests
 npm run test:package                  # isolated tarball installs, ESM/CJS, inference
 npm run test:browser                  # local browser example checks
