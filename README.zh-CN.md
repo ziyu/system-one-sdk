@@ -28,6 +28,8 @@ core 不导入具体 adapter 或 transport。各包提供 ESM、CommonJS 和 Typ
 
 **`0.6.0-rc.0` 已通过 npm 的 `next` 标签发布。** 按需安装应用使用的包，npm 自动解析其依赖。这是预发布版本，详见[迁移说明](docs/migration-0.6.md)和[发布包验证记录](docs/validation.md)。
 
+npm 为这批首次发布的包同时创建了 `latest`，目前拒绝删除。因此不指定标签安装也会得到该 RC；稳定版 `0.6.0` 尚未发布。
+
 ```sh
 npm install @system-one-ai/core@next @system-one-ai/transport-fetch@next @system-one-ai/adapter-system-one@next
 ```

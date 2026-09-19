@@ -1,6 +1,6 @@
 # 下一次发布规划
 
-状态（2026-09-19）：P0–P2 已完成；P3 的 11 个 `0.6.0-rc.0` 包已发布到 npm `next`，远端发布工作流和 npm 安装后的 7 次 TypeSafe、2 次 LLM 真实调用全部通过。npm 首次创建包时自动添加的 `latest` 仍待清理，P3 尚有该收尾项；P4 稳定版未开始。操作说明见 [releasing.md](releasing.md)，证据见 [validation.md](validation.md)。
+状态（2026-09-19）：P0–P2 已完成；P3 的 11 个 `0.6.0-rc.0` 包已发布到 npm `next`，远端发布工作流和 npm 安装后的 7 次 TypeSafe、2 次 LLM 真实调用全部通过。npm 自动添加的 `latest` 在成功认证后仍因 registry HTTP 400 无法清理，P3 尚有该服务端阻塞项；P4 稳定版未开始。操作说明见 [releasing.md](releasing.md)，证据见 [validation.md](validation.md)。
 
 ## 1. 本次发布的定位与基线
 
