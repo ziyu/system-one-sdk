@@ -1,5 +1,5 @@
 import type { AdapterContext, SystemOneAdapter } from '@system-one-ai/core';
-import { hasOwn, isRecord, parseBaseURL, responseRecord } from '@system-one-ai/core';
+import { hasOwn, isRecord, parseBaseURL, responseRecord } from '@system-one-ai/core/validation';
 
 /** Optional Evaluation v4 codec. Import from @system-one-ai/adapter-vercel. */
 export const vercelAdapter: SystemOneAdapter = Object.freeze({

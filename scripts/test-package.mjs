@@ -1,14 +1,37 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
+import { buildOrder } from './workspaces.mjs';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const artifacts = path.join(root, '.artifacts');
+const rootManifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 await mkdir(artifacts, { recursive: true });
-const [corePack] = JSON.parse(execFileSync('npm', ['pack', './packages/core', '--ignore-scripts', '--pack-destination', artifacts, '--json'], { cwd: root, encoding: 'utf8' }));
+const packs = new Map();
+for (const workspace of buildOrder()) {
+  const [packed] = JSON.parse(execFileSync('npm', ['pack', '.', '--ignore-scripts', '--pack-destination', artifacts, '--json'], { cwd: workspace.cwd, encoding: 'utf8' }));
+  assert.ok(packed.files.some(file => file.path === 'LICENSE'));
+  packs.set(workspace.manifest.name, packed);
+}
+const tarballs = names => names.map(name => path.join(artifacts, packs.get(name).filename));
+// Consumers live outside the repository: missing packages cannot resolve through workspace links.
+for (const workspace of buildOrder()) {
+  const isolated = await mkdtemp(path.join(tmpdir(), 'system-one-package-'));
+  try {
+    const closure = buildOrder(workspace.directory).map(item => item.manifest.name);
+    await writeFile(path.join(isolated, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
+    execFileSync('npm', ['install', ...tarballs(closure), '--ignore-scripts', '--offline', '--no-audit', '--no-fund'], { cwd: isolated, stdio: 'pipe' });
+    await copyFile(path.join(root, 'tests/package-contracts.mjs'), path.join(isolated, 'contract.mjs'));
+    execFileSync(process.execPath, ['contract.mjs', workspace.directory], { cwd: isolated, stdio: 'inherit' });
+    await writeFile(path.join(isolated, 'consumer.mts'), `import * as pkg from '${workspace.manifest.name}'; void pkg;`);
+    await writeFile(path.join(isolated, 'consumer.cts'), `import * as pkg from '${workspace.manifest.name}'; void pkg;`);
+    execFileSync(process.execPath, [createRequire(import.meta.url).resolve('typescript/bin/tsc'), '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', 'consumer.mts', 'consumer.cts'], { cwd: isolated, stdio: 'inherit' });
+  } finally { await rm(isolated, { recursive: true, force: true }); }
+}
 const [pack] = JSON.parse(execFileSync('npm', ['pack', '.', '--ignore-scripts', '--pack-destination', artifacts, '--json'], { cwd: root, encoding: 'utf8' }));
 assert.ok(pack.files.some(file => file.path === 'dist/esm/index.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/cjs/index.js'));
@@ -23,10 +46,26 @@ for (const entry of ['decisions', 'policies', 'batch', 'adapters/cloudflare']) {
   }
 }
 assert.ok(pack.files.every(file => /^(dist\/|docs\/|README(?:\.zh-CN)?\.md$|LICENSE$|package\.json$)/.test(file.path)), 'Unexpected file in package');
-const consumer = await mkdtemp(path.join(artifacts, 'consumer-'));
+const consumer = await mkdtemp(path.join(tmpdir(), 'system-one-sdk-'));
 try {
   await writeFile(path.join(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
-  execFileSync('npm', ['install', path.join(artifacts, corePack.filename), path.join(artifacts, pack.filename), '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: consumer, stdio: 'pipe' });
+  const minimal = ['@system-one-ai/core', '@system-one-ai/protocol-system-one', '@system-one-ai/adapter-system-one', '@system-one-ai/transport-fetch'];
+  execFileSync('npm', ['install', ...tarballs(minimal), path.join(artifacts, pack.filename), '--ignore-scripts', '--offline', '--no-audit', '--no-fund'], { cwd: consumer, stdio: 'pipe' });
+  execFileSync(process.execPath, ['--input-type=module', '--eval', `
+    import assert from 'node:assert/strict';
+    import { createRequire } from 'node:module';
+    import * as sdk from '@system-one-ai/sdk';
+    const require = createRequire(import.meta.url);
+    require('@system-one-ai/sdk');
+    assert.equal('llmAdapter' in sdk, false);
+    for (const name of ['adapter-llm', 'adapter-vercel', 'adapter-openrouter', 'adapter-cloudflare', 'decisions', 'policies', 'batch']) {
+      assert.throws(() => require.resolve('@system-one-ai/' + name), { code: 'MODULE_NOT_FOUND' });
+    }
+    const client = new sdk.SystemOne({ apiKey: null, fetch: async () => new Response(JSON.stringify({ answers: { on: { type: 'noul', noul: 1 } } })) });
+    assert.equal((await client.evaluate({ state: 'on', questions: { on: sdk.booleanQuestion('On?') } })).answers.on.probability, 1);
+    console.log('Minimal SDK install contains only native adapter and Fetch; optional packages are absent.');
+  `], { cwd: consumer, stdio: 'inherit' });
+  execFileSync('npm', ['install', ...tarballs([...packs.keys()]), '--ignore-scripts', '--offline', '--no-audit', '--no-fund'], { cwd: consumer, stdio: 'pipe' });
   const smoke = `
     import assert from 'node:assert/strict';
     import { createRequire } from 'node:module';
@@ -37,7 +76,7 @@ try {
     assert.equal(manifest.name, '@system-one-ai/sdk');
     assert.equal(manifest.license, 'MIT');
     assert.equal(manifest.publishConfig.access, 'public');
-    assert.deepEqual(manifest.dependencies ?? {}, { '@system-one-ai/core': '0.5.2' });
+    assert.deepEqual(manifest.dependencies ?? {}, ${JSON.stringify(rootManifest.dependencies)});
     assert.equal(manifest.devDependencies?.['@ai-sdk/gateway'], undefined);
     assert.equal('vercelAdapter' in esm, false);
     assert.equal('vercelAdapter' in cjs, false);
@@ -134,6 +173,20 @@ try {
   `;
   execFileSync(process.execPath, ['--input-type=module', '--eval', smoke], { cwd: consumer, stdio: 'inherit' });
   const typeConsumer = `
+    import { createSystemOne as createCore, type Transport } from '@system-one-ai/core';
+    import { createFetchTransport } from '@system-one-ai/transport-fetch';
+    import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+    import { llmAdapter } from '@system-one-ai/adapter-llm';
+    createCore({ apiKey: null, adapter: systemOneAdapter, transport: createFetchTransport() });
+    createCore({ apiKey: 'fixture', adapter: llmAdapter(), transport: createFetchTransport(), model: 'llm' });
+    // @ts-expect-error The core requires an explicit adapter.
+    createCore({ apiKey: null, transport: createFetchTransport() });
+    // @ts-expect-error The core requires an explicit transport.
+    createCore({ apiKey: null, adapter: systemOneAdapter });
+    // @ts-expect-error LLM is independently installed and has no root re-export.
+    import { llmAdapter as removedLlm } from '@system-one-ai/sdk';
+    void removedLlm;
+
     import { SystemOne, choice } from '@system-one-ai/sdk';
     import { vercelAdapter } from '@system-one-ai/sdk/adapters/vercel';
     import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
@@ -207,6 +260,7 @@ try {
   execFileSync(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', path.join(consumer, 'tsconfig.json')], { cwd: consumer, stdio: 'inherit' });
   await writeFile(path.join(artifacts, 'package-manifest.json'), JSON.stringify({
     name: pack.name, version: pack.version, filename: pack.filename, integrity: pack.integrity,
+    packages: [...packs.values()].map(({ name, version, filename, integrity }) => ({ name, version, filename, integrity })),
   }, null, 2) + '\n');
   console.log(`Installed declarations: ESM and CommonJS type inference passed. Package: .artifacts/${pack.filename}`);
 } finally {

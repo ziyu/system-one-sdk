@@ -235,11 +235,4 @@ export function configInteger(value: number, name: string, min: number, max = 2_
   if (!Number.isSafeInteger(value) || value < min || value > max) throw new ConfigurationError(`${name} must be an integer between ${min} and ${max}.`);
   return value;
 }
-export function parseBaseURL(value: string): URL {
-  let url: URL;
-  try { url = new URL(value); } catch { throw new ConfigurationError('baseURL must be an absolute HTTP(S) URL.'); }
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
-    throw new ConfigurationError('baseURL must use HTTP(S) and contain no credentials, query, or fragment.');
-  }
-  return url;
-}
+export { parseBaseURL } from './http.js';

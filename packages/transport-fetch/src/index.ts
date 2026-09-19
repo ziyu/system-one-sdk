@@ -1,6 +1,8 @@
-import { APIError, ConfigurationError, ConnectionError, RequestAbortedError, ResponseValidationError, SystemOneError, TimeoutError } from './errors.js';
-import type { ApiKey, Fetch, PreparedRequest, SystemOneAdapter } from './types.js';
-import { parseBaseURL } from './validation.js';
+import { APIError, ConfigurationError, ConnectionError, RequestAbortedError, ResponseValidationError, SystemOneError, TimeoutError } from '@system-one-ai/core';
+import type { ApiKey, Fetch, PreparedRequest, Transport, TransportRequest } from '@system-one-ai/core';
+import { configInteger } from '@system-one-ai/core/validation';
+import { checkRequestURL, snapshotHeaders } from '@system-one-ai/core/http';
+export { checkRequestURL, snapshotHeaders } from '@system-one-ai/core/http';
 
 export class RequestScope {
   readonly controller = new AbortController();
@@ -49,23 +51,17 @@ export class RequestScope {
   }
 }
 
-function headersFrom(value?: HeadersInit): Headers {
-  try { return new Headers(value); }
-  catch { throw new ConfigurationError('headers contains an invalid HTTP header.'); }
-}
-export function snapshotHeaders(value?: HeadersInit): Headers { return headersFrom(value); }
-
-export function buildHeaders(adapter: SystemOneAdapter, prepared: PreparedRequest, key: string | null, custom: readonly HeadersInit[]): Headers {
-  const headers = headersFrom(prepared.headers);
+export function buildHeaders(adapter: Pick<TransportRequest, 'authenticate'>, prepared: PreparedRequest, key: string | null, custom: readonly HeadersInit[]): Headers {
+  const headers = snapshotHeaders(prepared.headers);
   headers.set('content-type', 'application/json');
   headers.set('accept', 'application/json');
   const auth = adapter.authenticate
-    ? headersFrom(adapter.authenticate(key))
-    : headersFrom(key === null ? undefined : { authorization: `Bearer ${key}` });
+    ? snapshotHeaders(adapter.authenticate(key))
+    : snapshotHeaders(key === null ? undefined : { authorization: `Bearer ${key}` });
   auth.forEach((value, name) => headers.set(name, value));
   const reserved = new Set(['authorization', 'host', 'content-length', ...headers.keys(), ...auth.keys()]);
   for (const extra of custom) {
-    headersFrom(extra).forEach((value, name) => {
+    snapshotHeaders(extra).forEach((value, name) => {
       if (reserved.has(name)) throw new ConfigurationError(`Header ${name} is managed by the SDK or adapter and cannot be overridden.`);
       headers.set(name, value);
     });
@@ -73,11 +69,6 @@ export function buildHeaders(adapter: SystemOneAdapter, prepared: PreparedReques
   return headers;
 }
 
-export function checkRequestURL(url: string, baseURL: string): string {
-  const target = parseBaseURL(url);
-  if (target.origin !== parseBaseURL(baseURL).origin) throw new ConfigurationError('An adapter request must use the configured baseURL origin.');
-  return target.toString();
-}
 export async function resolveApiKey(apiKey: ApiKey, scope: RequestScope): Promise<string | null> {
   let key: unknown;
   try { key = await scope.run(() => typeof apiKey === 'function' ? apiKey() : apiKey); }
@@ -174,4 +165,53 @@ export async function postJson(fetcher: Fetch, url: string, headers: Headers, bo
     throw new APIError(response.status, requestId, parseRetryAfter(response.headers));
   }
   return { payload: await readJson(response, maxBytes, scope), status: response.status, requestId };
+}
+
+/** The Fetch implementation is optional; globalThis.fetch is resolved at call time. */
+export function createFetchTransport(fetch?: Fetch): Transport {
+  if (fetch !== undefined && typeof fetch !== 'function') throw new ConfigurationError('fetch must be a function.');
+  return {
+    async send(request, options) {
+      const start = Date.now();
+      const timeoutMs = configInteger(options.timeoutMs, 'timeoutMs', 1);
+      const maxRetries = configInteger(options.maxRetries, 'maxRetries', 0, 100);
+      const retryDelayMs = configInteger(options.retryDelayMs, 'retryDelayMs', 0);
+      const maxRetryDelayMs = configInteger(options.maxRetryDelayMs, 'maxRetryDelayMs', 0);
+      const maxResponseBytes = configInteger(options.maxResponseBytes, 'maxResponseBytes', 1);
+      const url = checkRequestURL(request.url, request.baseURL);
+      if (typeof request.body !== 'string') throw new ConfigurationError('Transport body must be serialized JSON.');
+      const body = request.body;
+      const prepared = { url, body, headers: snapshotHeaders(request.headers) };
+      const customHeaders = options.headers.map(snapshotHeaders);
+      const fetcher = fetch ?? globalThis.fetch?.bind(globalThis);
+      if (!fetcher) throw new ConfigurationError('This runtime needs a Fetch implementation; provide the fetch option.');
+      const remaining = timeoutMs - (Date.now() - start);
+      if (remaining <= 0) throw new TimeoutError();
+      const scope = new RequestScope(remaining, options.signal);
+      try {
+        for (let attempt = 0; ; attempt++) {
+          scope.throwIfAborted();
+          try {
+            const key = await resolveApiKey(request.apiKey, scope);
+            const headers = buildHeaders(request, prepared, key, customHeaders);
+            const response = await postJson(fetcher, url, headers, body, maxResponseBytes, scope);
+            scope.throwIfAborted();
+            return {
+              payload: response.payload, status: response.status, attempts: attempt + 1,
+              ...(response.requestId === undefined ? {} : { requestId: response.requestId }),
+            };
+          } catch (error) {
+            scope.throwIfAborted();
+            if (attempt >= maxRetries || !(error instanceof ConnectionError || error instanceof APIError && error.retryable)) throw error;
+            const reportedDelay = error instanceof APIError ? error.retryAfterMs : undefined;
+            const backoff = Math.min(maxRetryDelayMs, retryDelayMs * 2 ** Math.min(attempt, 30));
+            const delay = reportedDelay ?? Math.floor(backoff * (0.5 + Math.random() * 0.5));
+            // Never retry earlier than Retry-After, including values too large for JS timers.
+            if (delay >= timeoutMs - (Date.now() - start)) throw new TimeoutError();
+            await scope.delay(delay);
+          }
+        }
+      } finally { scope.dispose(); }
+    },
+  };
 }

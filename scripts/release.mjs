@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { buildOrder } from './workspaces.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const repository = 'ziyu/sytem-one-sdk';
@@ -46,6 +47,13 @@ export function registryState(metadata, artifact) {
   return 'identical';
 }
 
+/** The SDK facade must not be published before its independently released dependencies. */
+export function testedDependency(name, version, packages) {
+  const artifact = packages?.find(item => item.name === name && item.version === version);
+  assert.ok(artifact?.integrity, `Build and test ${name}@${version} before publishing the SDK.`);
+  return artifact;
+}
+
 async function sourceRelease() {
   const release = validateRelease(process.env.RELEASE_TAG, await readJSON('../package.json'), await readJSON('../package-lock.json'));
   if (process.env.GITHUB_REPOSITORY) assert.equal(process.env.GITHUB_REPOSITORY, repository, 'Wrong GitHub repository.');
@@ -84,6 +92,17 @@ function versionURL(release) {
 
 async function publish(release) {
   const artifact = await testedArtifact(release);
+  const manifest = await readJSON('../package.json');
+  const receipt = await readJSON('../.artifacts/package-manifest.json');
+  const dependencies = new Map();
+  for (const name of Object.keys(manifest.dependencies ?? {})) {
+    for (const workspace of buildOrder(name)) dependencies.set(workspace.manifest.name, workspace.manifest.version);
+  }
+  for (const [name, version] of dependencies) {
+    const dependency = testedDependency(name, version, receipt.packages);
+    const metadata = await getJSON(versionURL(dependency));
+    assert.equal(registryState(metadata, dependency), 'identical', `Publish and verify ${name}@${version} before releasing the SDK.`);
+  }
   const existing = await getJSON(versionURL(release));
   if (registryState(existing, artifact) === 'missing') {
     // npm obtains a short-lived credential from GitHub OIDC; no stored npm token is used.

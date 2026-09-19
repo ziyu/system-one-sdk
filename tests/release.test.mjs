@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { registryState, validateRelease } from '../scripts/release.mjs';
+import { registryState, testedDependency, validateRelease } from '../scripts/release.mjs';
 
 function config(version = '0.3.0') {
   return {
@@ -12,6 +12,13 @@ function config(version = '0.3.0') {
     lock: { name: '@system-one-ai/sdk', version, packages: { '': { name: '@system-one-ai/sdk', version } } },
   };
 }
+
+test('SDK release dependencies require tested artifacts for the exact requested versions', () => {
+  const artifact = { name: '@system-one-ai/core', version: '0.5.2', integrity: 'sha512-fixture' };
+  assert.equal(testedDependency(artifact.name, artifact.version, [artifact]), artifact);
+  assert.throws(() => testedDependency(artifact.name, '0.6.0', [artifact]));
+  assert.throws(() => testedDependency(artifact.name, artifact.version, undefined));
+});
 
 test('stable releases target latest, while prereleases target next', () => {
   const stable = config();

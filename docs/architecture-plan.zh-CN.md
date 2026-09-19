@@ -1,175 +1,112 @@
-# SDK 解耦重构计划
+# SDK 包边界与迁移
 
-这份计划以当前提交 `bc49b67` 为基线。目标是让核心库只负责统一的决策契约和生命周期，把 HTTP 和协议 adapter 移到独立包；LLM 保留为一个可选的单体 adapter 包。
+以 `bc49b67` 的行为为基线，仓库已从单包迁移为 npm workspaces。实现只保留一份，根目录 `src/` 是兼容转导出和默认配置；新代码位于 `packages/`。独立包尚未发布到 npm，当前先通过 workspace 和 tarball 验证。
 
-当前已落地第一阶段：仓库使用 npm workspaces，`packages/core` 和五个 `packages/adapter-*` 已能独立构建；根包通过兼容 facade 使用 core。Fetch 生命周期暂时仍在 core，下一阶段再抽成 `transport-fetch`，避免一次迁移同时改变运行行为。
+参考 [AI SDK 的 Providers and Models](https://ai-sdk.dev/docs/foundations/providers-and-models) 和 [Testing](https://ai-sdk.dev/docs/ai-sdk-core/testing)：共享稳定契约、显式传入实现、按供应商独立发布，用确定性测试验证业务行为。沿用已有 `SystemOneAdapter.prepare/decode/authenticate` 契约，不引入另一套 LLM model 层。
 
-设计参考：
+## 已落地的包边界
 
-- [AI SDK Providers and Models](https://ai-sdk.dev/docs/foundations/providers-and-models)：用稳定的 model/adapter contract 隔离业务和协议。
-- [AI SDK Provider & Model Management](https://ai-sdk.dev/docs/ai-sdk-core/provider-management)：把可选的 model registry 放在核心之外。
-- [AI SDK Language Model Middleware](https://ai-sdk.dev/docs/ai-sdk-core/middleware)：日志、缓存和重试通过 wrapper 组合，而不是写进业务流程。
-- [AI SDK Testing](https://ai-sdk.dev/docs/ai-sdk-core/testing)：用 mock model 和固定 fixture 测试，不让业务测试依赖真实 API。
-
-## 当前问题
-
-当前 `@system-one-ai/sdk` 同时包含：
-
-- 决策领域类型、问题构造器和答案验证；
-- Fetch、鉴权、取消、超时、重试和响应读取；
-- TypeSafe、OpenRouter、Vercel、Cloudflare 和 LLM 的协议细节；
-- decisions、policies、batch 等上层组合模块。
-
-`src/adapters/llm.ts` 同时处理 prompt、JSON schema、OpenAI/Anthropic wire format、鉴权和答案转换；这部分保留在 LLM 包内，不再把它拆成多个 provider 包。真正需要解决的是根包同时携带所有 adapter，导致任一协议变化都会扩大核心 diff 和测试矩阵。
-
-## 目标包图
+| 包 | 职责 | 运行时依赖 |
+| --- | --- | --- |
+| `@system-one-ai/core` | 类型、问题构造、请求快照、结果校验、评估生命周期；导出 adapter/transport 契约 | 无 |
+| `@system-one-ai/transport-fetch` | Fetch、鉴权、超时、取消、Retry-After、重试、响应读取上限 | core |
+| `@system-one-ai/protocol-system-one` | 三个服务共用的 `boolean/noul`、token 和 rounding 编解码 | core |
+| `@system-one-ai/adapter-system-one` | TypeSafe 地址、默认模型和原生请求 | core、protocol-system-one |
+| `@system-one-ai/adapter-openrouter` | Decisions 地址、options、generation/cost 元数据 | core、protocol-system-one |
+| `@system-one-ai/adapter-cloudflare` | 账户路径、REST/runner envelope 校验 | core、protocol-system-one |
+| `@system-one-ai/adapter-vercel` | Evaluation v4 请求和响应 | core |
+| `@system-one-ai/adapter-llm` | 现有 LLM 协议、prompt、schema、答案转换 | core |
+| `@system-one-ai/decisions` | 动作、候选项及参数组合 | core |
+| `@system-one-ai/policies` | 概率、差值、confidence gate | core |
+| `@system-one-ai/batch` | 并发、取消和部分失败 | core |
 
 ```mermaid
 graph TD
-  Core["@system-one-ai/core\n领域契约 + 验证 + client engine"]
-  Fetch["@system-one-ai/transport-fetch\nFetch + timeout + retry"]
-  LLM["@system-one-ai/adapter-llm\nquestions -> schema/prompt -> answers"]
-  Native["@system-one-ai/adapter-system-one"]
-  OR["@system-one-ai/adapter-openrouter"]
-  Vercel["@system-one-ai/adapter-vercel"]
-  CF["@system-one-ai/adapter-cloudflare"]
-  Registry["@system-one-ai/registry\n(optional)"]
-
+  SDK["sdk 兼容入口"] --> Core["core"]
+  SDK --> Fetch["transport-fetch"]
+  SDK --> Native["adapter-system-one"]
   Fetch --> Core
-  LLM --> Core
-  LLM --> Fetch
+  Native --> Protocol["protocol-system-one"]
   Native --> Core
-  Native --> Fetch
+  OR["adapter-openrouter"] --> Protocol
   OR --> Core
-  OR --> Fetch
-  Vercel --> Core
-  Vercel --> Fetch
+  CF["adapter-cloudflare"] --> Protocol
   CF --> Core
-  CF --> Fetch
-  Registry --> Core
+  Protocol --> Core
+  Vercel["adapter-vercel"] --> Core
+  LLM["adapter-llm：保持单包"] --> Core
+  Decisions["decisions"] --> Core
+  Policies["policies"] --> Core
+  Batch["batch"] --> Core
 ```
 
-依赖方向只允许从上到下：核心不导入任何 adapter；adapter 互不导入；transport 只处理 HTTP 生命周期；registry 只负责选择已构造的 adapter 和别名。
+core 不导入任何具体 adapter、transport 或供应商 SDK。adapter 之间不互相导入，也不发网络请求。`protocol-system-one` 只共享已经被三个服务使用的 wire codec，没有 endpoint、默认模型、认证或请求生命周期。
 
-## 目标契约
+core 仍保留当前 HTTP codec 契约中的 URL、headers 和配置类型，以及独立的 `core/http` 校验工具。它不调用 Fetch，不解析供应商特有字段。此次先明确代码所有权与执行边界，保持现有请求语义；如将来需要非 HTTP 执行，再根据具体调用场景调整契约。
 
-### `@system-one-ai/core`
-
-核心只保留：
-
-- `Question`、`Answer`、`EvaluateRequest`、`EvaluationResult`；
-- 输入快照、领域验证和结果验证；
-- `EvaluationClient` 与一次评估的生命周期；
-- `SystemOneAdapter`、`EvaluationClient` 等稳定契约；
-- 可注入的 `Transport`、`Clock` 和 `IdGenerator` 接口。
-
-核心不认识：URL、Bearer、`x-api-key`、OpenAI、Anthropic、Cloudflare、`providerOptions` 的具体字段和任何 provider SDK。
-
-`SystemOneAdapter` 继续只负责 `prepare`、`decode` 和协议认证；核心负责请求快照、Fetch 生命周期、重试和最终答案验证。这样现有 adapter contract 可以直接迁移，不需要先引入一层只有一个实现的 model 抽象。
-
-### `@system-one-ai/transport-fetch`
-
-这个包实现通用 HTTP 生命周期：
-
-- Fetch、AbortSignal、总 deadline、响应大小限制；
-- HTTP 状态、Retry-After、网络错误和重试策略；
-- 鉴权头合并及跨 origin 保护；
-- 不记录 key、请求体和上游错误正文。
-
-它只接受已经准备好的 `HttpRequest`，不知道请求体里是 `questions`、`input` 还是 `messages`。adapter 可换成自带 SDK 或测试 transport，而不修改核心。
-
-### `@system-one-ai/adapter-*`
-
-每个协议一个包，每个包只做一件事：把标准 `EvaluateRequest` 编码成该服务的请求，再把响应映射回标准结果。
-
-第一批包：
-
-| 包 | 负责 | 依赖 |
-| --- | --- | --- |
-| `@system-one-ai/adapter-system-one` | TypeSafe System One 原生协议 | `core`, `transport-fetch` |
-| `@system-one-ai/adapter-openrouter` | Decisions 协议和 generation metadata | `core`, `transport-fetch` |
-| `@system-one-ai/adapter-vercel` | Evaluation v4 | `core`, `transport-fetch` |
-| `@system-one-ai/adapter-cloudflare` | 账户路径、AI runner envelope | `core`, `transport-fetch` |
-| `@system-one-ai/adapter-llm` | LLM 输出 schema、prompt、答案转换和 LLM 协议 | `core`, `transport-fetch` |
-
-这些包不能互相导入。Cloudflare 的账户校验只存在 Cloudflare 包；OpenRouter 的 provider options 只存在 OpenRouter 包；LLM 的概率归一化、prompt、schema 和 OpenAI/Anthropic 协议细节全部只存在 LLM 包。
-
-### `@system-one-ai/adapter-llm`
-
-LLM 是低优先级、可选的兼容 adapter，不进入 core，也不拆出独立 provider 包。它内部继续支持当前的 OpenAI Responses、OpenAI-compatible Chat Completions 和 Anthropic Messages；新增 LLM 协议只修改这个包。
+## 调用方式
 
 ```ts
-import { createSystemOne } from '@system-one-ai/core';
-import { createLlmAdapter } from '@system-one-ai/adapter-llm';
+import { createSystemOne, choice } from '@system-one-ai/core';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
 
 const client = createSystemOne({
-  baseURL,
-  apiKey,
-  model: 'deepseek-flash',
-  adapter: createLlmAdapter({ provider: 'openai' }),
+  adapter: openRouterAdapter,
+  transport: createFetchTransport(),
+  apiKey: process.env.OPENROUTER_API_KEY!,
+});
+const result = await client.evaluate({
+  state: 'The user asked for water.',
+  questions: { action: choice('Next action?', { drink: null, rest: null }) },
 });
 ```
 
-### `@system-one-ai/registry`
+`Transport.send` 接收已序列化的请求与调用预算，返回未知 payload 和 HTTP 元数据。Fetch transport 独占鉴权、网络重试和响应读取。core 调用 adapter 解码，再进行领域结果校验；解码或校验失败不会触发网络重试。总时间预算覆盖准备请求、网络、重试和解码。
 
-借鉴 AI SDK 的 registry，用稳定 ID 选择已经构造好的 adapter，并允许应用定义别名和白名单：
+`core/validation`、`core/http`、`core/composition` 是包间共用的显式工具入口。禁止通过跨目录相对路径读取其他包的私有源文件。错误类型来自同一 core，保持 `instanceof` 行为。
+
+## LLM 保持单包
+
+LLM 是可选、低优先级的兼容能力。OpenAI Responses、OpenAI-compatible Chat Completions、Anthropic Messages、prompt、schema、鉴权映射和概率处理全部保留在 `adapter-llm`。不拆 provider 包，不扩展为通用 LLM 框架。
 
 ```ts
-const adapters = createAdapterRegistry({
-  native: systemOneAdapter,
-  llm: createLlmAdapter(),
-});
+import { llmAdapter } from '@system-one-ai/adapter-llm';
 
-const adapter = adapters.get('llm');
-```
-
-registry 是可选的。核心永远接收已解析的 adapter，避免在运行时猜协议或根据 hostname 改行为。
-
-## 组合与 middleware
-
-`decisions`、`policies` 和 `batch` 移到独立包：
-
-- `@system-one-ai/decisions`：动作和参数组合；
-- `@system-one-ai/policies`：概率、差值、confidence gate；
-- `@system-one-ai/batch`：并发、取消和部分失败。
-
-它们只依赖 `EvaluationClient`/领域类型，不依赖任何 adapter。
-
-日志、缓存、fallback、限流、telemetry 和 prompt guardrail 使用 adapter/client wrapper：
-
-```ts
-const client = wrapEvaluationClient({
-  client,
-  middleware: [withTelemetry(), withRetry(), withCache()],
+const client = createSystemOne({
+  adapter: llmAdapter({ provider: 'openai', api: 'chat_completions' }),
+  transport: createFetchTransport(),
+  baseURL, apiKey, model,
 });
 ```
 
-wrapper 只接收标准 request/result；不得解析具体协议 response body。这样缓存和 telemetry 可以跨原生 adapter 和 LLM adapter 复用。
+## 兼容与安装
 
-## 迁移顺序
+- `@system-one-ai/sdk` 继续提供默认 TypeSafe adapter 与 Fetch transport。它只依赖 core、transport-fetch、adapter-system-one，不再携带其他 adapter 的实现。
+- 旧 `sdk/adapters/*`、`sdk/decisions`、`sdk/policies`、`sdk/batch` 是弃用的转导出；使用时必须显式安装对应包。这些包声明为可选 peer，不会随 SDK 自动安装。
+- LLM 从 SDK 根入口移除。改为从 `@system-one-ai/adapter-llm` 导入；避免一次根入口 import 强制加载可选包。
+- 下一次发布需要更新 SDK 版本并说明安装方式变化。当前不创建 tag、不发布任何包。
 
-1. **冻结当前契约**：保留 `bc49b67`，把 `types.ts` 中领域类型与 transport/adapter 类型拆成独立文件；不改变行为。
-2. **先抽接口**：冻结现有 `SystemOneAdapter`、`Transport`、`ProviderResponse` contract，让现有 adapter 通过 bridge 实现；现有测试继续跑。
-3. **抽出 transport**：把 `transport.ts` 移到 `transport-fetch`，核心只依赖接口；错误类型按 `core`、`transport`、`adapter` 分层。
-4. **拆原生 adapter**：先移动 `system-one`，再移动 OpenRouter、Vercel、Cloudflare；每个包带自己的 contract fixture、声明测试和 live script。
-5. **移动 LLM**：将当前 `llm.ts` 整体移动到 `adapter-llm`，保留现有 OpenAI、OpenAI-compatible 和 Anthropic 支持；不拆 provider，不让 LLM 阻塞原生 adapter 拆分。
-6. **移出组合模块**：decisions、policies、batch 改为 workspace 子包，核心只保留 `EvaluationClient`。
-7. **兼容发布**：当前包进入兼容期，只保留核心与明确安装的 adapter 入口；旧 `@system-one-ai/sdk/adapters/*` 入口发出 deprecation，下一主版本移除。
+## 构建与验证
 
-每一步都保持可发布状态。不要一次性改名、改协议和改包结构；每次迁移只移动一个边界，并保留一个 bridge。
+```sh
+npm ci --ignore-scripts
+npm run check
+npm run test:package
+npm run build --workspace @system-one-ai/adapter-openrouter
+npm run typecheck --workspace @system-one-ai/core
+npm test --workspace @system-one-ai/adapter-llm
+npm run test:live:llm -- /path/to/llm.env
+```
 
-## 发布与测试规则
+每个包都有独立 build、typecheck、test 和 prepack；构建顺序从 package.json 的依赖推导。包测试在仓库之外创建临时项目，只安装目标包及其声明的依赖，验证 ESM/CJS 运行与 NodeNext 声明解析。SDK 的最小安装另行检查可选 adapter 和组合包确实不存在。
 
-- 使用 npm workspaces，所有包共享 TypeScript 基础配置，但每个包独立 `build`、`typecheck`、`test` 和 `pack`。
-- 核心 CI 不安装任何 adapter，也不读取环境变量。
-- adapter test 用固定 JSON fixture；LLM live test 只在 `adapter-llm` 包执行。
-- 每个 adapter 包声明自己的可选依赖，安装核心不会带来 OpenAI、Anthropic 或 Playwright。
-- 包版本独立；领域契约破坏只升级 `core` major，单个 adapter 可以独立 minor/patch。
-- 发布前检查依赖图，禁止 `core -> adapter-*`、`adapter-a -> adapter-b` 和 adapter 反向依赖业务组合包。
+原有协议、验证、超时、取消、重试、本地 HTTP、业务场景测试继续通过兼容入口执行，入口直接使用独立包实现。依赖检查拒绝 core 依赖实现包、adapter 互相依赖、未声明依赖和跨包源文件导入。真实 LLM 测试单独执行，读取指定文件，不进入普通 CI，不保存密钥。
 
-## 暂不做的事
+## 后续开发规则
 
-- 不在核心里加入 adapter 自动发现、hostname 猜测或全局 registry。
-- 不把所有 adapter options 提升为一套“万能配置”；未识别字段留在对应 adapter 包。
-- 不为了兼容一次性保留全部旧内部模块；兼容只保留公开入口和一个过渡 bridge。
-- 不先做 streaming、tool calling、embedding 等与当前决策 API 无关的能力；先把一次结构化评估的边界拆干净。
+1. 协议改动只在所属 adapter 包修改；新增 adapter 不修改 core 或 SDK 根入口。
+2. 每次变更先明确契约、涉及的包和可复现验收，再修改代码。包移动、行为变化与发布分开提交。
+3. 各包独立版本；破坏共享契约时同时调整相关包的依赖范围，不能只升 core major。
+4. 发布按依赖顺序执行，先 core、共享协议/transport，再 adapter/组合包，最后兼容 SDK。现有 SDK 发布脚本会检查依赖的已发布版本与测试产物。
+5. registry、middleware、Clock、IdGenerator 等暂不增加。确有多个调用场景需要时再设计，不为 AI SDK 的每一个模块建立对应包。

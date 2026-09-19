@@ -10,12 +10,42 @@
   "types": "./dist/esm/index.d.ts",
   "exports": {
     ".": {
-      "import": { "types": "./dist/esm/index.d.ts", "default": "./dist/esm/index.js" },
-      "require": { "types": "./dist/cjs/index.d.ts", "default": "./dist/cjs/index.js" }
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "LICENSE"],
-  "dependencies": { "@system-one-ai/core": "0.5.2" },
-  "engines": { "node": ">=20" }
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@system-one-ai/core": "^0.5.2",
+    "@system-one-ai/protocol-system-one": "^0.5.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ziyu/sytem-one-sdk.git",
+    "directory": "packages/adapter-system-one"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs adapter-system-one",
+    "typecheck": "node ../../scripts/build-packages.mjs adapter-system-one --check",
+    "test": "node ../../scripts/test-workspace.mjs adapter-system-one",
+    "prepack": "npm run build"
+  }
 }

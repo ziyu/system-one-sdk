@@ -1,6 +1,6 @@
 import { ConfigurationError, ResponseValidationError, UnsupportedFeatureError } from '@system-one-ai/core';
 import type { AdapterContext, Answer, Description, JsonObject, PreparedRequest, ProviderResponse, Question, Questions, SystemOneAdapter, Usage } from '@system-one-ai/core';
-import { hasOwn, isRecord, parseBaseURL, responseRecord } from '@system-one-ai/core';
+import { hasOwn, isRecord, parseBaseURL, responseRecord } from '@system-one-ai/core/validation';
 
 export type LlmProvider = 'openai' | 'anthropic';
 export type LlmAnswerMode = 'probabilities' | 'discrete';

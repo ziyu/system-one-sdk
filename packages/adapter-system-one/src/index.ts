@@ -1,14 +1,9 @@
-import { isRecord, parseBaseURL, responseRecord, UnsupportedFeatureError } from '@system-one-ai/core';
-import type { AdapterContext, Questions, SystemOneAdapter } from '@system-one-ai/core';
+import { UnsupportedFeatureError } from '@system-one-ai/core';
+import type { AdapterContext, SystemOneAdapter } from '@system-one-ai/core';
+import { parseBaseURL } from '@system-one-ai/core/validation';
+import { nativeQuestions, decodeNative } from '@system-one-ai/protocol-system-one';
 
 const questionTypes = Object.freeze(['choice', 'score', 'boolean'] as const);
-
-/** Shared wire encoding for native System One question primitives. */
-export function nativeQuestions(questions: Questions) {
-  return Object.fromEntries(Object.entries(questions).map(([id, question]) => [
-    id, question.type === 'boolean' ? { ...question, type: 'noul' as const } : question,
-  ]));
-}
 
 function endpoint(baseURL: string): string {
   const url = parseBaseURL(baseURL);
@@ -28,27 +23,9 @@ export const systemOneAdapter: SystemOneAdapter = Object.freeze({
     if (request.providerOptions !== undefined && Object.keys(request.providerOptions).length > 0) {
       throw new UnsupportedFeatureError('The TypeSafe System One protocol does not define providerOptions. Use an adapter that supports them.');
     }
+    // Per-model upper limits belong to the service; do not freeze current Jev limits into a portable codec.
     const questions = nativeQuestions(request.questions);
     return { url: endpoint(baseURL), body: { model, state: request.state, questions } };
   },
-  decode(payload: unknown) {
-    const root = responseRecord(payload, 'response');
-    const rawAnswers = responseRecord(root.answers, 'answers');
-    const answers = Object.fromEntries(Object.entries(rawAnswers).map(([id, value]) => {
-      const answer = responseRecord(value, `answers.${id}`);
-      return [id, answer.type === 'noul' ? { type: 'boolean', probability: answer.noul } : answer];
-    }));
-    let usage: unknown = root.usage;
-    if (isRecord(usage)) {
-      usage = {
-        ...(usage.input_tokens == null ? {} : { inputTokens: usage.input_tokens }),
-        ...(usage.output_tokens == null ? {} : { outputTokens: usage.output_tokens }),
-      };
-    }
-    return {
-      ...root, answers,
-      ...(usage === undefined ? {} : { usage }),
-      rounding: root.rounding ?? { probabilityDecimals: 2, scoreDecimals: 2 },
-    };
-  },
+  decode: decodeNative,
 });

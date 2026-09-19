@@ -10,12 +10,41 @@
   "types": "./dist/esm/index.d.ts",
   "exports": {
     ".": {
-      "import": { "types": "./dist/esm/index.d.ts", "default": "./dist/esm/index.js" },
-      "require": { "types": "./dist/cjs/index.d.ts", "default": "./dist/cjs/index.js" }
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "LICENSE"],
-  "dependencies": { "@system-one-ai/core": "0.5.2" },
-  "engines": { "node": ">=20" }
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@system-one-ai/core": "^0.5.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ziyu/sytem-one-sdk.git",
+    "directory": "packages/adapter-llm"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs adapter-llm",
+    "typecheck": "node ../../scripts/build-packages.mjs adapter-llm --check",
+    "test": "node ../../scripts/test-workspace.mjs adapter-llm",
+    "prepack": "npm run build"
+  }
 }

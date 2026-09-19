@@ -6,14 +6,15 @@ import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
 import { vercelAdapter } from '@system-one-ai/adapter-vercel';
 import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 import { llmAdapter } from '@system-one-ai/adapter-llm';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 
 const request = { state: 'on', questions: { on: booleanQuestion('Is the light on?') } };
 
 async function evaluate(adapter, payload, expectedURL, options = {}) {
-  const client = createSystemOne({ adapter, apiKey: 'fixture', ...options, fetch: async (url) => {
+  const client = createSystemOne({ adapter, apiKey: 'fixture', ...options, transport: createFetchTransport(async (url) => {
     assert.equal(url, expectedURL);
     return new Response(JSON.stringify(payload));
-  }});
+  }) });
   const result = await client.evaluate(request);
   assert.equal(result.answers.on.probability, 0.9);
 }

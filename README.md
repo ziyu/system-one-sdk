@@ -6,6 +6,26 @@ A TypeScript SDK for decision models with a shared `evaluate({ state, questions 
 
 The runtime has no third-party dependencies and uses standard Fetch, AbortController, and ReadableStream APIs. The package includes ESM, CommonJS, and TypeScript declarations, with Node.js 20 as the minimum target. Browsers, Workers, and other environments need these Web APIs. Keep long-lived model API keys on the server.
 
+## Workspace packages (unreleased)
+
+The repository now uses npm workspaces. `@system-one-ai/core` contains the shared contracts and validated evaluation client; `transport-fetch` owns network execution. Each adapter and the decisions/policies/batch modules is independently packaged. LLM remains one adapter package.
+
+The SDK facade keeps the native TypeSafe adapter and Fetch defaults. Optional `sdk/adapters/*` and composition subpaths are deprecated forwarding exports and require installing the corresponding independent package. LLM is no longer exported from the SDK root. Independent packages are currently verified locally with isolated tarball installs; npm instructions below refer to the existing published SDK until the next release.
+
+```ts
+import { createSystemOne, choice } from '@system-one-ai/core';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
+
+const client = createSystemOne({
+  adapter: openRouterAdapter,
+  transport: createFetchTransport(),
+  apiKey: process.env.OPENROUTER_API_KEY!,
+});
+```
+
+After publishing, install only your selection: `npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-openrouter`. See [package boundaries and migration](docs/architecture-plan.zh-CN.md).
+
 ## Capability matrix
 
 SDK entries are included in the npm package. Repository examples run from a checkout and provide their own action executors. Verification below refers to the recorded runs on **2026-09-18**; details and limitations are in the [validation record](docs/validation.md).
@@ -22,7 +42,7 @@ SDK entries are included in the npm package. Repository examples run from a chec
 | File and support workflows | Repository examples: `examples/scenarios/` | File reads and moves, persistent ticket updates, state checks and request replay. Generated business data, real disk effects; the recorded 20-case suite passed on both TypeSafe and OpenRouter. [Guide](docs/decision-workflows.md). |
 | Slow-model handoff | Application callback example: `examples/uncertainty.ts` | Explicit service integration via `SLOW_THINK_URL`; without it, returns a pending handoff. No built-in planner or verified slow-model call. |
 
-All four built-in adapters implement choice, score and boolean evaluation and supply default URLs and models. Cloudflare also requires an account ID; configuration details are under [URLs and protocols](#urls-and-protocols).
+All four native decision adapters implement choice, score and boolean evaluation and supply default URLs and models. Cloudflare also requires an account ID; configuration details are under [URLs and protocols](#urls-and-protocols).
 
 | Provider | SDK integration | Recorded verification |
 | --- | --- | --- |
@@ -81,7 +101,7 @@ result.answers.interrupt.probability;   // number, P(true)
 result.usage.inputTokens;               // number | undefined
 ```
 
-Built-in adapters supply their default URL and model. Choose an adapter and provide its credentials; Cloudflare also needs your account ID. Normal use does not require looking up a `baseURL` or model ID. `baseURL` remains an optional override for proxies and compatible services, and `model` can pin a version or select another supported decision model. The client does not infer a provider from the hostname.
+Independently packaged adapters supply their default URL and model. Choose an adapter and provide its credentials; Cloudflare also needs your account ID. Normal use does not require looking up a `baseURL` or model ID. `baseURL` remains an optional override for proxies and compatible services, and `model` can pin a version or select another supported decision model. The client does not infer a provider from the hostname.
 
 ```ts
 const direct = new SystemOne({
@@ -113,7 +133,7 @@ The actual model determines limits on option counts, scoring levels, and context
 
 ## Optional decision composition (0.4.0+)
 
-These modules work with `SystemOne` and any wrapper implementing the exported `EvaluationClient` type. They do not select providers or add runtime dependencies, and the core does not import them. Composition declarations require TypeScript 5.4+.
+These modules work with `SystemOne` and any wrapper implementing the exported `EvaluationClient` type. They do not select providers and depend only on core, and the core does not import them. Composition declarations require TypeScript 5.4+.
 
 | Entry point | Functions |
 | --- | --- |
@@ -122,8 +142,8 @@ These modules work with `SystemOne` and any wrapper implementing the exported `E
 | `@system-one-ai/sdk/batch` | `evaluateMany` |
 
 ```ts
-import { choiceFrom, defineDecision } from '@system-one-ai/sdk/decisions';
-import { gateChoice } from '@system-one-ai/sdk/policies';
+import { choiceFrom, defineDecision } from '@system-one-ai/decisions';
+import { gateChoice } from '@system-one-ai/policies';
 
 const targets = choiceFrom({
   instructions: 'Choose the requested device.',
@@ -158,7 +178,7 @@ Candidate IDs and descriptions are snapshotted, while resolved objects preserve 
 Policies have no default thresholds. `gateChoice` can require selected probability, margin over alternatives, and/or provider confidence. `gateBoolean` uses `maxFalseProbability` and `minTrueProbability` with an uncertain interval between them. Results explicitly distinguish acceptance, uncertainty and choice abstention. Missing evidence stays uncertain; API failures stay errors. Example thresholds are illustrative. Action execution and slow-thinking callbacks belong to the application.
 
 ```ts
-import { evaluateMany } from '@system-one-ai/sdk/batch';
+import { evaluateMany } from '@system-one-ai/batch';
 
 const report = await evaluateMany(client, [
   { id: 'first', request: { state: 'Turn on the desk lamp.', questions: definition.questions } },
@@ -196,7 +216,7 @@ npm run example:browser
 npm run example:browser -- --task github-agents
 ```
 
-These commands use real model requests and actual public pages. Every step observes the current DOM, selects an action and its target through `decisions`, then executes it with Playwright. Final-state checks, screenshots and a Playwright trace are saved under `.artifacts/`. The example supports custom `--url`, `--goal` and `--input`, plus provider selection. Playwright is only a development dependency; the SDK runtime remains dependency-free. See [browser setup, implementation and evidence](docs/browser-decisions.md) ([中文](docs/browser-decisions.zh-CN.md)).
+These commands use real model requests and actual public pages. Every step observes the current DOM, selects an action and its target through `decisions`, then executes it with Playwright. Final-state checks, screenshots and a Playwright trace are saved under `.artifacts/`. The example supports custom `--url`, `--goal` and `--input`, plus provider selection. Playwright is only a development dependency; the SDK runtime uses only the selected System One packages. See [browser setup, implementation and evidence](docs/browser-decisions.md) ([中文](docs/browser-decisions.zh-CN.md)).
 
 ## URLs and protocols
 
@@ -225,7 +245,7 @@ Requires SDK version 0.3.0 or later. Version 0.2.0 does not contain this entry p
 
 ```ts
 import { SystemOne, choice } from '@system-one-ai/sdk';
-import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
+import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
 
 const openrouter = new SystemOne({
   adapter: openRouterAdapter,
@@ -277,7 +297,7 @@ node scripts/test-openrouter-live.mjs --verify-only
 
 ```ts
 import { SystemOne, booleanQuestion } from '@system-one-ai/sdk';
-import { cloudflareAdapter } from '@system-one-ai/sdk/adapters/cloudflare';
+import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 
 const cloudflare = new SystemOne({
   adapter: cloudflareAdapter({ accountId: process.env.CLOUDFLARE_ACCOUNT_ID! }),
@@ -312,7 +332,7 @@ Vercel uses a separate Evaluation protocol, provided through its own export. The
 
 ```ts
 import { SystemOne } from '@system-one-ai/sdk';
-import { vercelAdapter } from '@system-one-ai/sdk/adapters/vercel';
+import { vercelAdapter } from '@system-one-ai/adapter-vercel';
 
 const gateway = new SystemOne({
   adapter: vercelAdapter,
@@ -335,7 +355,8 @@ Switching only the URL and key requires the service to support the same protocol
 The optional `adapters/llm` export ports the Python adapter's core behavior to the existing `SystemOne` client. It builds a per-request JSON schema from the questions, calls OpenAI Responses or Chat Completions, or Anthropic Messages, and converts probability maps or discrete answers into the normal SDK result types. It uses Fetch and adds no provider SDK dependency.
 
 ```ts
-import { SystemOne, choice, llmAdapter } from '@system-one-ai/sdk';
+import { SystemOne, choice } from '@system-one-ai/sdk';
+import { llmAdapter } from '@system-one-ai/adapter-llm';
 
 const client = new SystemOne({
   adapter: llmAdapter({ provider: 'openai', llmAnswerMode: 'probabilities', structuredOutputs: true }),

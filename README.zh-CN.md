@@ -6,6 +6,26 @@
 
 运行时代码零第三方依赖，使用标准 Fetch、AbortController、ReadableStream；提供 ESM、CommonJS 和 TypeScript 声明。Node.js 最低目标为 20。浏览器、Workers 等环境需要提供这些 Web API；长期模型密钥应放在服务端。
 
+## 独立包迁移（尚未发布）
+
+仓库已使用 npm workspaces：`@system-one-ai/core` 负责共享契约和评估校验，`transport-fetch` 负责网络执行；每个 adapter 和 decisions/policies/batch 均为独立包。LLM 保持一个 adapter 包。
+
+SDK 兼容入口继续提供原生 TypeSafe adapter 和 Fetch 默认值。可选 `sdk/adapters/*` 及组合模块子路径改为弃用的转导出，使用时需要安装相应独立包。LLM 不再从 SDK 根入口导出。独立包目前通过本地 tarball 隔离安装验证，尚未发布；下方 npm 安装说明在下一次发布前仍对应已发布的旧 SDK。
+
+```ts
+import { createSystemOne, choice } from '@system-one-ai/core';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
+
+const client = createSystemOne({
+  adapter: openRouterAdapter,
+  transport: createFetchTransport(),
+  apiKey: process.env.OPENROUTER_API_KEY!,
+});
+```
+
+发布后按需安装：`npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-openrouter`。完整边界与迁移见[架构文档](docs/architecture-plan.zh-CN.md)。
+
 ## 当前能力矩阵
 
 SDK 入口包含在 npm 包中；仓库示例需要在源码目录运行，并由示例提供动作执行器。下表验证状态依据 **2026-09-18** 的已有运行记录，详细结果和边界见[验证记录](docs/validation.md)。
@@ -22,7 +42,7 @@ SDK 入口包含在 npm 包中；仓库示例需要在源码目录运行，并�
 | 文件与客服工作流 | 仓库示例：`examples/scenarios/` | 文件读取与移动、工单持久化、状态检查和请求重放；业务数据由示例生成，磁盘操作真实执行，已有 20 条用例在 TypeSafe、OpenRouter 均通过。[使用说明](docs/decision-workflows.zh-CN.md)。 |
 | 慢模型转交 | 应用回调示例：`examples/uncertainty.ts` | 通过 `SLOW_THINK_URL` 显式接入服务，未配置时返回待转交；没有内置规划器，也未验证真实慢模型调用。 |
 
-四个内置 adapter 均实现 choice、score、boolean 评估，并提供默认地址和模型。Cloudflare 另需账户 ID，配置方式见[地址与协议](#地址与协议)。
+四个原生决策 adapter 均实现 choice、score、boolean 评估，并提供默认地址和模型。Cloudflare 另需账户 ID，配置方式见[地址与协议](#地址与协议)。
 
 | 供应商 | SDK 接入 | 已有验证状态 |
 | --- | --- | --- |
@@ -81,7 +101,7 @@ result.answers.interrupt.probability;   // number，P(true)
 result.usage.inputTokens;               // number | undefined
 ```
 
-内置 adapter 自带默认地址和模型。选择 adapter 并提供对应凭据即可使用；Cloudflare 还需要账户 ID。正常接入无需查找 `baseURL` 或模型名称。`baseURL` 保留为代理和兼容服务的可选覆盖项；`model` 可用于固定版本或选择其他受支持的决策模型。客户端不会根据 hostname 猜测供应商。
+独立 adapter 包自带默认地址和模型。选择 adapter 并提供对应凭据即可使用；Cloudflare 还需要账户 ID。正常接入无需查找 `baseURL` 或模型名称。`baseURL` 保留为代理和兼容服务的可选覆盖项；`model` 可用于固定版本或选择其他受支持的决策模型。客户端不会根据 hostname 猜测供应商。
 
 ```ts
 const direct = new SystemOne({
@@ -122,8 +142,8 @@ SDK 以 `boolean` 命名真假问题，TypeSafe 适配器会将它转换成原�
 | `@system-one-ai/sdk/batch` | `evaluateMany` |
 
 ```ts
-import { choiceFrom, defineDecision } from '@system-one-ai/sdk/decisions';
-import { gateChoice } from '@system-one-ai/sdk/policies';
+import { choiceFrom, defineDecision } from '@system-one-ai/decisions';
+import { gateChoice } from '@system-one-ai/policies';
 
 const targets = choiceFrom({
   instructions: '选择用户请求操作的设备。',
@@ -158,7 +178,7 @@ if (actionGate.status === 'accepted' && decision.action === 'turn_on') {
 策略没有默认阈值。`gateChoice` 可组合所选概率、与其他项的差值、供应商 confidence；`gateBoolean` 使用 `maxFalseProbability` 与 `minTrueProbability` 定义真假接受区间，中间保留不确定。结果明确区分接受、不确定和 choice 弃权；缺少证据保持不确定，接口失败保持错误。示例阈值需要在业务中验证，动作执行与慢思考回调由应用接入。
 
 ```ts
-import { evaluateMany } from '@system-one-ai/sdk/batch';
+import { evaluateMany } from '@system-one-ai/batch';
 
 const report = await evaluateMany(client, [
   { id: 'first', request: { state: '打开台灯。', questions: definition.questions } },
@@ -196,7 +216,7 @@ npm run example:browser
 npm run example:browser -- --task github-agents
 ```
 
-命令发出真实模型请求并操作公开网页。每步读取当前 DOM，通过 `decisions` 选择动作和目标，再由 Playwright 执行。最终页面验收、截图和操作回放保存到 `.artifacts/`。可以用 `--url`、`--goal`、`--input` 配置其他任务，也可以切换 provider。Playwright 仅是开发依赖，SDK 运行时仍然零依赖。配置、实现及证据见[浏览器案例文档](docs/browser-decisions.zh-CN.md)（[English](docs/browser-decisions.md)）。
+命令发出真实模型请求并操作公开网页。每步读取当前 DOM，通过 `decisions` 选择动作和目标，再由 Playwright 执行。最终页面验收、截图和操作回放保存到 `.artifacts/`。可以用 `--url`、`--goal`、`--input` 配置其他任务，也可以切换 provider。Playwright 仅是开发依赖，SDK 运行时只依赖所选 System One 包。配置、实现及证据见[浏览器案例文档](docs/browser-decisions.zh-CN.md)（[English](docs/browser-decisions.md)）。
 
 ## 地址与协议
 
@@ -225,7 +245,7 @@ npm run example:browser -- --task github-agents
 
 ```ts
 import { SystemOne, choice } from '@system-one-ai/sdk';
-import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
+import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
 
 const openrouter = new SystemOne({
   adapter: openRouterAdapter,
@@ -277,7 +297,7 @@ node scripts/test-openrouter-live.mjs --verify-only
 
 ```ts
 import { SystemOne, booleanQuestion } from '@system-one-ai/sdk';
-import { cloudflareAdapter } from '@system-one-ai/sdk/adapters/cloudflare';
+import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 
 const cloudflare = new SystemOne({
   adapter: cloudflareAdapter({ accountId: process.env.CLOUDFLARE_ACCOUNT_ID! }),
@@ -312,7 +332,7 @@ Vercel 使用独立的 Evaluation 协议，适配器单独导出。核心入口�
 
 ```ts
 import { SystemOne } from '@system-one-ai/sdk';
-import { vercelAdapter } from '@system-one-ai/sdk/adapters/vercel';
+import { vercelAdapter } from '@system-one-ai/adapter-vercel';
 
 const gateway = new SystemOne({
   adapter: vercelAdapter,
@@ -335,7 +355,8 @@ const gateway = new SystemOne({
 可选入口 `adapters/llm` 将 Python 适配器的核心行为接入现有 `SystemOne` 客户端：根据每次请求的问题生成 JSON schema，调用 OpenAI Responses/Chat Completions 或 Anthropic Messages，再把概率分布或离散答案转换成 SDK 统一的结果。实现使用 Fetch，不新增供应商 SDK 依赖。
 
 ```ts
-import { SystemOne, choice, llmAdapter } from '@system-one-ai/sdk';
+import { SystemOne, choice } from '@system-one-ai/sdk';
+import { llmAdapter } from '@system-one-ai/adapter-llm';
 
 const client = new SystemOne({
   adapter: llmAdapter({ provider: 'openai', llmAnswerMode: 'probabilities', structuredOutputs: true }),

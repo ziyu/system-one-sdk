@@ -1,7 +1,7 @@
 {
   "name": "@system-one-ai/sdk",
   "version": "0.5.2",
-  "description": "Dependency-free, typed System One decisions for Jev and compatible models, with optional protocol adapters.",
+  "description": "Typed System One decisions with independently installed protocol adapters.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -17,48 +17,110 @@
   },
   "type": "module",
   "sideEffects": false,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
   "exports": {
     ".": {
-      "import": { "types": "./dist/esm/index.d.ts", "default": "./dist/esm/index.js" },
-      "require": { "types": "./dist/cjs/index.d.ts", "default": "./dist/cjs/index.js" }
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
     },
     "./adapters/vercel": {
-      "import": { "types": "./dist/esm/adapters/vercel.d.ts", "default": "./dist/esm/adapters/vercel.js" },
-      "require": { "types": "./dist/cjs/adapters/vercel.d.ts", "default": "./dist/cjs/adapters/vercel.js" }
+      "import": {
+        "types": "./dist/esm/adapters/vercel.d.ts",
+        "default": "./dist/esm/adapters/vercel.js"
+      },
+      "require": {
+        "types": "./dist/cjs/adapters/vercel.d.ts",
+        "default": "./dist/cjs/adapters/vercel.js"
+      }
     },
     "./adapters/openrouter": {
-      "import": { "types": "./dist/esm/adapters/openrouter.d.ts", "default": "./dist/esm/adapters/openrouter.js" },
-      "require": { "types": "./dist/cjs/adapters/openrouter.d.ts", "default": "./dist/cjs/adapters/openrouter.js" }
+      "import": {
+        "types": "./dist/esm/adapters/openrouter.d.ts",
+        "default": "./dist/esm/adapters/openrouter.js"
+      },
+      "require": {
+        "types": "./dist/cjs/adapters/openrouter.d.ts",
+        "default": "./dist/cjs/adapters/openrouter.js"
+      }
     },
     "./adapters/cloudflare": {
-      "import": { "types": "./dist/esm/adapters/cloudflare.d.ts", "default": "./dist/esm/adapters/cloudflare.js" },
-      "require": { "types": "./dist/cjs/adapters/cloudflare.d.ts", "default": "./dist/cjs/adapters/cloudflare.js" }
+      "import": {
+        "types": "./dist/esm/adapters/cloudflare.d.ts",
+        "default": "./dist/esm/adapters/cloudflare.js"
+      },
+      "require": {
+        "types": "./dist/cjs/adapters/cloudflare.d.ts",
+        "default": "./dist/cjs/adapters/cloudflare.js"
+      }
     },
     "./adapters/llm": {
-      "import": { "types": "./dist/esm/adapters/llm.d.ts", "default": "./dist/esm/adapters/llm.js" },
-      "require": { "types": "./dist/cjs/adapters/llm.d.ts", "default": "./dist/cjs/adapters/llm.js" }
+      "import": {
+        "types": "./dist/esm/adapters/llm.d.ts",
+        "default": "./dist/esm/adapters/llm.js"
+      },
+      "require": {
+        "types": "./dist/cjs/adapters/llm.d.ts",
+        "default": "./dist/cjs/adapters/llm.js"
+      }
     },
     "./decisions": {
-      "import": { "types": "./dist/esm/decisions.d.ts", "default": "./dist/esm/decisions.js" },
-      "require": { "types": "./dist/cjs/decisions.d.ts", "default": "./dist/cjs/decisions.js" }
+      "import": {
+        "types": "./dist/esm/decisions.d.ts",
+        "default": "./dist/esm/decisions.js"
+      },
+      "require": {
+        "types": "./dist/cjs/decisions.d.ts",
+        "default": "./dist/cjs/decisions.js"
+      }
     },
     "./policies": {
-      "import": { "types": "./dist/esm/policies.d.ts", "default": "./dist/esm/policies.js" },
-      "require": { "types": "./dist/cjs/policies.d.ts", "default": "./dist/cjs/policies.js" }
+      "import": {
+        "types": "./dist/esm/policies.d.ts",
+        "default": "./dist/esm/policies.js"
+      },
+      "require": {
+        "types": "./dist/cjs/policies.d.ts",
+        "default": "./dist/cjs/policies.js"
+      }
     },
     "./batch": {
-      "import": { "types": "./dist/esm/batch.d.ts", "default": "./dist/esm/batch.js" },
-      "require": { "types": "./dist/cjs/batch.d.ts", "default": "./dist/cjs/batch.js" }
+      "import": {
+        "types": "./dist/esm/batch.d.ts",
+        "default": "./dist/esm/batch.js"
+      },
+      "require": {
+        "types": "./dist/cjs/batch.d.ts",
+        "default": "./dist/cjs/batch.js"
+      }
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md", "README.zh-CN.md", "LICENSE", "docs"],
-  "engines": { "node": ">=20" },
-  "dependencies": { "@system-one-ai/core": "0.5.2" },
+  "files": [
+    "dist",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "docs"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@system-one-ai/core": "^0.5.2",
+    "@system-one-ai/transport-fetch": "^0.5.2",
+    "@system-one-ai/adapter-system-one": "^0.5.2"
+  },
   "scripts": {
     "build:packages": "node scripts/build-packages.mjs",
     "build": "node scripts/build.mjs",
@@ -84,11 +146,44 @@
     "test:browser": "npm run examples:build && node --test tests/browser/*.test.mjs",
     "example:uncertainty": "npm run examples:build && node --env-file=.env .examples/examples/uncertainty.js",
     "example:batch": "npm run examples:build && node --env-file=.env .examples/examples/batch.js",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "test:live:llm": "node scripts/build-packages.mjs adapter-llm && node scripts/build-packages.mjs transport-fetch && node scripts/test-llm-live.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.3",
     "playwright": "1.63.0",
     "typescript": "5.9.3"
+  },
+  "peerDependencies": {
+    "@system-one-ai/adapter-openrouter": "^0.5.2",
+    "@system-one-ai/adapter-cloudflare": "^0.5.2",
+    "@system-one-ai/adapter-vercel": "^0.5.2",
+    "@system-one-ai/adapter-llm": "^0.5.2",
+    "@system-one-ai/decisions": "^0.5.2",
+    "@system-one-ai/policies": "^0.5.2",
+    "@system-one-ai/batch": "^0.5.2"
+  },
+  "peerDependenciesMeta": {
+    "@system-one-ai/adapter-openrouter": {
+      "optional": true
+    },
+    "@system-one-ai/adapter-cloudflare": {
+      "optional": true
+    },
+    "@system-one-ai/adapter-vercel": {
+      "optional": true
+    },
+    "@system-one-ai/adapter-llm": {
+      "optional": true
+    },
+    "@system-one-ai/decisions": {
+      "optional": true
+    },
+    "@system-one-ai/policies": {
+      "optional": true
+    },
+    "@system-one-ai/batch": {
+      "optional": true
+    }
   }
 }

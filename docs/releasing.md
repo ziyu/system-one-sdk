@@ -62,3 +62,29 @@ If npm accepts a publication but is still processing it, the current release scr
 ## Live model tests
 
 Live integration checks stay separate from CI and publication. Run `npm run test:live` or `npm run test:live:openrouter` locally with the appropriate credentials when provider behavior changes. These commands consume real API usage. Their reports and credentials remain excluded from GitHub and npm packages.
+
+## Workspace migration (unreleased)
+
+The repository now builds independently versioned workspace packages. The root SDK
+is a compatibility facade and requires published versions of core, transport-fetch
+and adapter-system-one (including protocol-system-one). Optional adapters and
+composition modules are optional peers, not bundled dependencies.
+
+Before the first workspace release:
+
+1. Choose unpublished versions and update internal dependency ranges and the lockfile.
+2. Run `npm run check` and `npm run test:package`. The latter packs every workspace,
+   installs each dependency closure outside the repository, checks ESM/CJS and
+   declarations, and records all tested package integrities.
+3. Configure npm publishing permissions for each package. Publish the **tested
+   tarballs** in dependency order: core; protocol-system-one and transport-fetch;
+   adapters and composition packages; SDK last. Do not rebuild the tested artifacts
+   during publication.
+4. The existing SDK release script verifies required workspace dependencies against
+   their tested SHA-512 digests on npm before it will publish the facade. It does not
+   publish workspaces automatically. No package versions or Git tags are created by
+   the refactor itself.
+
+Each workspace supports `npm run build --workspace <name>`,
+`npm run typecheck --workspace <name>`, `npm test --workspace <name>` and
+`npm pack --workspace <name>`. A prepack build includes local dependencies first.

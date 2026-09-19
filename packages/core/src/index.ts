@@ -1,6 +1,5 @@
 export { SystemOne, createSystemOne } from './client.js';
 export { choice, score, booleanQuestion, defineQuestions } from './questions.js';
-export { hasOwn, isRecord, parseBaseURL, responseRecord } from './validation.js';
 export {
   APIError, ConfigurationError, ConnectionError, RequestAbortedError,
   ResponseValidationError, SystemOneError, TimeoutError, UnsupportedFeatureError, ValidationError,
@@ -13,3 +12,4 @@ export type {
   ProviderResponse, Question, Questions, QuestionType, RequestOptions, Rounding,
   ScoreAnswer, ScoreQuestion, State, SystemOneAdapter, SystemOneOptions, Usage,
 } from './types.js';
+export type { Transport, TransportRequest, TransportOptions, TransportResponse } from './types.js';

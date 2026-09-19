@@ -1,5 +1,5 @@
-import { APIError, ConfigurationError, ConnectionError, ResponseValidationError, SystemOneError, TimeoutError, UnsupportedFeatureError } from './errors.js';
-import { buildHeaders, checkRequestURL, postJson, RequestScope, resolveApiKey, snapshotHeaders } from './transport.js';
+import { ConfigurationError, RequestAbortedError, ResponseValidationError, SystemOneError, TimeoutError, UnsupportedFeatureError } from './errors.js';
+import { checkRequestURL, snapshotHeaders } from './http.js';
 import type { AdapterContext, EvaluateRequest, EvaluationResult, Questions, RequestOptions, SystemOneAdapter, SystemOneOptions } from './types.js';
 import { assertJson, configInteger, parseBaseURL, snapshotRequest, validateResponse } from './validation.js';
 
@@ -37,7 +37,7 @@ export class SystemOne {
     this.#retryDelayMs = configInteger(options.retryDelayMs ?? 200, 'retryDelayMs', 0);
     this.#maxRetryDelayMs = configInteger(options.maxRetryDelayMs ?? 2_000, 'maxRetryDelayMs', 0);
     this.#maxResponseBytes = configInteger(options.maxResponseBytes ?? 8 * 1024 * 1024, 'maxResponseBytes', 1);
-    if (options.fetch !== undefined && typeof options.fetch !== 'function') throw new ConfigurationError('fetch must be a function.');
+    if (!options.transport || typeof options.transport.send !== 'function') throw new ConfigurationError('Provide a transport implementing send.');
   }
 
   async evaluate<const Q extends Questions>(request: EvaluateRequest<Q>, options: RequestOptions = {}): Promise<EvaluationResult<Q>> {
@@ -54,45 +54,40 @@ export class SystemOne {
     const url = checkRequestURL(prepared.url, this.baseURL);
     assertJson(prepared.body, 'adapter.request.body');
     const body = JSON.stringify(prepared.body);
-    const fetcher = this.#options.fetch ?? globalThis.fetch?.bind(globalThis);
-    if (!fetcher) throw new ConfigurationError('This runtime needs a Fetch implementation; provide the fetch option.');
     const remaining = timeoutMs - (Date.now() - start);
     if (remaining <= 0) throw new TimeoutError();
-    const scope = new RequestScope(remaining, options.signal);
-    try {
-      for (let attempt = 0; ; attempt++) {
-        scope.throwIfAborted();
-        try {
-          const key = await resolveApiKey(this.#options.apiKey, scope);
-          const headers = buildHeaders(this.#adapter, prepared, key, [this.#headers, requestHeaders]);
-          const response = await postJson(fetcher, url, headers, body, this.#maxResponseBytes, scope);
-          let decoded: unknown;
-          try { decoded = this.#adapter.decode(response.payload, context); }
-          catch (error) {
-            if (error instanceof SystemOneError) throw error;
-            throw new ResponseValidationError('response', 'adapter could not decode the response');
-          }
-          const validated = validateResponse(decoded, snapshot.questions, context.model);
-          scope.throwIfAborted();
-          return {
-            ...validated,
-            response: {
-              ...(response.requestId === undefined ? {} : { requestId: response.requestId }),
-              status: response.status, attempts: attempt + 1, durationMs: Date.now() - start, adapter: this.adapterId,
-            },
-          };
-        } catch (error) {
-          scope.throwIfAborted();
-          if (attempt >= maxRetries || !(error instanceof ConnectionError || error instanceof APIError && error.retryable)) throw error;
-          const reportedDelay = error instanceof APIError ? error.retryAfterMs : undefined;
-          const backoff = Math.min(this.#maxRetryDelayMs, this.#retryDelayMs * 2 ** Math.min(attempt, 30));
-          const delay = reportedDelay ?? Math.floor(backoff * (0.5 + Math.random() * 0.5));
-          // Never retry earlier than Retry-After, including values too large for JS timers.
-          if (delay >= timeoutMs - (Date.now() - start)) throw new TimeoutError();
-          await scope.delay(delay);
-        }
-      }
-    } finally { scope.dispose(); }
+    if (options.signal?.aborted) throw new RequestAbortedError();
+    const response = await this.#options.transport.send({
+      baseURL: this.baseURL, url, body, apiKey: this.#options.apiKey,
+      ...(prepared.headers === undefined ? {} : { headers: prepared.headers }),
+      ...(this.#adapter.authenticate === undefined ? {} : { authenticate: this.#adapter.authenticate.bind(this.#adapter) }),
+    }, {
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      timeoutMs: remaining, maxRetries, retryDelayMs: this.#retryDelayMs,
+      maxRetryDelayMs: this.#maxRetryDelayMs, maxResponseBytes: this.#maxResponseBytes,
+      headers: [this.#headers, requestHeaders],
+    });
+    const checkDeadline = () => {
+      if (options.signal?.aborted) throw new RequestAbortedError();
+      if (Date.now() - start >= timeoutMs) throw new TimeoutError();
+    };
+    checkDeadline();
+    let decoded: unknown;
+    try { decoded = this.#adapter.decode(response.payload, context); }
+    catch (error) {
+      checkDeadline();
+      if (error instanceof SystemOneError) throw error;
+      throw new ResponseValidationError('response', 'adapter could not decode the response');
+    }
+    const validated = validateResponse(decoded, snapshot.questions, context.model);
+    checkDeadline();
+    return {
+      ...validated,
+      response: {
+        ...(response.requestId === undefined ? {} : { requestId: response.requestId }),
+        status: response.status, attempts: response.attempts, durationMs: Date.now() - start, adapter: this.adapterId,
+      },
+    };
   }
 }
 

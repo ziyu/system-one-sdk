@@ -132,6 +132,35 @@ export interface SystemOneAdapter {
 }
 export type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export type ApiKey = string | null | (() => string | null | Promise<string | null>);
+
+/** Prepared HTTP exchange; contains no decision questions or answer decoding. */
+export interface TransportRequest {
+  readonly baseURL: string;
+  readonly url: string;
+  readonly body: string;
+  readonly headers?: HeadersInit;
+  readonly apiKey: ApiKey;
+  readonly authenticate?: (apiKey: string | null) => HeadersInit;
+}
+export interface TransportOptions {
+  readonly signal?: AbortSignal;
+  readonly timeoutMs: number;
+  readonly maxRetries: number;
+  readonly retryDelayMs: number;
+  readonly maxRetryDelayMs: number;
+  readonly maxResponseBytes: number;
+  readonly headers: readonly HeadersInit[];
+}
+export interface TransportResponse {
+  readonly payload: unknown;
+  readonly status: number;
+  readonly requestId?: string;
+  readonly attempts: number;
+}
+export interface Transport {
+  /** Must honor the total timeout, cancellation and retry budget for this exchange. */
+  send(request: TransportRequest, options: TransportOptions): Promise<TransportResponse>;
+}
 export interface SystemOneOptions {
   /** Optional override for a proxy or compatible service. Built-in adapters supply their own URL. */
   readonly baseURL?: string;
@@ -141,7 +170,8 @@ export interface SystemOneOptions {
   readonly model?: string;
   /** Protocol behavior is supplied by an independently installed adapter package. */
   readonly adapter: SystemOneAdapter;
-  readonly fetch?: Fetch;
+  /** Install transport-fetch or supply a custom transport. Core performs no network I/O. */
+  readonly transport: Transport;
   readonly headers?: HeadersInit;
   readonly timeoutMs?: number;
   readonly maxRetries?: number;
