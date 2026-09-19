@@ -16,6 +16,15 @@ const save = async (file, value) => writeFile(path.join(artifacts, file), JSON.s
 const versionURL = pkg => `${registry}${encodeURIComponent(pkg.name)}/${pkg.version}`;
 const ordered = packages => buildOrder(undefined, packages.map(manifest => ({ manifest }))).map(item => item.manifest);
 const internal = name => name.startsWith('@system-one-ai/');
+const releases = manifest => ordered(manifest.packages).filter(pkg => pkg.filename);
+const stable = pkg => !semver.prerelease(pkg.version);
+
+export function validateVerification(manifest, receipt, manifestSha256) {
+  assert.equal(receipt.status, 'passed', 'Registry verification has not passed.');
+  assert.equal(receipt.commit, manifest.source.commit, 'Registry verification belongs to another commit.');
+  assert.equal(receipt.manifestSha256, manifestSha256, 'Registry verification belongs to another artifact set.');
+  assert.deepEqual(receipt.packages, ordered(manifest.packages).map(({ name, version, integrity }) => ({ name, version, integrity })), 'Registry verification package integrities differ.');
+}
 
 export function validatePackage(manifest, lock) {
   const directory = manifest.name?.replace('@system-one-ai/', '');
@@ -204,11 +213,36 @@ export async function publishBatch(manifest, effects) {
     await effects.confirm(pkg);
   }
   await effects.verify(packages.map(({ filename, ...pkg }) => pkg));
-  for (const pkg of packages.filter(pkg => pkg.filename && !semver.prerelease(pkg.version))) {
+}
+
+/** Separate from uploads: the protected finalization job runs only after registry acceptance. */
+export async function finalizeBatch(manifest, effects) {
+  assert.equal(manifest.dryRun, false, 'Dry-run manifest cannot be finalized.');
+  await effects.accept();
+  const packages = releases(manifest);
+  for (const pkg of ordered(manifest.packages)) {
+    assert.equal(registryState(await effects.metadata(pkg), pkg), 'identical', 'Verified registry version disappeared.');
+  }
+  const latestVersion = async pkg => {
     const latest = await effects.latest(pkg.name);
+    assert.ok(!latest || semver.valid(latest), `Invalid latest for ${pkg.name}.`);
+    assert.ok(!latest || !semver.prerelease(latest) || semver.lt(latest, pkg.version), `Newer prerelease occupies latest for ${pkg.name}; resolve the channel explicitly.`);
+    return latest;
+  };
+  // Check every target before any writes, then re-read immediately before each promotion.
+  for (const pkg of packages.filter(stable)) await latestVersion(pkg);
+  for (const pkg of packages.filter(stable)) {
+    const latest = await latestVersion(pkg);
     if (!latest || semver.lt(latest, pkg.version)) await effects.promote(pkg);
   }
-  for (const pkg of packages.filter(pkg => pkg.filename)) await effects.github(pkg);
+  const tags = [];
+  for (const pkg of packages.filter(stable)) {
+    const latest = await latestVersion(pkg);
+    assert.ok(latest && semver.gte(latest, pkg.version), `Stable tag not confirmed for ${pkg.name}; resume finalization.`);
+    tags.push({ name: pkg.name, version: pkg.version, latest });
+  }
+  await effects.record(tags);
+  for (const pkg of packages) await effects.github(pkg);
 }
 
 async function githubTag(pkg, commit, create = false) {
@@ -243,17 +277,47 @@ async function publish() {
     verify: async packages => {
       await testPackages(packages);
       for (const graph of manifest.minimums) await testPackages(graph.map(({ filename, ...pkg }) => pkg));
-      await save('registry-verification.json', { commit: manifest.source.commit, manifestSha256: digest(await readFile(path.join(artifacts, 'release-manifest.json'))), verifiedAt: new Date().toISOString(), packages: packages.map(({ name, version, integrity }) => ({ name, version, integrity })) });
+      await save('registry-verification.json', { status: 'passed', commit: manifest.source.commit, manifestSha256: digest(await readFile(path.join(artifacts, 'release-manifest.json'))), verifiedAt: new Date().toISOString(), packages: packages.map(({ name, version, integrity }) => ({ name, version, integrity })) });
     },
-    latest: async name => (await getJSON(`${registry}${encodeURIComponent(name)}/latest`))?.version,
+  });
+  console.log('Batch uploaded to next and verified from npm. Awaiting protected finalization.');
+}
+
+async function checkTagAuth() {
+  const plan = await readJSON('.changeset/release.json');
+  if (!plan.packages.some(stable)) return;
+  assert.ok(process.env.NPM_TAG_TOKEN, 'Stable releases require the protected npm environment secret NPM_TAG_TOKEN.');
+  // OIDC handles publish only. This token is passed only to npm identity/tag operations.
+  execFileSync('npm', ['whoami', `--registry=${registry}`], { cwd: root, stdio: 'pipe', env: { ...process.env, NODE_AUTH_TOKEN: process.env.NPM_TAG_TOKEN } });
+  console.log('Stable tag credential identity verified.');
+}
+
+async function finalize() {
+  const manifest = await loadManifest(true);
+  assert.ok(process.env.GH_TOKEN, 'GH_TOKEN is required to finalize release tags.');
+  const manifestSha256 = digest(await readFile(path.join(artifacts, 'release-manifest.json')));
+  for (const pkg of releases(manifest)) await githubTag(pkg, manifest.source.commit);
+  await finalizeBatch(manifest, {
+    accept: async () => {
+      validateVerification(manifest, await readJSON('.artifacts/registry-verification.json'), manifestSha256);
+      await checkTagAuth();
+    },
+    metadata: pkg => getJSON(versionURL(pkg)),
+    latest: async name => (await getJSON(`${registry}-/package/${encodeURIComponent(name)}/dist-tags`))?.latest,
     promote: async pkg => {
-      run('npm', ['dist-tag', 'add', `${pkg.name}@${pkg.version}`, 'latest', `--registry=${registry}`]);
-      assert.equal((await getJSON(`${registry}${encodeURIComponent(pkg.name)}/latest`))?.version, pkg.version, 'Stable tag is not visible yet; resume this batch.');
+      execFileSync('npm', ['dist-tag', 'add', `${pkg.name}@${pkg.version}`, 'latest', `--registry=${registry}`], { cwd: root, stdio: 'inherit', env: { ...process.env, NODE_AUTH_TOKEN: process.env.NPM_TAG_TOKEN } });
+      for (let attempt = 0; attempt < 61; attempt++) {
+        const latest = (await getJSON(`${registry}-/package/${encodeURIComponent(pkg.name)}/dist-tags`))?.latest;
+        if (latest && semver.valid(latest) && !semver.prerelease(latest) && semver.gte(latest, pkg.version)) return;
+        if (attempt < 60) await delay(5000);
+      }
+      throw new Error(`Stable tag not visible for ${pkg.name}; resume finalization.`);
     },
+    record: tags => save('release-result.json', { status: 'passed', commit: manifest.source.commit, manifestSha256, finalizedAt: new Date().toISOString(), tags }),
     github: async pkg => {
       await githubTag(pkg, manifest.source.commit, true);
       const existing = await getJSON(`https://api.github.com/repos/${repository}/releases/tags/${pkg.tag}`, { authorization: `Bearer ${process.env.GH_TOKEN}` });
-      const assets = [path.join(artifacts, pkg.filename), path.join(artifacts, 'release-manifest.json'), path.join(artifacts, 'SHA256SUMS'), path.join(artifacts, 'registry-verification.json')];
+      const assets = [path.join(artifacts, pkg.filename), path.join(artifacts, 'release-manifest.json'), path.join(artifacts, 'SHA256SUMS'), path.join(artifacts, 'registry-verification.json'), path.join(artifacts, 'release-result.json')];
       if (existing) {
         run('gh', ['release', 'upload', pkg.tag, ...assets, '--clobber', '--repo', repository]);
         if (existing.draft) run('gh', ['release', 'edit', pkg.tag, '--draft=false', '--repo', repository]);
@@ -270,7 +334,7 @@ async function publish() {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const command = process.argv[2];
-    assert.ok(['prepare', 'verify', 'publish'].includes(command), 'Use release.mjs prepare [--dry-run], verify, or publish.');
+    assert.ok(['prepare', 'verify', 'check-tag-auth', 'publish', 'finalize'].includes(command), 'Use release.mjs prepare [--dry-run], verify, check-tag-auth, publish, or finalize.');
     if (command === 'prepare') await prepare(process.argv.includes('--dry-run'));
     if (command === 'verify') {
       const manifest = await loadManifest();
@@ -278,6 +342,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       for (const graph of manifest.minimums) await testPackages(graph);
     }
     if (command === 'publish') await publish();
+    if (command === 'check-tag-auth') await checkTagAuth();
+    if (command === 'finalize') await finalize();
   } catch (error) {
     console.error(error instanceof Error ? error.message : 'Release failed.');
     process.exitCode = 1;
