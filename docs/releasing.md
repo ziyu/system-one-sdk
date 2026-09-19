@@ -1,90 +1,53 @@
-# Releasing the SDK
+# Releasing workspace packages
 
-The repository uses two GitHub Actions workflows. Neither workflow reads a local `.env` file or calls a paid model API.
+The repository root is private and cannot be published. Every runtime package under `packages/` is independently versioned. The release workflow publishes one package selected by a tag such as `core-v0.5.2` or `adapter-llm-v0.6.0-rc.1`. Old `v*` SDK tags no longer trigger publication.
 
-## CI
+## CI and artifacts
 
-`.github/workflows/ci.yml` runs on pushes to `main`, pull requests, and manual dispatches. It installs the lockfile, runs strict type checking and offline tests, compiles the examples, and installs the actual tarball in a temporary consumer project. The matrix covers Node.js 20, 22, and 24, including ESM, CommonJS, and both optional adapters.
+CI runs on Node.js 20, 22 and 24. It checks types, builds all packages, runs offline regression and workflow tests, then installs each package's tarball with only its dependency closure outside the repository. ESM/CJS runtime contracts and all installed declaration inference checks must pass. Neither CI nor releases read local credentials or call paid models.
 
-## One-time npm setup
+`npm run test:package` records workspace filenames and SHA-512 integrities in `.artifacts/package-manifest.json` only after every package passes. Release commands use these exact tarballs; they do not rebuild during publication.
 
-The release workflow uses npm Trusted Publishing with GitHub OIDC. No `NPM_TOKEN` repository secret is required. Configure a trusted publisher in the npm settings for `@system-one-ai/sdk` with these exact values:
+## npm setup
 
-| Field | Value |
-| --- | --- |
-| Publisher | GitHub Actions |
-| Organization or user | `ziyu` |
-| Repository | `sytem-one-sdk` |
-| Workflow filename | `release.yml` |
-| Environment | `npm` |
-| Allowed action | Direct publishing with `npm publish` |
+Configure npm Trusted Publishing separately for each package, with GitHub Actions publisher, owner `ziyu`, repository `sytem-one-sdk`, workflow `release.yml`, and environment `npm`. Create the GitHub environment with that name. The workflow uses Node.js 24, npm 11.17.0 and OIDC; no stored `NPM_TOKEN` is used.
 
-The GitHub repository must have an environment named `npm`. Repository owners can add required reviewers to it when manual approval is desired. The workflow runs on a GitHub-hosted runner with Node.js 24 and npm 11.17.0. Its job requests `id-token: write` for npm authentication and `contents: write` for the GitHub Release. Action references are pinned to commit SHAs, checkout credentials are not persisted, and release builds do not restore dependency caches.
+Package metadata must retain the repository URL and its own `repository.directory`. For packages that do not yet exist on npm, complete the initial package/bootstrap setup permitted by your npm account before relying on OIDC. No package has been published by the workspace refactor. See [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) for current requirements.
 
-The package's `repository.url` must stay aligned with the trusted publisher. See the official [npm Trusted Publishing documentation](https://docs.npmjs.com/trusted-publishers/) for setup and authentication troubleshooting.
+## Prepare a release
 
-## Publish a new version
-
-Merge the changes into `main`, then prepare a version commit and annotated tag. For example:
+Choose an unpublished version for the affected package. For example:
 
 ```sh
-git switch main
-git pull --ff-only
-npm version patch -m "chore: release %s"
-git push origin main --follow-tags
+npm version patch --workspace @system-one-ai/adapter-llm --no-git-tag-version
+npm install --ignore-scripts
+npm run check
+npm run test:package
 ```
 
-For an already prepared version such as `0.3.0`, tag that commit instead of incrementing it again:
+Update dependent package ranges when changing a shared contract, especially across a major version. Commit the manifest and lockfile changes, merge them into `main`, and tag that commit with the package directory and its exact version:
 
 ```sh
-git tag -a v0.3.0 -m "Release v0.3.0"
-git push origin main v0.3.0
+git tag -a adapter-llm-v0.5.3 -m "Release adapter-llm 0.5.3"
+git push origin adapter-llm-v0.5.3
 ```
 
-`.github/workflows/release.yml` starts on a `v*` tag. It verifies that the tag is a valid semantic version, matches both `package.json` and `package-lock.json`, identifies the checked-out commit, and belongs to the history of `origin/main`. A mismatched version or dirty tracked source stops the release before publication.
+The version above is illustrative; it must match `packages/adapter-llm/package.json` and the workspace entry in the lockfile. The release guard also requires the tagged commit to match the checkout, belong to `origin/main`, and have clean tracked source. Private packages and unexpected repository/registry settings are rejected.
 
-The workflow then runs the offline checks, builds and installs the package for verification, and publishes that exact tarball to npm. npm uses the configured trusted publisher and includes provenance. After verifying the registry's SHA-512 integrity, the workflow creates a GitHub Release with generated notes, the npm tarball, and `SHA256SUMS`.
+Publish dependencies first: core; protocol-system-one and transport-fetch; adapters and composition packages. A package release verifies that every local dependency in its closure is already on npm with the exact version and SHA-512 integrity tested by that run. It never publishes dependencies automatically. If an unchanged dependency's bytes differ from its published artifact, resolve the build/source mismatch or release a new dependency version before proceeding.
 
-Stable versions use the npm `latest` tag. Prereleases such as `v0.4.0-rc.1` use `next` and create a GitHub prerelease. Publish stable versions in ascending order. Release runs are serialized and do not cancel a publication in progress.
+The workflow publishes the selected tarball with provenance, verifies npm's SHA-512 integrity, then creates a GitHub Release with the tarball and `SHA256SUMS`. Stable releases use `latest`; prereleases use `next`. Release runs are serialized. Publish versions in ascending order for each package.
 
 ## Resume a failed release
 
-Fix external configuration issues, such as a missing trusted publisher, and rerun the failed GitHub Actions run. Alternatively, manually run the **Release** workflow with the existing version tag:
+Fix the external configuration and rerun the failed workflow, or dispatch the existing tag:
 
 ```sh
-gh workflow run release.yml --repo ziyu/sytem-one-sdk --ref main -f tag=v0.3.0
+gh workflow run release.yml --repo ziyu/sytem-one-sdk --ref main -f tag=adapter-llm-v0.5.3
 ```
 
-The tag must already exist; the workflow never creates or moves tags. If npm already has the same version, the workflow verifies that its integrity matches the newly tested tarball and skips the publish command. It then completes the GitHub Release and uploads the matching assets. An existing npm version with different contents stops the workflow; release a new version instead of overwriting or moving the old tag.
+Tags are never created or moved by the workflow. An existing npm version is reused only when its integrity matches the tested tarball exactly; different contents require a new version. After publication, the script waits for public metadata for up to 61 attempts with five-second delays and bounded request time. It does not repeat `npm publish` during that wait. GitHub Release creation requires successful npm verification.
 
-If npm accepts a publication but is still processing it, the current release script checks public metadata up to 61 times with five-second delays (five minutes of scheduled waiting, plus bounded request time). It never repeats `npm publish` during that wait. If metadata is still unavailable, the verification step fails; wait until the version is publicly readable before rerunning the workflow. Rerunning uses the same integrity check. A GitHub Release is not created until npm publication is verified. The original `v0.3.0` tag retains its shorter verification window; rerunning that release after the package becomes visible completes the same checks without moving the tag.
+## Live verification
 
-## Live model tests
-
-Live integration checks stay separate from CI and publication. Run `npm run test:live` or `npm run test:live:openrouter` locally with the appropriate credentials when provider behavior changes. These commands consume real API usage. Their reports and credentials remain excluded from GitHub and npm packages.
-
-## Workspace migration (unreleased)
-
-The repository now builds independently versioned workspace packages. The root SDK
-is a compatibility facade and requires published versions of core, transport-fetch
-and adapter-system-one (including protocol-system-one). Optional adapters and
-composition modules are optional peers, not bundled dependencies.
-
-Before the first workspace release:
-
-1. Choose unpublished versions and update internal dependency ranges and the lockfile.
-2. Run `npm run check` and `npm run test:package`. The latter packs every workspace,
-   installs each dependency closure outside the repository, checks ESM/CJS and
-   declarations, and records all tested package integrities.
-3. Configure npm publishing permissions for each package. Publish the **tested
-   tarballs** in dependency order: core; protocol-system-one and transport-fetch;
-   adapters and composition packages; SDK last. Do not rebuild the tested artifacts
-   during publication.
-4. The existing SDK release script verifies required workspace dependencies against
-   their tested SHA-512 digests on npm before it will publish the facade. It does not
-   publish workspaces automatically. No package versions or Git tags are created by
-   the refactor itself.
-
-Each workspace supports `npm run build --workspace <name>`,
-`npm run typecheck --workspace <name>`, `npm test --workspace <name>` and
-`npm pack --workspace <name>`. A prepack build includes local dependencies first.
+Run `npm run test:live:llm -- /path/to/llm.env` for an OpenAI-compatible LLM service, or the dedicated TypeSafe/OpenRouter/Cloudflare live commands with their credentials. These are separate from publication, consume actual usage, and keep credentials and generated reports out of npm and Git.

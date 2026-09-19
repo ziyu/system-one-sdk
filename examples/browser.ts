@@ -48,7 +48,7 @@ if (values.help) {
     await mkdir('.artifacts', { recursive: true });
     output = await mkdtemp(path.resolve('.artifacts', `browser-decisions-${values.provider}-`));
     const sourceHashes = Object.fromEntries(await Promise.all([
-      'examples/browser.ts', 'examples/browser-use/agent.ts', 'examples/browser-use/observe.ts', 'examples/browser-use/tasks.ts', 'src/decisions.ts',
+      'examples/browser.ts', 'examples/browser-use/agent.ts', 'examples/browser-use/observe.ts', 'examples/browser-use/tasks.ts', 'packages/decisions/src/index.ts',
     ].map(async file => [file, createHash('sha256').update(await readFile(file)).digest('hex')])));
     browser = await chromium.launch({ ...(values.channel === 'chrome' ? { channel: 'chrome' } : {}), headless: values.headless!, timeout: 15000 });
     const summary: Record<string, unknown> = { startedAt: new Date().toISOString(), provider: values.provider, browser: browser.version(), headless: values.headless, sourceHashes, results: [] };

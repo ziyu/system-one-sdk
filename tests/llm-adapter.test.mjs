@@ -1,7 +1,8 @@
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ResponseValidationError, SystemOne, booleanQuestion, choice, score } from '../dist/esm/index.js';
-import { llmAdapter } from '../dist/esm/adapters/llm.js';
+import { ResponseValidationError, SystemOne, booleanQuestion, choice, score } from '@system-one-ai/core';
+import { llmAdapter } from '@system-one-ai/adapter-llm';
 
 const request = {
   state: 'The light is on.',
@@ -25,10 +26,10 @@ test('LLM adapter sends OpenAI Responses schema and converts probabilities', asy
   const client = new SystemOne({
     adapter: llmAdapter({ provider: 'openai', structuredOutputs: true }),
     apiKey: 'llm-fixture', model: 'gpt-fixture',
-    fetch: async (url, init) => {
+    transport: createFetchTransport(async (url, init) => {
       call = { url, body: JSON.parse(init.body), headers: new Headers(init.headers) };
       return new Response(JSON.stringify({ model: 'gpt-fixture-real', output_text: JSON.stringify(output), usage: { input_tokens: 12, output_tokens: 7 }, status: 'completed' }), { status: 200 });
-    },
+    }),
   });
   const result = await client.evaluate(request);
   assert.equal(call.url, 'https://api.openai.com/v1/responses');
@@ -48,11 +49,11 @@ test('LLM adapter supports OpenAI-compatible chat endpoints and optional normali
   const client = new SystemOne({
     adapter: llmAdapter({ provider: 'openai', normalizeProbabilities: true }),
     baseURL: 'https://proxy.example/v1', apiKey: 'fixture', model: 'local-model',
-    fetch: async (url, init) => {
+    transport: createFetchTransport(async (url, init) => {
       assert.equal(url, 'https://proxy.example/v1/chat/completions');
       assert.equal(JSON.parse(init.body).response_format.type, 'json_schema');
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ answers: { on: 1, action: { keep: 0.6, turn_off: 0.6 }, urgency: { 0: 0, 1: 1, 2: 0 } } }) }, finish_reason: 'stop' }] }), { status: 200 });
-    },
+    }),
   });
   const result = await client.evaluate({ ...request, questions: { on: request.questions.on, action: request.questions.action, urgency: request.questions.urgency } });
   assert.equal(result.answers.on.probability, 1);
@@ -64,14 +65,14 @@ test('LLM adapter sends Anthropic native schema and API-key authentication', asy
   const client = new SystemOne({
     adapter: llmAdapter({ provider: 'anthropic', structuredOutputs: true }),
     apiKey: 'anthropic-fixture', model: 'claude-fixture',
-    fetch: async (url, init) => {
+    transport: createFetchTransport(async (url, init) => {
       assert.equal(url, 'https://api.anthropic.com/v1/messages');
       assert.equal(init.headers.get('x-api-key'), 'anthropic-fixture');
       assert.equal(init.headers.get('anthropic-version'), '2023-06-01');
       const body = JSON.parse(init.body);
       assert.equal(body.output_config.format.type, 'json_schema');
       return new Response(JSON.stringify({ model: 'claude-fixture', content: [{ type: 'text', text: JSON.stringify({ answers: { on: 0, action: { keep: 0, turn_off: 1 }, urgency: { 0: 0, 1: 0, 2: 1 } } }) }], usage: { input_tokens: 3, output_tokens: 2 }, stop_reason: 'end_turn' }), { status: 200 });
-    },
+    }),
   });
   const result = await client.evaluate(request);
   assert.equal(result.answers.on.probability, 0);
@@ -80,6 +81,6 @@ test('LLM adapter sends Anthropic native schema and API-key authentication', asy
 });
 
 test('LLM output errors stay response validation errors', async () => {
-  const client = new SystemOne({ adapter: llmAdapter(), apiKey: null, model: 'fixture', maxRetries: 4, fetch: async () => new Response(JSON.stringify({ output_text: 'not json', status: 'completed' }), { status: 200 }) });
+  const client = new SystemOne({ adapter: llmAdapter(), apiKey: null, model: 'fixture', maxRetries: 4, transport: createFetchTransport(async () => new Response(JSON.stringify({ output_text: 'not json', status: 'completed' }), { status: 200 })) });
   await assert.rejects(client.evaluate({ state: 'x', questions: { on: booleanQuestion('on?') } }), ResponseValidationError);
 });

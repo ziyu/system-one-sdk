@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import { buildOrder, workspaces } from '../scripts/workspaces.mjs';
+import { buildOrder, root, workspaces } from '../scripts/workspaces.mjs';
 
 test('workspace imports follow declared dependencies, with no adapter or transport in core', () => {
   assert.equal(buildOrder().length, workspaces.length);
@@ -18,6 +18,23 @@ test('workspace imports follow declared dependencies, with no adapter or transpo
       for (const [, specifier] of source.matchAll(/(?:from|import)\s+['"]([^'"]+)['"]/g)) {
         if (specifier.startsWith('.')) assert.ok(!specifier.startsWith('../'), 'Source cannot reach another package by relative path');
         else assert.ok(dependencies.some(name => specifier === name || specifier.startsWith(`${name}/`)), `${manifest.name} has an undeclared import: ${specifier}`);
+      }
+    }
+  }
+});
+
+test('the root is a private workspace without a runtime or compatibility entry point', () => {
+  const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.equal(manifest.private, true);
+  for (const field of ['main', 'module', 'types', 'exports', 'dependencies', 'peerDependencies']) assert.equal(manifest[field], undefined);
+  assert.equal(existsSync(path.join(root, 'src')), false);
+  for (const directory of ['tests', 'examples', 'scripts']) {
+    for (const file of readdirSync(path.join(root, directory), { recursive: true })) {
+      if (!/\.(mjs|ts)$/.test(file)) continue;
+      const source = readFileSync(path.join(root, directory, file), 'utf8');
+      for (const [, specifier] of source.matchAll(/(?:from|import)\s*['"]([^'"]+)['"]/g)) {
+        assert.ok(!specifier.startsWith('@system-one-ai/sdk'), `Legacy import in ${file}`);
+        assert.ok(!/^(?:\.\.\/)+(?:src|dist|\.examples\/src)\//.test(specifier), `Legacy relative import in ${file}`);
       }
     }
   }

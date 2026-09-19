@@ -1,7 +1,8 @@
-import { SystemOne, SystemOneError, choice, score, booleanQuestion } from '../src/index.js';
-import { cloudflareAdapter } from '../src/adapters/cloudflare.js';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { SystemOne, SystemOneError, choice, score, booleanQuestion } from '@system-one-ai/core';
+import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 
-// Consumers import @system-one-ai/sdk and @system-one-ai/sdk/adapters/cloudflare.
+// Consumers import @system-one-ai/core and @system-one-ai/adapter-cloudflare.
 // npm run example:cloudflare loads this project's .env.cloudflare.
 try {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -10,6 +11,7 @@ try {
   const baseURL = process.env.SYSTEM_ONE_BASE_URL;
   const model = process.env.SYSTEM_ONE_MODEL;
   const client = new SystemOne({
+    transport: createFetchTransport(),
     adapter: cloudflareAdapter({ accountId }),
     apiKey,
     ...(baseURL ? { baseURL } : {}),

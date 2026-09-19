@@ -81,7 +81,7 @@ The executor compares a hash of the current file inventory with the one used for
 
 `runFileCommand(client, directory, message, requestId, options?)` and `runSupportCommand(...)` accept any `EvaluationClient`. They return the complete normalized evaluation, selected branch and parameter IDs, each policy outcome, and the execution result. Replayed calls return their receipt without fabricated inference metadata. The CLI saves a `run-*.json` report, including partial results when a later command fails.
 
-The SDK itself remains responsible for evaluation and typed resolution. The filesystem, ticket revisions and handlers belong to these Node.js examples. In a consuming application, import the SDK from `@system-one-ai/sdk`, `@system-one-ai/sdk/decisions` and `@system-one-ai/sdk/policies`, and implement persistence using that application's storage layer.
+The SDK itself remains responsible for evaluation and typed resolution. The filesystem, ticket revisions and handlers belong to these Node.js examples. In a consuming application, import the SDK from `@system-one-ai/core`, `@system-one-ai/decisions` and `@system-one-ai/policies`, and implement persistence using that application's storage layer.
 
 Every action and each relevant selected-branch choice must pass `minProbability: 0.8` and `minMargin: 0.2`. `clarify` and `none` are explicit abstentions. Unselected branches do not block execution. API failures stay errors; weak evidence stays uncertain. These thresholds are example configuration, not a recommended universal cutoff.
 

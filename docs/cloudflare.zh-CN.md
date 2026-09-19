@@ -2,13 +2,15 @@
 
 [English](cloudflare.md) | **简体中文**
 
-`0.5.0` 起提供可选入口 `@system-one-ai/sdk/adapters/cloudflare`；AI runner 响应包装需要使用 `0.5.2+`。默认地址和模型由 adapter 提供，应用只需传入账户 ID 和 API token。
+独立包 `@system-one-ai/adapter-cloudflare` 支持 REST 和 AI runner 响应包装。默认地址和模型由 adapter 提供，应用只需传入账户 ID 和 API token。
 
 ```ts
-import { SystemOne, choice } from '@system-one-ai/sdk';
-import { cloudflareAdapter } from '@system-one-ai/sdk/adapters/cloudflare';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { SystemOne, choice } from '@system-one-ai/core';
+import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 
 const client = new SystemOne({
+  transport: createFetchTransport(),
   adapter: cloudflareAdapter({ accountId: process.env.CLOUDFLARE_ACCOUNT_ID! }),
   apiKey: process.env.CLOUDFLARE_API_TOKEN!,
 });

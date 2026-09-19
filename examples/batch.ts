@@ -1,5 +1,5 @@
-import { score, SystemOneError } from '../src/index.js';
-import { evaluateMany } from '../src/batch.js';
+import { score, SystemOneError } from '@system-one-ai/core';
+import { evaluateMany } from '@system-one-ai/batch';
 import { exampleClient } from './config.js';
 
 const snippets = [

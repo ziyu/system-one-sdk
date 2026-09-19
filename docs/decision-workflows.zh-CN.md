@@ -81,7 +81,7 @@ npm run example:decisions -- \
 
 `runFileCommand(client, directory, message, requestId, options?)` 和 `runSupportCommand(...)` 接受任意 `EvaluationClient`。返回完整模型评估、选中动作与参数 ID、逐项策略结果和执行效果。重放直接返回已保存结果，不虚构一次新的推理元数据。CLI 会保存 `run-*.json`，后续指令失败时也保留前面已完成的结果。
 
-SDK 继续负责评估和类型化解析；磁盘读写、工单版本和执行器属于示例应用。在消费项目里使用 `@system-one-ai/sdk`、`@system-one-ai/sdk/decisions`、`@system-one-ai/sdk/policies`，再把持久化操作替换为应用自身的数据层即可。
+SDK 继续负责评估和类型化解析；磁盘读写、工单版本和执行器属于示例应用。在消费项目里使用 `@system-one-ai/core`、`@system-one-ai/decisions`、`@system-one-ai/policies`，再把持久化操作替换为应用自身的数据层即可。
 
 动作和被选中分支中的相关参数分别检查 `minProbability: 0.8`、`minMargin: 0.2`。`clarify`、`none` 明确返回弃权；未选中分支的答案不会阻止当前动作。接口失败仍是错误，证据不足仍是不确定。这些阈值属于示例配置，不是适用于所有任务的默认标准。
 

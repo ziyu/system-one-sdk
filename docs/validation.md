@@ -1,6 +1,26 @@
 # 验证记录
 
-日期：2026-09-18。本文件按版本保留验证历史，当前版本为 `0.5.2`。npm 包名为 `@system-one-ai/sdk`；旧版记录不与新请求合并统计。
+本文件保留当前 workspace 验证及历史 SDK 发布记录；不同版本的真实请求分别记录。
+
+## 2026-09-19 独立包清理（未发布）
+
+删除旧根目录 src、SDK 转导出、默认客户端、根包构建与发布入口。根目录改为私有 workspace；示例、类型测试、回归与联调脚本直接使用独立包。LLM 保持单包。旧 protocol 配置的迁移分支及对应旧 API 测试一并删除，新增根目录不能恢复运行时入口的架构检查。
+
+在 Node.js v26.5.0 执行完整检查：类型、11 个包的 ESM/CJS 构建及示例编译通过；211 项回归和 13 项工作流测试全部通过。随后新增的根目录架构检查与依赖边界检查共 2 项通过；当前完整回归计 212 项。真实 Chrome 与本地 HTTP 的浏览器示例检查 7 项全部通过。无跳过项。
+
+11 个真实 tarball 各自安装到仓库外的临时项目，只安装目标包的依赖闭包，ESM/CJS 契约及 NodeNext 声明检查均通过；所有类型推导和负面断言还在安装全部独立包的消费项目中，对 ESM/CJS 声明再次通过。11 个包的发布 tag、manifest 和 lockfile 配置校验通过，未实际发布。
+
+使用用户指定的测试配置调用 DeepSeek deepseek-flash。每种环境分别测试 probabilities 和 discrete，两种模式均检查 choice、boolean 和 score 的已知答案。共 4 次真实请求全部 HTTP 200，均仅尝试 1 次：
+
+| 环境 | UTC 时间 | 概率模式耗时 | 离散模式耗时 |
+| --- | --- | --- | --- |
+| workspace 独立包 | 2026-09-19T05:44:02.443Z | 1073 ms | 794 ms |
+| 仓库外实际安装的 core + transport-fetch + adapter-llm tarball | 2026-09-19T05:45:26.290Z | 1030 ms | 872 ms |
+
+第二组没有仓库 workspace 链接，只使用打包安装后的模块。脱敏结果保存在 .artifacts/live-llm.json、.artifacts/live-llm-installed.json；后者同时记录三个实际安装包的 SHA-512。构建、打包、浏览器日志为 .artifacts/check-modular.log、packages-modular.log、browser-modular.log。凭据和这些本地产物均不提交。
+
+本轮真实外部验证仅覆盖所提供的 OpenAI-compatible Chat Completions 服务，未重新验证 TypeSafe、OpenRouter、Cloudflare、Vercel、OpenAI Responses 或 Anthropic 外部接口；对应协议仍有离线回归。以下为 2026-09-18 的旧 @system-one-ai/sdk 发布历史，不代表当前独立包已发布。
+
 
 ## 0.5.2 Cloudflare runner 修正
 

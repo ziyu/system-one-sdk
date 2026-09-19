@@ -1,8 +1,10 @@
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import { readFile } from 'node:fs/promises';
 import { parseEnv } from 'node:util';
-import { SystemOne } from '../../src/index.js';
-import { openRouterAdapter } from '../../src/adapters/openrouter.js';
-import { cloudflareAdapter } from '../../src/adapters/cloudflare.js';
+import { SystemOne } from '@system-one-ai/core';
+import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
+import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 
 export type Provider = 'typesafe' | 'openrouter' | 'cloudflare';
 export interface RequestTrace {
@@ -26,11 +28,11 @@ export async function scenarioClient(provider: string) {
   const requests: RequestTrace[] = [];
   const nativeFetch = globalThis.fetch.bind(globalThis);
   const client = new SystemOne({
-    apiKey, ...(adapter ? { adapter } : {}),
+    apiKey, adapter: adapter ?? systemOneAdapter,
     ...(env.SYSTEM_ONE_MODEL ? { model: env.SYSTEM_ONE_MODEL } : {}),
     ...(env.SYSTEM_ONE_BASE_URL ? { baseURL: env.SYSTEM_ONE_BASE_URL } : {}),
     timeoutMs: 15_000, maxRetries: 0,
-    fetch: async (input, init) => {
+    transport: createFetchTransport(async (input, init) => {
       const url = new URL(String(input));
       if (url.origin !== expectedOrigin) throw new Error('Live examples require the selected provider origin.');
       const trace: RequestTrace = { startedAt: new Date().toISOString(), origin: url.origin, method: init?.method ?? 'GET' };
@@ -42,7 +44,7 @@ export async function scenarioClient(provider: string) {
         return value === null ? [] : [[name, value]];
       }));
       return response;
-    },
+    }),
   });
   return { client, provider, configFile: file, requests, redact: (text: string) => text.replaceAll(apiKey, '[redacted]') };
 }

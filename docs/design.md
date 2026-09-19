@@ -2,29 +2,13 @@
 
 ## 目标
 
-调用方只围绕状态、问题和结果编写业务逻辑。地址、凭据、模型及协议转换集中在客户端配置。核心默认采用 TypeSafe Jev 原生兼容协议；其他协议显式传入适配器，未来兼容服务无需修改业务函数。
+调用方只围绕状态、问题和结果编写业务逻辑。地址、凭据、模型及协议转换集中在客户端配置。应用显式选择适配器和 transport，未来兼容服务无需修改业务函数。
 
 ## 分层
 
-| 模块 | 职责 |
-| --- | --- |
-| `src/types.ts` | 共享状态、问题、结果、适配器及调用选项的公共契约 |
-| `src/questions.ts` | 简单问题构造器、字面量类型保留 |
-| `src/client.ts` | 选择适配器、生成快照、组织一次完整调用和重试 |
-| `src/adapters/system-one.ts` | 默认原生协议转换 |
-| `src/adapters/vercel.ts` | 显式子路径导入的可选 Evaluation v4 适配器 |
-| `src/adapters/openrouter.ts` | 显式子路径导入的可选 Decisions 适配器，保留 generation ID 和费用 |
-| `src/adapters/cloudflare.ts` | 可选 Cloudflare REST 适配器，按账户生成默认地址、包装 input 并解开响应 envelope |
-| `src/transport.ts` | Fetch、鉴权、总期限、取消、受限读取及 HTTP 错误 |
-| `src/validation.ts` | 输入与输出边界验证，概率和评分的一致性检查 |
-| `src/errors.ts` | 调用方可以分支处理的稳定错误类型 |
-| `src/decisions.ts` | 可选决策组合：候选快照、原对象映射、动作分支及具名参数证据 |
-| `src/policies.ts` | 可选纯函数策略：分别处理概率、差值、置信统计量和真假接受区间 |
-| `src/batch.ts` | 可选批量评估：有界并发、输入顺序、部分失败、取消和已报告用量 |
+完整包职责与依赖图见[包边界](architecture-plan.zh-CN.md)。运行时只存在于 `packages/`，根目录是私有 workspace。core 定义契约、生成请求快照并校验结果；adapter 负责协议转换；transport-fetch 负责鉴权和网络生命周期；decisions、policies、batch 通过 `EvaluationClient` 组合业务能力。
 
-运行时代码不依赖 Node API。环境变量读取只出现在示例和主动运行的联调脚本中，不让共享 SDK 隐式读取宿主凭据。SDK 没有进程级全局配置，客户端之间不会共享请求状态。
-
-主入口不引用 Vercel、OpenRouter 或 Cloudflare 模块，不进行 hostname 自动识别，不保留 `protocol` 字符串选项。适配器差异只由 `adapter` 对象表达。可选适配器与核心一同打包，但仅在调用方显式导入相应的 `@system-one-ai/sdk/adapters/*` 子路径时加载。
+每个 adapter 都独立打包，core 不导入任何具体实现。客户端必须显式传入 adapter 与 transport。LLM 保持一个 adapter 包，不拆分 provider 层。运行时代码不依赖 Node API；环境变量和密钥读取只出现在示例和联调脚本中。
 
 ## 统一接口与供应商差异
 
@@ -34,7 +18,7 @@
 
 `SystemOneAdapter` 声明支持的原语，把请求编码成 JSON、把响应映射成 `ProviderResponse`。公共 transport 拥有网络生命周期。新的鉴权头可通过 `authenticate` 定义，跨 origin 请求会被阻止。
 
-所有内置 adapter 提供 `defaultBaseURL` 和 `defaultModel`，正常使用不需要显式填写地址和模型。客户端 `baseURL`/`model` 是可选覆盖，单次请求模型优先级最高。自定义 adapter 可按相同约定提供默认值。Cloudflare 使用 `cloudflareAdapter({ accountId })` 工厂建立账户配置快照；账户专属信息保留在 adapter 内，不在通用客户端增加供应商字段。原生问题编码由内部 `nativeQuestions` 共用。
+四个原生决策 adapter 提供 `defaultBaseURL` 和 `defaultModel`，正常使用不需要显式填写地址和模型。客户端 `baseURL`/`model` 是可选覆盖，单次请求模型优先级最高。自定义 adapter 可按相同约定提供默认值。Cloudflare 使用 `cloudflareAdapter({ accountId })` 工厂建立账户配置快照；账户专属信息保留在 adapter 内，不在通用客户端增加供应商字段。原生问题编码由 `protocol-system-one` 中的 `nativeQuestions` 共用。
 
 Cloudflare 按 Jev 模型页使用 `/ai/run` 与 `{ model, input }`，不猜测或轮询备用端点。当前覆盖 REST 调用，未封装 Workers 原生 binding。完整契约和来源见 [Cloudflare 接入文档](cloudflare.zh-CN.md)。
 
@@ -56,4 +40,4 @@ Cloudflare 按 Jev 模型页使用 `/ai/run` 与 `{ model, input }`，不猜测�
 
 `npm run test:live:openrouter` 读取独立 `.env.openrouter`，使用原生 Fetch 包装记录实际地址、时间和非敏感响应头。四个 POST 完成后用同一密钥 GET `/api/v1/generation?id=...`，核对 ID、模型、提供商、`api_type`、原生 token 数和费用。支持 `--verify-only` 仅回查已有 ID，避免因记录暂不可用而重复推理；初始失败报告与后续成功报告分别保留。
 
-核心客户端继续关注一次状态评估。0.4.0 在独立的 `decisions`、`policies`、`batch` 子路径增加通用组合层，依赖结构化 `EvaluationClient` 接口，核心不加载这些模块。动作执行器、Agent 循环、聊天生成和慢思考服务由应用显式接入。公共接口、快照边界、概率语义和批量取消行为见 [组合模块契约](composition.zh-CN.md)。
+核心客户端关注一次状态评估。独立的 `decisions`、`policies`、`batch` 包提供通用组合层，依赖结构化 `EvaluationClient` 接口，核心不加载这些模块。动作执行器、Agent 循环、聊天生成和慢思考服务由应用显式接入。公共接口、快照边界、概率语义和批量取消行为见 [组合模块契约](composition.zh-CN.md)。

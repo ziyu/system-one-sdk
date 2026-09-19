@@ -3,10 +3,12 @@
 The OpenRouter adapter is an optional entry point added for the 0.3.0 source version:
 
 ```ts
-import { SystemOne } from '@system-one-ai/sdk';
-import { openRouterAdapter } from '@system-one-ai/sdk/adapters/openrouter';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { SystemOne } from '@system-one-ai/core';
+import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
 
 const client = new SystemOne({
+  transport: createFetchTransport(),
   adapter: openRouterAdapter,
   apiKey: process.env.SYSTEM_ONE_API_KEY!,
 });

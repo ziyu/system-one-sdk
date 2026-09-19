@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { SystemOneError } from '../../src/index.js';
+import { SystemOneError } from '@system-one-ai/core';
 import { scenarioClient } from './client.js';
 import { runFileCommand, seedFiles } from './files.js';
 import { runSupportCommand, seedSupport } from './support.js';

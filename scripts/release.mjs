@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { buildOrder } from './workspaces.mjs';
+import { buildOrder, workspaces } from './workspaces.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const repository = 'ziyu/sytem-one-sdk';
@@ -15,26 +15,26 @@ const run = (program, args, options = {}) => execFileSync(program, args, { cwd: 
 /** Pure release guard, also used by offline tests. No version or tag is created automatically. */
 export function validateRelease(tag, manifest, lock) {
   assert.equal(typeof tag, 'string', 'RELEASE_TAG is required.');
-  const match = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(tag);
-  assert.ok(match, 'Use a semantic version tag such as v0.3.0 or v0.4.0-rc.1.');
-  if (match[4]) {
-    assert.ok(match[4].split('.').every(part => !/^\d+$/.test(part) || part === '0' || !part.startsWith('0')), 'Numeric prerelease identifiers cannot have leading zeros.');
+  const match = /^([a-z]+(?:-[a-z]+)*)-v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(tag);
+  assert.ok(match, 'Use a semantic version tag such as core-v0.5.2 or adapter-llm-v0.6.0-rc.1.');
+  if (match[5]) {
+    assert.ok(match[5].split('.').every(part => !/^\d+$/.test(part) || part === '0' || !part.startsWith('0')), 'Numeric prerelease identifiers cannot have leading zeros.');
   }
-  assert.equal(manifest.name, '@system-one-ai/sdk', 'Unexpected npm package.');
-  assert.equal(tag, `v${manifest.version}`, 'Tag must exactly match package.json version.');
-  assert.equal(lock.name, manifest.name, 'Lockfile package name differs.');
-  assert.equal(lock.version, manifest.version, 'Lockfile version differs.');
-  assert.equal(lock.packages?.['']?.name, manifest.name, 'Lockfile root name differs.');
-  assert.equal(lock.packages?.['']?.version, manifest.version, 'Lockfile root version differs.');
+  const directory = match[1];
+  assert.ok(workspaces.some(item => item.directory === directory), 'Unknown workspace.');
+  assert.equal(manifest.name, `@system-one-ai/${directory}`, 'Tag must select this package.');
+  assert.equal(tag, `${directory}-v${manifest.version}`, 'Tag must exactly match the workspace version.');
+  assert.equal(lock.packages?.[`packages/${directory}`]?.version, manifest.version, 'Lockfile workspace version differs.');
+  assert.equal(manifest.repository?.directory, `packages/${directory}`, 'Repository directory must match the workspace.');
   assert.notEqual(manifest.private, true, 'A private package cannot be published.');
   assert.equal(manifest.license, 'MIT', 'Release must include the MIT license.');
   assert.equal(manifest.publishConfig?.access, 'public', 'Release must be public.');
   assert.equal(manifest.publishConfig?.registry, registry, 'Release must target the public npm registry.');
   assert.equal(manifest.repository?.url, `git+https://github.com/${repository}.git`, 'Repository metadata must match the trusted publisher.');
   return {
-    name: manifest.name, version: manifest.version, tag,
-    prerelease: Boolean(match[4]), npmTag: match[4] ? 'next' : 'latest',
-    filename: `system-one-ai-sdk-${manifest.version}.tgz`,
+    name: manifest.name, version: manifest.version, tag, directory,
+    prerelease: Boolean(match[5]), npmTag: match[5] ? 'next' : 'latest',
+    filename: `system-one-ai-${directory}-${manifest.version}.tgz`,
   };
 }
 
@@ -47,15 +47,17 @@ export function registryState(metadata, artifact) {
   return 'identical';
 }
 
-/** The SDK facade must not be published before its independently released dependencies. */
+/** A package must not be published before its independently released dependencies. */
 export function testedDependency(name, version, packages) {
   const artifact = packages?.find(item => item.name === name && item.version === version);
-  assert.ok(artifact?.integrity, `Build and test ${name}@${version} before publishing the SDK.`);
+  assert.ok(artifact?.integrity, `Build and test ${name}@${version} before publishing dependents.`);
   return artifact;
 }
 
 async function sourceRelease() {
-  const release = validateRelease(process.env.RELEASE_TAG, await readJSON('../package.json'), await readJSON('../package-lock.json'));
+  const workspace = workspaces.find(item => process.env.RELEASE_TAG === `${item.directory}-v${item.manifest.version}`);
+  assert.ok(workspace, 'RELEASE_TAG must select an existing workspace and its exact version.');
+  const release = validateRelease(process.env.RELEASE_TAG, workspace.manifest, await readJSON('../package-lock.json'));
   if (process.env.GITHUB_REPOSITORY) assert.equal(process.env.GITHUB_REPOSITORY, repository, 'Wrong GitHub repository.');
   const commit = run('git', ['rev-parse', 'HEAD']).trim();
   const taggedCommit = run('git', ['rev-parse', '--verify', `refs/tags/${release.tag}^{commit}`]).trim();
@@ -67,7 +69,8 @@ async function sourceRelease() {
 
 async function testedArtifact(release) {
   // test-package writes this receipt only after installation and type checks have passed.
-  const tested = await readJSON('../.artifacts/package-manifest.json');
+  const receipt = await readJSON('../.artifacts/package-manifest.json');
+  const tested = testedDependency(release.name, release.version, receipt.packages);
   assert.equal(tested.name, release.name);
   assert.equal(tested.version, release.version);
   assert.equal(tested.filename, release.filename);
@@ -92,7 +95,7 @@ function versionURL(release) {
 
 async function publish(release) {
   const artifact = await testedArtifact(release);
-  const manifest = await readJSON('../package.json');
+  const manifest = await readJSON(`../packages/${release.directory}/package.json`);
   const receipt = await readJSON('../.artifacts/package-manifest.json');
   const dependencies = new Map();
   for (const name of Object.keys(manifest.dependencies ?? {})) {
@@ -101,7 +104,7 @@ async function publish(release) {
   for (const [name, version] of dependencies) {
     const dependency = testedDependency(name, version, receipt.packages);
     const metadata = await getJSON(versionURL(dependency));
-    assert.equal(registryState(metadata, dependency), 'identical', `Publish and verify ${name}@${version} before releasing the SDK.`);
+    assert.equal(registryState(metadata, dependency), 'identical', `Publish and verify ${name}@${version} before releasing this package.`);
   }
   const existing = await getJSON(versionURL(release));
   if (registryState(existing, artifact) === 'missing') {

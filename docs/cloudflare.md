@@ -2,13 +2,15 @@
 
 **English** | [简体中文](cloudflare.zh-CN.md)
 
-The optional `@system-one-ai/sdk/adapters/cloudflare` entry point is available since 0.5.0. Use 0.5.2+ for AI runner response envelopes. It supplies the REST URL and model; the application supplies an account ID and API token.
+The independent `@system-one-ai/adapter-cloudflare` package handles REST and AI runner response envelopes. It supplies the REST URL and model; the application supplies an account ID and API token.
 
 ```ts
-import { SystemOne, choice } from '@system-one-ai/sdk';
-import { cloudflareAdapter } from '@system-one-ai/sdk/adapters/cloudflare';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { SystemOne, choice } from '@system-one-ai/core';
+import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 
 const client = new SystemOne({
+  transport: createFetchTransport(),
   adapter: cloudflareAdapter({ accountId: process.env.CLOUDFLARE_ACCOUNT_ID! }),
   apiKey: process.env.CLOUDFLARE_API_TOKEN!,
 });

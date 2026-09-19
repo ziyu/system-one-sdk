@@ -1,8 +1,9 @@
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { parseEnv } from 'node:util';
-import { SystemOne, SystemOneError, choice, score, booleanQuestion } from '../dist/esm/index.js';
-import { cloudflareAdapter } from '../dist/esm/adapters/cloudflare.js';
+import { SystemOne, SystemOneError, choice, score, booleanQuestion } from '@system-one-ai/core';
+import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 
 // Explicit opt-in. Only .env.cloudflare supplies credentials; ordinary tests never call this file.
 // All responses come from native Fetch. Three small requests, no retries, no fallback providers.
@@ -24,7 +25,7 @@ try {
   assert.ok(!config.SYSTEM_ONE_MODEL || config.SYSTEM_ONE_MODEL === 'typesafe/jev', 'Live verification requires the default Jev model.');
   const client = new SystemOne({
     adapter, apiKey, timeoutMs: 15_000, maxRetries: 0,
-    fetch: async (url, init) => {
+    transport: createFetchTransport(async (url, init) => {
       assert.equal(String(url), expectedURL);
       assert.equal(init.method, 'POST');
       assert.equal(new Headers(init.headers).get('authorization'), `Bearer ${apiKey}`);
@@ -37,7 +38,7 @@ try {
         return value === null ? [] : [[name, value]];
       }));
       return response;
-    },
+    }),
   });
   const cases = [
     {

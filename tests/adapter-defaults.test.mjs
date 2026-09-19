@@ -1,9 +1,11 @@
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ConfigurationError, SystemOne, systemOneAdapter } from '../dist/esm/index.js';
-import { vercelAdapter } from '../dist/esm/adapters/vercel.js';
-import { openRouterAdapter } from '../dist/esm/adapters/openrouter.js';
-import { cloudflareAdapter } from '../dist/esm/adapters/cloudflare.js';
+import { ConfigurationError, SystemOne } from '@system-one-ai/core';
+import { vercelAdapter } from '@system-one-ai/adapter-vercel';
+import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
+import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 import { booleanRequest, booleanPayload, jsonResponse } from './fixtures.mjs';
 
 const providers = [
@@ -22,9 +24,9 @@ for (const { name, adapter, url, model, overrideURL } of providers) {
       sent.push({ url, model });
       return jsonResponse(name === 'Vercel' ? { answers: { on: { type: 'boolean', probability: 0.97 } } } : { ...booleanPayload, model, usage: {} });
     };
-    const defaults = new SystemOne({ adapter, apiKey: 'fixture', fetch });
+    const defaults = new SystemOne({ adapter, apiKey: 'fixture', transport: createFetchTransport(fetch) });
     await defaults.evaluate(booleanRequest);
-    const overridden = new SystemOne({ adapter, apiKey: 'fixture', fetch, baseURL: overrideURL, model: 'vendor/pinned' });
+    const overridden = new SystemOne({ adapter, apiKey: 'fixture', transport: createFetchTransport(fetch), baseURL: overrideURL, model: 'vendor/pinned' });
     await overridden.evaluate(booleanRequest);
     await overridden.evaluate({ ...booleanRequest, model: 'vendor/per-request' });
     assert.deepEqual(sent, [{ url, model }, { url: overrideURL, model: 'vendor/pinned' }, { url: overrideURL, model: 'vendor/per-request' }]);
@@ -34,6 +36,6 @@ for (const { name, adapter, url, model, overrideURL } of providers) {
 test('custom adapters without a default URL still require an explicit endpoint', () => {
   const custom = { ...systemOneAdapter, id: 'custom' };
   delete custom.defaultBaseURL;
-  assert.throws(() => new SystemOne({ adapter: custom, apiKey: null }), ConfigurationError);
-  assert.equal(new SystemOne({ adapter: custom, apiKey: null, baseURL: 'https://custom.example/v1' }).baseURL, 'https://custom.example/v1');
+  assert.throws(() => new SystemOne({ transport: createFetchTransport(), adapter: custom, apiKey: null }), ConfigurationError);
+  assert.equal(new SystemOne({ transport: createFetchTransport(), adapter: custom, apiKey: null, baseURL: 'https://custom.example/v1' }).baseURL, 'https://custom.example/v1');
 });

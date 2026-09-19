@@ -1,6 +1,6 @@
 # SDK 包边界与迁移
 
-以 `bc49b67` 的行为为基线，仓库已从单包迁移为 npm workspaces。实现只保留一份，根目录 `src/` 是兼容转导出和默认配置；新代码位于 `packages/`。独立包尚未发布到 npm，当前先通过 workspace 和 tarball 验证。
+仓库使用 npm workspaces，运行时代码全部位于 `packages/`。根目录仅负责编排开发、测试和发布，标记为 private；旧 SDK 入口、转导出和默认客户端已删除。独立包尚未发布到 npm，当前通过 workspace 和 tarball 使用与验证。
 
 参考 [AI SDK 的 Providers and Models](https://ai-sdk.dev/docs/foundations/providers-and-models) 和 [Testing](https://ai-sdk.dev/docs/ai-sdk-core/testing)：共享稳定契约、显式传入实现、按供应商独立发布，用确定性测试验证业务行为。沿用已有 `SystemOneAdapter.prepare/decode/authenticate` 契约，不引入另一套 LLM model 层。
 
@@ -22,11 +22,8 @@
 
 ```mermaid
 graph TD
-  SDK["sdk 兼容入口"] --> Core["core"]
-  SDK --> Fetch["transport-fetch"]
-  SDK --> Native["adapter-system-one"]
-  Fetch --> Core
-  Native --> Protocol["protocol-system-one"]
+  Fetch["transport-fetch"] --> Core["core"]
+  Native["adapter-system-one"] --> Protocol["protocol-system-one"]
   Native --> Core
   OR["adapter-openrouter"] --> Protocol
   OR --> Core
@@ -80,12 +77,11 @@ const client = createSystemOne({
 });
 ```
 
-## 兼容与安装
+## 安装与迁移
 
-- `@system-one-ai/sdk` 继续提供默认 TypeSafe adapter 与 Fetch transport。它只依赖 core、transport-fetch、adapter-system-one，不再携带其他 adapter 的实现。
-- 旧 `sdk/adapters/*`、`sdk/decisions`、`sdk/policies`、`sdk/batch` 是弃用的转导出；使用时必须显式安装对应包。这些包声明为可选 peer，不会随 SDK 自动安装。
-- LLM 从 SDK 根入口移除。改为从 `@system-one-ai/adapter-llm` 导入；避免一次根入口 import 强制加载可选包。
-- 下一次发布需要更新 SDK 版本并说明安装方式变化。当前不创建 tag、不发布任何包。
+应用显式安装 core、transport-fetch 和所选 adapter，组合功能按需安装。旧 `@system-one-ai/sdk` 包及其子路径不再由本仓库构建或发布。迁移时将 import 改为上表的独立包名，构造客户端必须传入 `adapter` 和 `transport`；自定义 fetch 改为 `createFetchTransport(fetch)`。没有默认供应商或隐式网络实现。
+
+独立包发布前，运行构建和打包检查后，从 `.artifacts/` 安装所选包及其依赖的 tarball。此次重构不发布包、不创建 tag。
 
 ## 构建与验证
 
@@ -99,14 +95,14 @@ npm test --workspace @system-one-ai/adapter-llm
 npm run test:live:llm -- /path/to/llm.env
 ```
 
-每个包都有独立 build、typecheck、test 和 prepack；构建顺序从 package.json 的依赖推导。包测试在仓库之外创建临时项目，只安装目标包及其声明的依赖，验证 ESM/CJS 运行与 NodeNext 声明解析。SDK 的最小安装另行检查可选 adapter 和组合包确实不存在。
+每个包都有独立 build、typecheck、test 和 prepack；构建顺序从 package.json 的依赖推导。包测试在仓库之外创建临时项目，只安装目标包及其声明的依赖，验证 ESM/CJS 运行与 NodeNext 声明解析。所有类型推导和负面断言还会对已安装的 ESM/CJS 声明再次执行。
 
-原有协议、验证、超时、取消、重试、本地 HTTP、业务场景测试继续通过兼容入口执行，入口直接使用独立包实现。依赖检查拒绝 core 依赖实现包、adapter 互相依赖、未声明依赖和跨包源文件导入。真实 LLM 测试单独执行，读取指定文件，不进入普通 CI，不保存密钥。
+协议、验证、超时、取消、重试、本地 HTTP、业务场景测试直接导入独立包。依赖检查拒绝 core 依赖实现包、adapter 互相依赖、未声明依赖和跨包源文件导入。真实 LLM 测试单独执行，读取指定文件，不进入普通 CI，不保存密钥。
 
 ## 后续开发规则
 
-1. 协议改动只在所属 adapter 包修改；新增 adapter 不修改 core 或 SDK 根入口。
+1. 协议改动只在所属 adapter 包修改；新增 adapter 不修改 core。
 2. 每次变更先明确契约、涉及的包和可复现验收，再修改代码。包移动、行为变化与发布分开提交。
 3. 各包独立版本；破坏共享契约时同时调整相关包的依赖范围，不能只升 core major。
-4. 发布按依赖顺序执行，先 core、共享协议/transport，再 adapter/组合包，最后兼容 SDK。现有 SDK 发布脚本会检查依赖的已发布版本与测试产物。
+4. 发布按依赖顺序执行，先 core、共享协议/transport，再 adapter/组合包。按 `<包目录>-v<版本>` tag 发布单包，脚本检查依赖的已发布版本与测试产物，详见[发布说明](releasing.md)。
 5. registry、middleware、Clock、IdGenerator 等暂不增加。确有多个调用场景需要时再设计，不为 AI SDK 的每一个模块建立对应包。

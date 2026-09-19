@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ConfigurationError, ResponseValidationError } from '../dist/esm/index.js';
-import { gateBoolean, gateChoice } from '../dist/esm/policies.js';
+import { ConfigurationError, ResponseValidationError } from '@system-one-ai/core';
+import { gateBoolean, gateChoice } from '@system-one-ai/policies';
 
 const choice = { type: 'choice', choice: 'run', probabilities: { run: 0.75, wait: 0.25 }, confidence: 0.95 };
 

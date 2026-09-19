@@ -2,11 +2,11 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ['*-v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing version tag to publish or resume, such as v0.3.0'
+        description: 'Existing version tag to publish or resume, such as adapter-llm-v0.5.2'
         required: true
         type: string
 
@@ -46,7 +46,6 @@ jobs:
         run: npm install --global npm@11.17.0 --ignore-scripts
       - run: npm ci --ignore-scripts
       - run: npm run check
-      - run: npm run examples:build
       - name: Build and test the exact package to publish
         run: npm run test:package
       - name: Publish to npm using OIDC and verify package integrity

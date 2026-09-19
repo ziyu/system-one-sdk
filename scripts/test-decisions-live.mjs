@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { SystemOneError } from '../.examples/src/index.js';
+import { SystemOneError } from '@system-one-ai/core';
 import { scenarioClient } from '../.examples/examples/scenarios/client.js';
 import { cases } from '../.examples/examples/scenarios/cases.js';
 import { runFileCommand, seedFiles } from '../.examples/examples/scenarios/files.js';
@@ -87,7 +87,7 @@ try {
   report.configFile = connection.configFile;
   report.sourceHashes = Object.fromEntries(await Promise.all([
     'examples/scenarios/files.ts', 'examples/scenarios/support.ts', 'examples/scenarios/workspace.ts',
-    'examples/scenarios/cases.ts', 'scripts/test-decisions-live.mjs', 'src/decisions.ts', 'src/policies.ts',
+    'examples/scenarios/cases.ts', 'scripts/test-decisions-live.mjs', 'packages/decisions/src/index.ts', 'packages/policies/src/index.ts',
   ].map(async name => [name, bytesHash(await readFile(name))])));
   for (const scenario of cases.filter(item => values.phase === 'all' || item.phase === values.phase)) {
     const row = { id: scenario.id, kind: scenario.kind, phase: scenario.phase, message: scenario.message, expected: scenario.expected, passed: false };

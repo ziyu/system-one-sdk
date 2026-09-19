@@ -1,6 +1,8 @@
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { SystemOne, SystemOneError, choice, score, booleanQuestion } from '../dist/esm/index.js';
+import { SystemOne, SystemOneError, choice, score, booleanQuestion } from '@system-one-ai/core';
 
 // Explicit opt-in only: npm run test:live loads this project's .env. Normal tests stay offline.
 // Four short sequential requests, no retries, and no logging of headers or credentials.
@@ -63,6 +65,8 @@ const scenarios = [
 try {
   if (!apiKey) throw new Error('SYSTEM_ONE_API_KEY is required.');
   const client = new SystemOne({
+    adapter: systemOneAdapter,
+    transport: createFetchTransport(),
     ...(process.env.SYSTEM_ONE_BASE_URL ? { baseURL: process.env.SYSTEM_ONE_BASE_URL } : {}),
     apiKey,
     ...(process.env.SYSTEM_ONE_MODEL ? { model: process.env.SYSTEM_ONE_MODEL } : {}),

@@ -33,7 +33,7 @@ TypeSafe 的三个原语是 Choice、Score、Noul。Noul 返回 P(true)；Choice
 
 参考：[TypeSafe API](https://docs.typesafe.ai/api)、[Models](https://docs.typesafe.ai/models)。
 
-Vercel 文档要求 AI SDK 7+ 的 Evaluation 能力，明确不支持通过 OpenAI-compatible、Anthropic-compatible 或 Cohere-compatible 接口调用 Evaluation。因此，仅把 JEV 原生地址换成 `/chat/completions` 会失败。本 SDK 的可选模块 `@system-one-ai/sdk/adapters/vercel` 实现官方 Gateway SDK 所使用的 Evaluation wire protocol，核心不自动选择该协议。
+Vercel 文档要求 AI SDK 7+ 的 Evaluation 能力，明确不支持通过 OpenAI-compatible、Anthropic-compatible 或 Cohere-compatible 接口调用 Evaluation。因此，仅把 JEV 原生地址换成 `/chat/completions` 会失败。本 SDK 的可选模块 `@system-one-ai/adapter-vercel` 实现官方 Gateway SDK 所使用的 Evaluation wire protocol，核心不自动选择该协议。
 
 参考：[Vercel Evaluation](https://vercel.com/docs/ai-gateway/modalities/evaluation)、[AI SDK Evaluation](https://ai-sdk.dev/docs/ai-sdk-core/evaluation)。
 
@@ -49,6 +49,6 @@ Vercel 文档要求 AI SDK 7+ 的 Evaluation 能力，明确不支持通过 Open
 
 ## 兼容边界
 
-System One 是能力类别，不代表所有供应商已经遵循同一个 HTTP 标准。本项目默认支持 TypeSafe-compatible，Vercel Evaluation、OpenRouter Decisions 与 Cloudflare Jev REST 通过可选入口提供，也支持用户自定义适配器。其他模型需要具备相应问题能力；不同 wire protocol 接入后可复用同一业务接口。TypeSafe 真实调用记录见 `validation.md`；OpenRouter 的独立真实请求及后台记录核验见 [openrouter.md](openrouter.md)。Vercel 与 Cloudflare 尚未进行真实调用验证。
+System One 是能力类别，不代表所有供应商已经遵循同一个 HTTP 标准。本项目通过独立 adapter 支持 TypeSafe-compatible，Vercel Evaluation、OpenRouter Decisions 与 Cloudflare Jev REST 通过可选入口提供，也支持用户自定义适配器。其他模型需要具备相应问题能力；不同 wire protocol 接入后可复用同一业务接口。TypeSafe 真实调用记录见 `validation.md`；OpenRouter 的独立真实请求及后台记录核验见 [openrouter.md](openrouter.md)。Vercel 与 Cloudflare 尚未进行真实调用验证。
 
 Cloudflare 的 [Jev 模型页](https://developers.cloudflare.com/ai/models/typesafe/jev/) 使用账户下 `/ai/run` 端点，请求体为 `{ model: 'typesafe/jev', input: { state, questions } }`。0.5.0 增加 `cloudflareAdapter({ accountId })`，自动提供地址及模型，不要求用户手写端点。协议转换、代理覆盖及验证范围见 [Cloudflare 接入](cloudflare.zh-CN.md)。

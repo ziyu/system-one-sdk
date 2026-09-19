@@ -18,7 +18,6 @@ export class SystemOne {
 
   constructor(options: SystemOneOptions) {
     if (!options || !('apiKey' in options)) throw new ConfigurationError('Provide apiKey explicitly; use null only for an unauthenticated endpoint.');
-    if ('protocol' in options) throw new ConfigurationError('The protocol option was removed. Pass an explicit adapter for a different wire protocol.');
     this.#adapter = options.adapter;
     if (!this.#adapter) throw new ConfigurationError('Provide an adapter explicitly. Install a protocol adapter package and pass its adapter option.');
     if (!this.#adapter.id || !Array.isArray(this.#adapter.supportedQuestionTypes) || typeof this.#adapter.prepare !== 'function' || typeof this.#adapter.decode !== 'function') {

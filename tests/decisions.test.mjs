@@ -1,10 +1,12 @@
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { SystemOne, choice, score, booleanQuestion, ValidationError, ResponseValidationError, RequestAbortedError, APIError } from '../dist/esm/index.js';
-import { choiceFrom, defineDecision } from '../dist/esm/decisions.js';
-import { vercelAdapter } from '../dist/esm/adapters/vercel.js';
-import { openRouterAdapter } from '../dist/esm/adapters/openrouter.js';
-import { cloudflareAdapter } from '../dist/esm/adapters/cloudflare.js';
+import { SystemOne, choice, score, booleanQuestion, ValidationError, ResponseValidationError, RequestAbortedError, APIError } from '@system-one-ai/core';
+import { choiceFrom, defineDecision } from '@system-one-ai/decisions';
+import { vercelAdapter } from '@system-one-ai/adapter-vercel';
+import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
+import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 import { jsonResponse } from './fixtures.mjs';
 
 test('choiceFrom snapshots membership and descriptions, but preserves business object identity', () => {
@@ -62,7 +64,7 @@ for (const [name, adapter, native] of [['native', undefined, true], ['vercel', v
   test(`one evaluation resolves typed action parameters through ${name} while retaining metadata`, async () => {
     const { target, definition } = scenario();
     let calls = 0;
-    const client = new SystemOne({ apiKey: null, ...(adapter ? { adapter } : {}), fetch: async (_, init) => {
+    const client = new SystemOne({ apiKey: null, adapter: adapter ?? systemOneAdapter, transport: createFetchTransport(async (_, init) => {
       calls++;
       const wire = JSON.parse(init.body);
       const body = name === 'cloudflare' ? wire.input : wire;
@@ -74,7 +76,7 @@ for (const [name, adapter, native] of [['native', undefined, true], ['vercel', v
       const usage = native ? { input_tokens: 10, output_tokens: 2 } : { inputTokens: 10, outputTokens: 2 };
       const payload = { answers: answers(native), usage, ...(name === 'openrouter' ? { id: 'gen-dec-test', provider: 'TypeSafe', model: 'typesafe/jev-1.13' } : {}) };
       return jsonResponse(name === 'cloudflare' ? { success: true, errors: [], result: { state: 'Completed', result: payload } } : payload, { headers: { 'x-request-id': 'test-decision' } });
-    } });
+    }) });
     const result = await definition.evaluate(client, { state: { request: 'Turn on the desk lamp' } }, { maxRetries: 0 });
     assert.equal(calls, 1);
     assert.equal(result.decision.action, 'adjust');
@@ -93,7 +95,7 @@ for (const [name, adapter, native] of [['native', undefined, true], ['vercel', v
 
 test('unselected branch values are excluded and compiled questions are immutable', async () => {
   const { definition } = scenario();
-  const client = new SystemOne({ apiKey: null, fetch: async () => jsonResponse({ answers: answers(true, 'wait') }) });
+  const client = new SystemOne({ adapter: systemOneAdapter, apiKey: null, transport: createFetchTransport(async () => jsonResponse({ answers: answers(true, 'wait') })) });
   const result = await definition.evaluate(client, { state: {} });
   assert.deepEqual(result.decision, { action: 'wait', parameters: { reason: 'no_request' }, parameterAnswers: { reason: { type: 'choice', choice: 'no_request' } } });
   assert.deepEqual(definition.resolve(result.evaluation), result.decision);
@@ -110,9 +112,9 @@ test('prototype-like action and parameter IDs cannot collide with generated wire
     ['__proto__', { description: null, parameters: Object.fromEntries([['constructor', targets]]) }],
     ['action', { description: null }],
   ]) });
-  const client = new SystemOne({ apiKey: null, fetch: async () => jsonResponse({ answers: {
+  const client = new SystemOne({ adapter: systemOneAdapter, apiKey: null, transport: createFetchTransport(async () => jsonResponse({ answers: {
     action: { type: 'choice', choice: '__proto__' }, parameter_0_0: { type: 'choice', choice: '__proto__' },
-  } }) });
+  } })) });
   const result = await definition.evaluate(client, { state: {} });
   assert.equal(result.decision.action, '__proto__');
   assert.strictEqual(result.decision.parameters.constructor, candidate);
@@ -133,7 +135,7 @@ test('decision composition preserves cancellation and API failures', async () =>
   const { definition } = scenario();
   const aborted = new AbortController();
   aborted.abort();
-  const client = new SystemOne({ apiKey: null, maxRetries: 0, fetch: async () => jsonResponse({}, { status: 401 }) });
+  const client = new SystemOne({ adapter: systemOneAdapter, apiKey: null, maxRetries: 0, transport: createFetchTransport(async () => jsonResponse({}, { status: 401 })) });
   await assert.rejects(definition.evaluate(client, { state: {} }, { signal: aborted.signal }), RequestAbortedError);
   await assert.rejects(definition.evaluate(client, { state: {} }), error => error instanceof APIError && error.statusCode === 401);
 });
