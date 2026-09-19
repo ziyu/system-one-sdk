@@ -18,7 +18,9 @@ node scripts/test-release-live.mjs /path/to/typesafe.env /path/to/llm.env --regi
 
 首次创建包时尚不能预配置 Trusted Publisher，因此本批使用已验证的 CI tarball 完成一次本地 bootstrap，SHA-512 与清单一致；这次上传没有 npm provenance。随后 11 个包均已配置并回读 GitHub Trusted Publisher（`ziyu/sytem-one-sdk`、`release.yml`、`npm` environment）。成功重跑核验并复用已存在版本，没有再次上传；后续新版本的 OIDC 上传仍需首次执行验证。首次 metadata 可见早于安装索引，曾导致 registry 安装 404；索引同步后原批次恢复成功。
 
-npm 为首次创建的包自动添加了 `latest`，即使上传指定 `next`。该自动标签仍待安全密钥授权清理；目前不将这批 RC 标记为稳定版。旧 `@system-one-ai/sdk@latest` 保持 `0.5.3`，没有 deprecation。GitHub `npm` environment 已创建，但尚未配置审批保护；稳定发布前需完成保护设置和 dist-tag 鉴权验收。
+npm 为首次创建的包自动添加了 `latest`，即使上传指定 `next`。清理时用户两次成功完成安全密钥认证，但 npm 11.17.0 的 `npm dist-tag rm @system-one-ai/core latest` 均被 registry 以 HTTP 400 拒绝；捕获的正文仅为 `Request failed with status code 400`，未给出具体原因，不能归因为登录失效，也不能据此断言 npm 永久禁止删除 `latest`。停止重复认证和删除重试。`2026-09-19T09:17:11.213Z` 回读确认 11 个包的 `next` 与自动 `latest` 都仍为 `0.6.0-rc.0`；无标签或 `@latest` 安装也会选择 RC。脱敏阻塞记录保存在 `.artifacts/rc-release/rc-dist-tags.json`。稳定版未发布，标签清理仍受服务端错误阻塞。
+
+旧 `@system-one-ai/sdk@latest` 保持 `0.5.3`，没有 deprecation。GitHub `npm` environment 已创建，但尚未配置审批保护；稳定发布前需完成保护设置和 dist-tag 鉴权验收。
 
 ## 2026-09-19 规范发布流程与 RC 产物演练
 

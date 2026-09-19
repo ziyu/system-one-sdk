@@ -28,6 +28,8 @@ Core imports no concrete adapter or transport. Each package provides ESM, Common
 
 **`0.6.0-rc.0` is available on npm under `next`.** Install only the packages your application uses; npm resolves their dependencies. This is a prerelease; see the [migration guide](docs/migration-0.6.md) and [published-package verification](docs/validation.md).
 
+npm also created `latest` for these first publications, and currently rejects its removal. An untagged install therefore selects this RC too; no stable `0.6.0` has been released.
+
 ```sh
 npm install @system-one-ai/core@next @system-one-ai/transport-fetch@next @system-one-ai/adapter-system-one@next
 ```

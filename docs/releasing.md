@@ -36,6 +36,8 @@ The `0.6.0-rc.0` batch used this bootstrap exception without provenance. All 11 
 
 For a new package, npm can initialize `latest` even when publication requests `next`. Inspect every package's dist-tags after bootstrap. If `latest` equals the RC, remove only that tag with `npm dist-tag rm PACKAGE latest`, then confirm `next` still resolves to the RC. Do not remove an existing stable or newer version's tag. npm may require separate security-key authentication for tag changes; the publish/trust authentication cooldown does not cover them. Before stable promotion, verify authentication for `npm dist-tag` separately: npm CLI's automatic OIDC exchange for `npm publish` does not authenticate tag mutations.
 
+For `0.6.0-rc.0`, two authenticated removal attempts returned registry HTTP 400 with only `Request failed with status code 400`. The cause remains unknown; further authentication retries are not a verified remedy. All 11 automatic `latest` tags remain alongside `next`, so untagged installs also select the RC. Record this exception and the registry response; do not claim a `next`-only release, republish existing bytes, or publish a stable placeholder to hide it. Tag cleanup remains blocked pending resolution of the registry error.
+
 ## Recovery
 
 Prefer **Re-run failed jobs**: successful prepare jobs retain the original artifact. If manually resuming, supply both the original full commit and original run ID:
