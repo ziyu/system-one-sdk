@@ -2,6 +2,8 @@
 
 这份计划以当前提交 `bc49b67` 为基线。目标是让核心库只负责统一的决策契约和生命周期，把 HTTP 和协议 adapter 移到独立包；LLM 保留为一个可选的单体 adapter 包。
 
+当前已落地第一阶段：仓库使用 npm workspaces，`packages/core` 和五个 `packages/adapter-*` 已能独立构建；根包通过兼容 facade 使用 core。Fetch 生命周期暂时仍在 core，下一阶段再抽成 `transport-fetch`，避免一次迁移同时改变运行行为。
+
 设计参考：
 
 - [AI SDK Providers and Models](https://ai-sdk.dev/docs/foundations/providers-and-models)：用稳定的 model/adapter contract 隔离业务和协议。

@@ -1,0 +1,21 @@
+{
+  "name": "@system-one-ai/adapter-cloudflare",
+  "version": "0.5.2",
+  "description": "Cloudflare AI runner adapter.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": { "types": "./dist/esm/index.d.ts", "default": "./dist/esm/index.js" },
+      "require": { "types": "./dist/cjs/index.d.ts", "default": "./dist/cjs/index.js" }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "LICENSE"],
+  "dependencies": { "@system-one-ai/core": "0.5.2" },
+  "engines": { "node": ">=20" }
+}

@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const artifacts = path.join(root, '.artifacts');
 await mkdir(artifacts, { recursive: true });
-const [pack] = JSON.parse(execFileSync('npm', ['pack', '--ignore-scripts', '--pack-destination', artifacts, '--json'], { cwd: root, encoding: 'utf8' }));
+const [corePack] = JSON.parse(execFileSync('npm', ['pack', './packages/core', '--ignore-scripts', '--pack-destination', artifacts, '--json'], { cwd: root, encoding: 'utf8' }));
+const [pack] = JSON.parse(execFileSync('npm', ['pack', '.', '--ignore-scripts', '--pack-destination', artifacts, '--json'], { cwd: root, encoding: 'utf8' }));
 assert.ok(pack.files.some(file => file.path === 'dist/esm/index.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/cjs/index.js'));
 assert.ok(pack.files.some(file => file.path === 'dist/esm/adapters/vercel.js'));
@@ -25,7 +26,7 @@ assert.ok(pack.files.every(file => /^(dist\/|docs\/|README(?:\.zh-CN)?\.md$|LICE
 const consumer = await mkdtemp(path.join(artifacts, 'consumer-'));
 try {
   await writeFile(path.join(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
-  execFileSync('npm', ['install', path.join(artifacts, pack.filename), '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: consumer, stdio: 'pipe' });
+  execFileSync('npm', ['install', path.join(artifacts, corePack.filename), path.join(artifacts, pack.filename), '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: consumer, stdio: 'pipe' });
   const smoke = `
     import assert from 'node:assert/strict';
     import { createRequire } from 'node:module';
@@ -36,7 +37,7 @@ try {
     assert.equal(manifest.name, '@system-one-ai/sdk');
     assert.equal(manifest.license, 'MIT');
     assert.equal(manifest.publishConfig.access, 'public');
-    assert.deepEqual(manifest.dependencies ?? {}, {});
+    assert.deepEqual(manifest.dependencies ?? {}, { '@system-one-ai/core': '0.5.2' });
     assert.equal(manifest.devDependencies?.['@ai-sdk/gateway'], undefined);
     assert.equal('vercelAdapter' in esm, false);
     assert.equal('vercelAdapter' in cjs, false);

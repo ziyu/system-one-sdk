@@ -1,9 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const tsc = require.resolve('typescript/bin/tsc');
+execFileSync(process.execPath, [fileURLToPath(new URL('./build-packages.mjs', import.meta.url))], { stdio: 'inherit' });
 // Only generated build output is replaced.
 await rm(new URL('../dist/', import.meta.url), { recursive: true, force: true });
 for (const args of [
