@@ -26,18 +26,10 @@ core 不导入具体 adapter 或 transport。各包提供 ESM、CommonJS 和 Typ
 
 ## 安装与调用
 
-**独立包尚未发布。** 先构建并验证本地 tarball：
+**`0.6.0-rc.0` 已通过 npm 的 `next` 标签发布。** 按需安装应用使用的包，npm 自动解析其依赖。这是预发布版本，详见[迁移说明](docs/migration-0.6.md)和[发布包验证记录](docs/validation.md)。
 
 ```sh
-npm ci --ignore-scripts
-npm run check
-npm run test:package
-```
-
-在消费项目中安装 `.artifacts/` 内所选包及其依赖。例如 LLM 只需 `system-one-ai-core-<version>.tgz`、`system-one-ai-transport-fetch-<version>.tgz`、`system-one-ai-adapter-llm-<version>.tgz`；原生 TypeSafe 还依赖 `protocol-system-one`。独立发布后可使用对应 npm 安装命令：
-
-```sh
-npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-system-one
+npm install @system-one-ai/core@next @system-one-ai/transport-fetch@next @system-one-ai/adapter-system-one@next
 ```
 
 ```ts
@@ -69,6 +61,10 @@ console.log(action, result.answers.urgency.score, result.answers.interrupt.proba
 ## LLM adapter
 
 安装 `adapter-llm`、core 和 transport-fetch。LLM 协议、prompt、schema、鉴权映射和答案转换都保留在同一个包。
+
+```sh
+npm install @system-one-ai/core@next @system-one-ai/transport-fetch@next @system-one-ai/adapter-llm@next
+```
 
 ```ts
 import { createSystemOne } from '@system-one-ai/core';
@@ -117,6 +113,7 @@ core 校验答案类型、选择项、概率、分布、评分范围和加权均
 ## 开发与验证
 
 ```sh
+npm ci --ignore-scripts
 npm run check                         # 类型、构建、回归和工作流测试
 npm run test:package                  # 隔离 tarball 安装、ESM/CJS、类型推导
 npm run test:browser                  # 本地浏览器示例检查

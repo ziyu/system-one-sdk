@@ -1,6 +1,6 @@
 # Migrate SDK 0.5.3 to independent packages
 
-The next release is `0.6.0-rc.N`, followed by `0.6.0`. Independent packages are not published yet. The commands below apply once the RC is available on npm; until then, install the corresponding tested `.artifacts/*.tgz` files together. The old `@system-one-ai/sdk@0.5.3` remains installable and is not modified by this migration.
+All 11 independent packages are available as `0.6.0-rc.0` on npm under `next`. The commands below install the RC; use `@0.6.0-rc.0` instead of `@next` to pin this batch. Stable `0.6.0` has not been released. The old `@system-one-ai/sdk@0.5.3` remains installable and is not modified by this migration. See the [published-package verification](validation.md).
 
 ## Imports
 
