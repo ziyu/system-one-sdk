@@ -1,9 +1,20 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { finalizeBatch, publishBatch, registryState, resolveGraph, validatePackage, validateVerification } from '../scripts/release.mjs';
+import { canonicalRelease, finalizeBatch, publishBatch, registryState, resolveGraph, validatePackage, validateVerification } from '../scripts/release.mjs';
 
 const pkg = (name, version = '0.6.0', dependencies = {}) => ({ name: `@system-one-ai/${name}`, version, dependencies, integrity: `sha512-${name}-${version}`, filename: `${name}.tgz` });
 const metadata = value => ({ ...value, dist: { integrity: value.integrity } });
+
+test('canonical stable package release is the repository-level GitHub Latest marker', () => {
+  assert.equal(canonicalRelease([
+    pkg('adapter-llm', '0.7.0'),
+    pkg('core', '0.6.0'),
+    pkg('adapter-system-one', '0.7.0'),
+    pkg('policies', '0.8.0-rc.0'),
+  ]).name, '@system-one-ai/adapter-llm');
+  assert.equal(canonicalRelease([pkg('adapter-llm'), pkg('core')]).name, '@system-one-ai/core');
+  assert.equal(canonicalRelease([pkg('policies', '0.8.0-rc.0')]), undefined);
+});
 
 test('batch preflight, dependency order, partial failure and resume use immutable versions', async () => {
   const core = pkg('core');
