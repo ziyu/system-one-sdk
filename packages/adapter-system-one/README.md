@@ -1,6 +1,6 @@
 # @system-one-ai/adapter-system-one
 
-system-one decision protocol adapter. Install this package alongside core and transport-fetch; other adapters are not required.
+Connect to TypeSafe’s official System One service to answer choice, score and boolean questions with native decision models. Install this package with `@system-one-ai/core` and `@system-one-ai/transport-fetch`.
 
 ```ts
 import { createSystemOne } from '@system-one-ai/core';

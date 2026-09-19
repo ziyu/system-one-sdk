@@ -1,6 +1,6 @@
 # @system-one-ai/core
 
-Core contracts and validated evaluation lifecycle. No concrete adapter or Fetch implementation is included.
+Create a shared `evaluate` client, define choice, score and boolean questions, and validate model answers. Supply the adapter for your model service and a transport when creating the client.
 
 ```ts
 import { createSystemOne } from '@system-one-ai/core';

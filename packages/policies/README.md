@@ -1,6 +1,6 @@
 # @system-one-ai/policies
 
-Explicit probability, margin and confidence policies; never silently substitutes model results.
+Decide whether to accept model answers using probability, option margin or confidence thresholds; return accepted, uncertain or abstained outcomes.
 
 ```ts
 import { gateChoice, gateBoolean } from '@system-one-ai/policies';

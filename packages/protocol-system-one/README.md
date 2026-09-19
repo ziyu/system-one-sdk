@@ -1,6 +1,6 @@
 # @system-one-ai/protocol-system-one
 
-Shared native question and answer codec for TypeSafe, OpenRouter and Cloudflare. Contains no service URLs, credentials or HTTP calls.
+Convert between this library’s questions/answers and the native System One wire format, shared by the TypeSafe, OpenRouter and Cloudflare adapters. The native adapters install this dependency automatically; use it directly when building a compatible adapter.
 
 ```ts
 import { nativeQuestions, decodeNative } from '@system-one-ai/protocol-system-one';
