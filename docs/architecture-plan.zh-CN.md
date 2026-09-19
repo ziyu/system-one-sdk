@@ -1,6 +1,6 @@
 # SDK 包边界与迁移
 
-仓库使用 npm workspaces，运行时代码全部位于 `packages/`。根目录仅负责编排开发、测试和发布，标记为 private；旧 SDK 入口、转导出和默认客户端已删除。11 个独立包已发布稳定版 `0.6.0`，通过 npm 默认 `latest` 安装，详见[迁移说明](migration-0.6.md)与[验证记录](validation.md)。
+仓库使用 npm workspaces，运行时代码全部位于 `packages/`。根目录仅负责编排开发、测试和发布，标记为 private；旧 SDK 入口、转导出和默认客户端已删除。当前 workspace 有 13 个独立包，已有发布包的稳定线为 `0.6.0`，详见[迁移说明](migration-0.6.md)与[验证记录](validation.md)。
 
 参考 [AI SDK 的 Providers and Models](https://ai-sdk.dev/docs/foundations/providers-and-models) 和 [Testing](https://ai-sdk.dev/docs/ai-sdk-core/testing)：共享稳定契约、显式传入实现、按供应商独立发布，用确定性测试验证业务行为。沿用已有 `SystemOneAdapter.prepare/decode/authenticate` 契约，不引入另一套 LLM model 层。
 
@@ -16,6 +16,8 @@
 | `@system-one-ai/adapter-cloudflare` | 账户路径、REST/runner envelope 校验及独立 Workers 入口 | core、protocol-system-one、transport-fetch |
 | `@system-one-ai/adapter-vercel` | Evaluation v4 请求和响应 | core |
 | `@system-one-ai/adapter-llm` | 现有 LLM 协议、prompt、schema、答案转换 | core |
+| `@system-one-ai/adapter-local` | 本地权重 runner、统一请求与结果校验 | core |
+| `@system-one-ai/adapter-webgpu` | 基于 Wllama/llama.cpp 的浏览器 WebGPU GGUF 推理 | adapter-local、core |
 | `@system-one-ai/decisions` | 动作、候选项及参数组合 | core |
 | `@system-one-ai/policies` | 概率、差值、confidence gate | core |
 | `@system-one-ai/batch` | 并发、取消和部分失败 | core |
@@ -32,14 +34,16 @@ graph TD
   Protocol --> Core
   Vercel["adapter-vercel"] --> Core
   LLM["adapter-llm：保持单包"] --> Core
+  Local["adapter-local：本地 runner"] --> Core
+  WebGPU["adapter-webgpu：Wllama/WebGPU"] --> Local
   Decisions["decisions"] --> Core
   Policies["policies"] --> Core
   Batch["batch"] --> Core
 ```
 
-core 不导入任何具体 adapter、transport 或供应商 SDK。adapter 之间不互相导入。REST adapter 只做编解码；Cloudflare 的独立 workers 入口实现 EvaluationClient，复用 transport-fetch 的响应和期限工具，调用原生 binding。`protocol-system-one` 只共享已经被三个服务使用的 wire codec，没有 endpoint、默认模型、认证或请求生命周期。
+core 不导入任何具体 adapter、transport 或供应商 SDK。`adapter-webgpu` 是唯一的组合例外，它复用 `adapter-local` 的生命周期和统一校验；其他 adapter 之间不互相导入。REST adapter 只做编解码；Cloudflare 的独立 workers 入口实现 EvaluationClient，复用 transport-fetch 的响应和期限工具，调用原生 binding。`protocol-system-one` 只共享已经被三个服务使用的 wire codec，没有 endpoint、默认模型、认证或请求生命周期。
 
-core 仍保留当前 HTTP codec 契约中的 URL、headers 和配置类型，以及独立的 `core/http` 校验工具。它不调用 Fetch，不解析供应商特有字段。此次先明确代码所有权与执行边界，保持现有请求语义；如将来需要非 HTTP 执行，再根据具体调用场景调整契约。
+core 仍保留当前 HTTP codec 契约中的 URL、headers 和配置类型，以及独立的 `core/http` 校验工具。它不调用 Fetch，不解析供应商特有字段。非 HTTP 权重通过 `adapter-local` 的 runner 边界接入，core 仍只处理统一的 `EvaluationClient` 语义。
 
 ## 调用方式
 
@@ -97,7 +101,7 @@ npm run test:live:llm -- /path/to/llm.env
 
 每个包都有独立 build、typecheck、test 和 prepack；构建顺序从 package.json 的依赖推导。包测试在仓库之外创建临时项目，只安装目标包及其声明的依赖，验证 ESM/CJS 运行与 NodeNext 声明解析。所有类型推导和负面断言还会对已安装的 ESM/CJS 声明再次执行。
 
-协议、验证、超时、取消、重试、本地 HTTP、业务场景测试直接导入独立包。依赖检查拒绝 core 依赖实现包、adapter 互相依赖、未声明依赖和跨包源文件导入。真实 LLM 测试单独执行，读取指定文件，不进入普通 CI，不保存密钥。
+协议、验证、超时、取消、重试、本地 HTTP、业务场景测试直接导入独立包。依赖检查拒绝 core 依赖实现包、除 WebGPU 复用 local runtime 外的 adapter 互相依赖、未声明依赖和跨包源文件导入。真实 LLM 测试单独执行，读取指定文件，不进入普通 CI，不保存密钥。
 
 ## 后续开发规则
 

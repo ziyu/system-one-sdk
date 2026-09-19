@@ -10,7 +10,7 @@ test('workspace imports follow declared dependencies, with no adapter or transpo
     const dependencies = Object.keys(manifest.dependencies ?? {});
     if (directory === 'core') assert.deepEqual(dependencies, []);
     for (const dependency of dependencies) {
-      assert.ok(!dependency.startsWith('@system-one-ai/adapter-'), 'No workspace may depend on a concrete adapter');
+      assert.ok(directory === 'adapter-webgpu' && dependency === '@system-one-ai/adapter-local' || !dependency.startsWith('@system-one-ai/adapter-'), 'Only the WebGPU adapter may compose the local runtime adapter');
       assert.notEqual(dependency, '@system-one-ai/sdk');
     }
     for (const filename of readdirSync(path.join(cwd, 'src')).filter(name => name.endsWith('.ts'))) {

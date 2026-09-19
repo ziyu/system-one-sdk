@@ -18,11 +18,34 @@ The repository is a private npm workspace. Runtime code lives in independently p
 | `adapter-cloudflare` | Cloudflare REST and native Workers binding | core, protocol-system-one, transport-fetch |
 | `adapter-vercel` | Vercel Evaluation v4 | core |
 | `adapter-llm` | OpenAI Responses/Chat Completions and Anthropic Messages | core |
+| `adapter-local` | Pluggable local weight runners with shared validation | core |
+| `adapter-webgpu` | Real browser WebGPU GGUF/OpenJev inference | adapter-local, core |
 | `decisions` | Dynamic candidates and typed action parameters | core |
 | `policies` | Probability, margin and confidence gates | core |
 | `batch` | Bounded concurrency, ordered results and partial failures | core |
 
 Core imports no concrete adapter or transport. Each package provides ESM, CommonJS and TypeScript declarations. Runtime packages use Web APIs and have no third-party dependencies. Node.js 20+ is the supported target; the native Cloudflare binding is verified separately in workerd. Keep model credentials on the server.
+
+`adapter-local` is the common boundary for self-hosted weights. A runner owns the model runtime (Python, MLX, CUDA, WASM, or a local sidecar) and returns the core `ProviderResponse`; the SDK owns request snapshots, deadlines, cancellation and result validation.
+
+For actual browser-side inference, `adapter-webgpu` loads the pinned OpenJev/SemIf GGUF checkpoints with Wllama and llama.cpp's WebGPU backend. It can also load any custom GGUF URL; no model API is called.
+
+```sh
+npm install @system-one-ai/core @system-one-ai/adapter-webgpu
+```
+
+```ts
+import { choice } from '@system-one-ai/core';
+import { createOpenJevWebGPUClient } from '@system-one-ai/adapter-webgpu';
+
+const client = await createOpenJevWebGPUClient({ model: 'qwen3-0.6b' });
+const result = await client.evaluate({
+  state: 'The customer cannot sign in after a password reset.',
+  questions: { queue: choice('Which queue?', { access: 'Account access', billing: 'Billing' }) },
+});
+```
+
+The runnable browser demo is in [`examples/webgpu-demo`](examples/webgpu-demo). Start it with `npm run demo:webgpu`, then open `http://localhost:4173/examples/webgpu-demo/` in Chrome or Edge.
 
 ## Install and use
 

@@ -18,11 +18,34 @@
 | `adapter-cloudflare` | Cloudflare REST 与 Workers 原生 binding | core、protocol-system-one、transport-fetch |
 | `adapter-vercel` | Vercel Evaluation v4 | core |
 | `adapter-llm` | OpenAI Responses/Chat Completions、Anthropic Messages | core |
+| `adapter-local` | 可插拔本地权重 runner 与统一结果校验 | core |
+| `adapter-webgpu` | 浏览器 WebGPU 直接加载 GGUF/OpenJev 权重推理 | adapter-local、core |
 | `decisions` | 动态候选和类型化动作参数 | core |
 | `policies` | 概率、差值和 confidence 策略 | core |
 | `batch` | 有界并发、顺序结果和部分失败 | core |
 
 core 不导入具体 adapter 或 transport。各包提供 ESM、CommonJS 和 TypeScript 声明。运行时使用 Web API，无第三方依赖；支持目标为 Node.js 20+，Cloudflare 原生 binding 另有 workerd 运行时验证。模型密钥应保留在服务端。
+
+`adapter-local` 是自部署权重的统一边界。runner 负责 Python、MLX、CUDA、WASM 或本地 sidecar 的模型运行时，并返回 core 的 `ProviderResponse`；SDK 负责请求快照、期限、取消和结果校验。
+
+需要真实浏览器推理时使用 `adapter-webgpu`：它通过 Wllama 和 llama.cpp 的 WebGPU 后端加载 OpenJev/SemIf 固定版本 GGUF，也可以传入任意 GGUF URL，不调用模型 API。
+
+```sh
+npm install @system-one-ai/core @system-one-ai/adapter-webgpu
+```
+
+```ts
+import { choice } from '@system-one-ai/core';
+import { createOpenJevWebGPUClient } from '@system-one-ai/adapter-webgpu';
+
+const client = await createOpenJevWebGPUClient({ model: 'qwen3-0.6b' });
+const result = await client.evaluate({
+  state: '客户重置密码后仍然无法登录。',
+  questions: { queue: choice('应该进入哪个队列？', { access: '账户访问', billing: '账单' }) },
+});
+```
+
+可直接运行的网页 demo 在 [`examples/webgpu-demo`](examples/webgpu-demo)：执行 `npm run demo:webgpu`，然后用 Chrome 或 Edge 打开 `http://localhost:4173/examples/webgpu-demo/`。
 
 ## 安装与调用
 

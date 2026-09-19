@@ -18,6 +18,22 @@ export async function checkPackage(name, format = 'esm') {
     assert.equal(prepared.url, url);
     return { payload, status: 200, attempts: 1 };
   } };
+  if (name === 'adapter-local') {
+    const localClient = pkg.createLocalClient({
+      id: 'fixture-local',
+      defaultModel: 'fixture-local',
+      async evaluate(localRequest) {
+        return { model: localRequest.model, answers, usage: {} };
+      },
+    });
+    assert.equal((await localClient.evaluate(request)).answers.on.probability, 0.9);
+    return;
+  }
+  if (name === 'adapter-webgpu') {
+    assert.equal(typeof pkg.createOpenJevWebGPUClient, 'function');
+    assert.equal(pkg.OPENJEV_MODELS['minicpm5-2b'].url.includes('huggingface.co'), true);
+    return;
+  }
   if (name.startsWith('adapter-')) {
     const cases = {
       'adapter-system-one': ['systemOneAdapter', 'https://api.typesafe.ai/v1/systemone', native],

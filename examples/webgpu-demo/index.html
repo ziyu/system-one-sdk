@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Run System One decisions locally with GGUF weights and WebGPU.">
+    <title>System One / Local Signal Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+    <script type="importmap">
+      {
+        "imports": {
+          "@system-one-ai/core": "/packages/core/dist/esm/index.js",
+          "@system-one-ai/adapter-local": "/packages/adapter-local/dist/esm/index.js",
+          "@system-one-ai/adapter-webgpu": "/packages/adapter-webgpu/dist/esm/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="System One local signal lab">
+        <span class="brand-mark">S1</span>
+        <span>LOCAL SIGNAL LAB</span>
+      </a>
+      <div class="top-meta"><span class="live-dot"></span> BROWSER ONLY <span class="slash">/</span> NO BACKEND</div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">SYSTEM ONE · WEBGPU ADAPTER · 2026</p>
+          <h1>Make a decision.<br><em>Keep the weights.</em></h1>
+          <p class="lede">A real GGUF checkpoint runs on your GPU, inside this tab. Pick a model, load it once, then inspect the probability field behind every answer.</p>
+          <div class="hero-stamp"><span class="stamp-number">01</span><span>LOCAL INFERENCE<br>NO SECRETS IN TRANSIT</span></div>
+        </div>
+        <aside class="model-card" aria-labelledby="model-heading">
+          <div class="card-kicker"><span>00 / CHECKPOINT</span><span class="status-pip" id="gpu-pip"></span></div>
+          <h2 id="model-heading">Choose a weight</h2>
+          <label class="field-label" for="model-select">GGUF MODEL</label>
+          <select id="model-select"></select>
+          <div class="model-facts"><span id="model-size">—</span><span id="model-family">llama.cpp / WebGPU</span></div>
+          <button class="button button-primary" id="load-button" type="button"><span class="button-icon">↓</span> LOAD CHECKPOINT</button>
+          <div class="load-status" aria-live="polite">
+            <div class="meter"><i id="download-meter"></i></div>
+            <div class="status-line"><span id="load-status">WebGPU check pending</span><strong id="download-percent">—</strong></div>
+          </div>
+          <p class="microcopy" id="model-note">The first load downloads to browser cache. Later loads reuse it.</p>
+        </aside>
+      </section>
+
+      <section class="workspace" aria-labelledby="decision-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">01 / DECISION INPUT</p><h2 id="decision-heading">Give the model a real choice.</h2></div>
+          <span class="section-count">STATE → QUESTION → OPTIONS</span>
+        </div>
+        <div class="input-grid">
+          <label class="field-block"><span class="field-label">STATE <b>01</b></span><textarea id="state-input" rows="6">A customer says a password reset succeeded, but every login attempt still returns “account locked”. Two unlock emails were requested and neither arrived.</textarea></label>
+          <label class="field-block"><span class="field-label">QUESTION <b>02</b></span><textarea id="question-input" rows="6">Which queue should handle this request?</textarea></label>
+        </div>
+        <div class="options-block">
+          <div class="options-head"><span class="field-label">ALLOWED OPTIONS <b>03</b></span><span class="option-count" id="option-count">3 / 20</span></div>
+          <div id="options-list" class="options-list"></div>
+          <div class="options-actions"><button class="text-button" id="add-option" type="button">+ ADD OPTION</button><button class="text-button muted" id="remove-option" type="button">− REMOVE LAST</button></div>
+        </div>
+        <div class="run-row">
+          <p class="run-hint"><span class="keycap">⌘</span> One local model, one structured answer, no API key.</p>
+          <button class="button button-run" id="run-button" type="button" disabled><span class="button-icon">↗</span> RUN DECISION</button>
+        </div>
+      </section>
+
+      <section class="results" aria-labelledby="results-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">02 / PROBABILITY FIELD</p><h2 id="results-heading">What the checkpoint thinks.</h2></div>
+          <span class="section-count" id="result-model">WAITING FOR A MODEL</span>
+        </div>
+        <div class="result-card">
+          <div class="result-top"><div><span class="result-label">MODEL ANSWER</span><div class="answer" id="answer-text">—</div></div><div class="answer-badge" id="answer-badge">READY WHEN YOU ARE</div></div>
+          <div id="result-bars" class="result-bars"><div class="empty-state">Load a checkpoint, then run the decision to see live probabilities.</div></div>
+          <div class="result-meta"><div><span>MODEL</span><strong id="meta-model">—</strong></div><div><span>INPUT</span><strong id="meta-input">—</strong></div><div><span>OUTPUT</span><strong id="meta-output">—</strong></div><div><span>ELAPSED</span><strong id="meta-time">—</strong></div></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer"><span>SYSTEM ONE / ADAPTER-WEBGPU</span><span>WEIGHTS STAY IN YOUR BROWSER CACHE</span><a href="https://openjev.com/" target="_blank" rel="noreferrer">INSPIRED BY OPENJEV ↗</a></footer>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
