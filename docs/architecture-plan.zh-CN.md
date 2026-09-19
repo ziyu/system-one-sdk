@@ -1,6 +1,6 @@
 # SDK 包边界与迁移
 
-仓库使用 npm workspaces，运行时代码全部位于 `packages/`。根目录仅负责编排开发、测试和发布，标记为 private；旧 SDK 入口、转导出和默认客户端已删除。11 个独立包已发布 `0.6.0-rc.0`，通过 npm `@next` 安装，详见[迁移说明](migration-0.6.md)与[验证记录](validation.md)。
+仓库使用 npm workspaces，运行时代码全部位于 `packages/`。根目录仅负责编排开发、测试和发布，标记为 private；旧 SDK 入口、转导出和默认客户端已删除。11 个独立包已发布稳定版 `0.6.0`，通过 npm 默认 `latest` 安装，详见[迁移说明](migration-0.6.md)与[验证记录](validation.md)。
 
 参考 [AI SDK 的 Providers and Models](https://ai-sdk.dev/docs/foundations/providers-and-models) 和 [Testing](https://ai-sdk.dev/docs/ai-sdk-core/testing)：共享稳定契约、显式传入实现、按供应商独立发布，用确定性测试验证业务行为。沿用已有 `SystemOneAdapter.prepare/decode/authenticate` 契约，不引入另一套 LLM model 层。
 

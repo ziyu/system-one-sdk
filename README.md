@@ -26,12 +26,10 @@ Core imports no concrete adapter or transport. Each package provides ESM, Common
 
 ## Install and use
 
-**`0.6.0-rc.0` is available on npm under `next`.** Install only the packages your application uses; npm resolves their dependencies. This is a prerelease; see the [migration guide](docs/migration-0.6.md) and [published-package verification](docs/validation.md).
-
-npm also created `latest` for these first publications, and currently rejects its removal. An untagged install therefore selects this RC too; no stable `0.6.0` has been released.
+**Stable `0.6.0` is available on npm.** Install only the packages your application uses; npm resolves their dependencies. See the [SDK 0.5.3 migration guide](docs/migration-0.6.md) and [published-package verification](docs/validation.md).
 
 ```sh
-npm install @system-one-ai/core@next @system-one-ai/transport-fetch@next @system-one-ai/adapter-system-one@next
+npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-system-one
 ```
 
 ```ts
@@ -65,7 +63,7 @@ Adapters supply native endpoint/model defaults. `baseURL` and `model` override t
 Install `adapter-llm` with core and transport-fetch. LLM protocols, prompts, schemas, authentication mapping and answer conversion stay together in this package.
 
 ```sh
-npm install @system-one-ai/core@next @system-one-ai/transport-fetch@next @system-one-ai/adapter-llm@next
+npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-llm
 ```
 
 ```ts

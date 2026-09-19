@@ -1,6 +1,6 @@
 # Migrate SDK 0.5.3 to independent packages
 
-All 11 independent packages are available as `0.6.0-rc.0` on npm under `next`. The commands below install the RC; use `@0.6.0-rc.0` instead of `@next` to pin this batch. Stable `0.6.0` has not been released. The old `@system-one-ai/sdk@0.5.3` remains installable and is not modified by this migration. See the [published-package verification](validation.md).
+All 11 independent packages are available as stable `0.6.0` on npm under `latest`. The commands below install the current stable packages; append `@0.6.0` to each package to pin this batch. The old `@system-one-ai/sdk@0.5.3` remains installable, with an npm deprecation notice linking here. See the [published-package verification](validation.md).
 
 ## Imports
 
@@ -25,7 +25,7 @@ Composition and provider exports retain their names. There is no forwarding SDK 
 Install only the packages imported by the application:
 
 ```sh
-npm install @system-one-ai/core@next @system-one-ai/transport-fetch@next @system-one-ai/adapter-system-one@next
+npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-system-one
 ```
 
 ```ts
@@ -56,7 +56,7 @@ Previously `new SystemOne({ apiKey, fetch: customFetch })` supplied native defau
 Keep the same client setup and replace its adapter with `openRouterAdapter`, `vercelAdapter`, or `cloudflareAdapter({ accountId })` from the corresponding package. Cloudflare REST still uses an API token as `apiKey`. See the runnable [Cloudflare example](../examples/cloudflare.ts).
 
 ```sh
-npm install @system-one-ai/core@next @system-one-ai/transport-fetch@next @system-one-ai/adapter-llm@next
+npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-llm
 ```
 
 ```ts
@@ -81,7 +81,7 @@ LLM probabilities are model-reported assessments, not calibrated native model pr
 ## Cloudflare Workers
 
 ```sh
-npm install @system-one-ai/core@next @system-one-ai/adapter-cloudflare@next
+npm install @system-one-ai/core @system-one-ai/adapter-cloudflare
 ```
 
 ```ts
