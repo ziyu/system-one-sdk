@@ -121,10 +121,14 @@ npm run check                         # 类型、构建、回归和工作流测�
 npm run test:package                  # 隔离 tarball 安装、ESM/CJS、类型推导
 npm run test:browser                  # 本地浏览器示例检查
 npm test --workspace @system-one-ai/adapter-llm
+npm run test:live -- /path/to/system-one.env
+npm run test:live:composition -- /path/to/system-one.env
 npm run test:live:llm -- /path/to/llm.env
 ```
 
 LLM 文件包含 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`。真实测试按需运行，会消耗接口用量，脱敏报告写入 `.artifacts/`。CI 不读取本地密钥。其他供应商测试命令为 `test:live`、`test:live:openrouter`、`test:live:cloudflare`。
+
+原生及组合测试从指定文件读取 `SYSTEM_ONE_API_KEY`、`SYSTEM_ONE_BASE_URL`、`SYSTEM_ONE_MODEL`；未传路径时读取本仓库 `.env`。配置以文件为准，不受 shell 环境变量覆盖。
 
 当前与历史证据见[验证记录](docs/validation.md)。真实 LLM 测试不代表其他供应商也已完成真实联调；各供应商协议另有 fixture 和本地 HTTP 回归。
 

@@ -121,10 +121,14 @@ npm run check                         # types, builds, regression and workflow t
 npm run test:package                  # isolated tarball installs, ESM/CJS, inference
 npm run test:browser                  # local browser example checks
 npm test --workspace @system-one-ai/adapter-llm
+npm run test:live -- /path/to/system-one.env
+npm run test:live:composition -- /path/to/system-one.env
 npm run test:live:llm -- /path/to/llm.env
 ```
 
 The LLM file supplies `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY`. Live tests are opt-in, make paid requests and save sanitized reports under `.artifacts/`. CI never reads local credentials. Other provider commands are `test:live`, `test:live:openrouter`, and `test:live:cloudflare`.
+
+The native and composition checks read `SYSTEM_ONE_API_KEY`, `SYSTEM_ONE_BASE_URL` and `SYSTEM_ONE_MODEL` from the supplied file, or the repository's `.env` when no path is supplied. Explicit file values are used without shell-environment overrides.
 
 See [verification records](docs/validation.md) for current and historical evidence. A live LLM pass does not verify other providers. Protocol fixtures and local HTTP servers cover those providers separately.
 

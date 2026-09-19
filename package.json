@@ -25,7 +25,7 @@
     "check": "npm run typecheck && npm run build && npm test && npm run test:scenarios",
     "test:scenarios": "npm run examples:build && node --test tests/examples/*.test.mjs",
     "test:package": "node scripts/test-package.mjs",
-    "test:live": "npm run build && node --env-file=.env scripts/test-live.mjs",
+    "test:live": "npm run build && node scripts/test-live.mjs",
     "test:live:openrouter": "npm run build && node scripts/test-openrouter-live.mjs",
     "test:live:composition": "npm run build && node scripts/test-composition-live.mjs",
     "test:live:decisions": "npm run examples:build && node scripts/test-decisions-live.mjs",

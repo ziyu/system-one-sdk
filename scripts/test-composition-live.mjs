@@ -8,14 +8,15 @@ import { choiceFrom, defineDecision } from '@system-one-ai/decisions';
 import { gateBoolean, gateChoice } from '@system-one-ai/policies';
 import { evaluateMany } from '@system-one-ai/batch';
 
-// Explicit opt-in: three real native requests using this project's .env; no retries or slow-model calls.
+// Explicit opt-in: three real native requests using the supplied env file or this project's .env.
+// No retries or slow-model calls.
 const startedAt = new Date().toISOString();
 const rows = [];
 let requests = 0;
 let apiKey = '';
 let failure;
 try {
-  const env = parseEnv(await readFile(new URL('../.env', import.meta.url), 'utf8'));
+  const env = parseEnv(await readFile(process.argv[2] ?? new URL('../.env', import.meta.url), 'utf8'));
   apiKey = env.SYSTEM_ONE_API_KEY ?? '';
   assert.ok(apiKey, 'SYSTEM_ONE_API_KEY is required.');
   const client = new SystemOne({
@@ -53,6 +54,8 @@ try {
   assert.equal(batch.summary.succeeded, 2);
   assert.deepEqual(gateBoolean(batch.items[0].value.answers.on, { maxFalseProbability: 0.4, minTrueProbability: 0.6 }), { status: 'accepted', value: false });
   assert.ok(batch.items[1].value.answers.severity.score >= 0 && batch.items[1].value.answers.severity.score <= 2);
+  const severity = batch.items[1].value.answers.severity.probabilities;
+  assert.ok(severity && severity['1'] > severity['0'] && severity['1'] > severity['2']);
   assert.equal(requests, 3);
   for (const row of rows) { assert.equal(row.response.status, 200); assert.equal(row.response.attempts, 1); }
 } catch (error) {
