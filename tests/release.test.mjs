@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { publishBatch, registryState, resolveGraph, validatePackage } from '../scripts/release.mjs';
+import { finalizeBatch, publishBatch, registryState, resolveGraph, validatePackage, validateVerification } from '../scripts/release.mjs';
 
 const pkg = (name, version = '0.6.0', dependencies = {}) => ({ name: `@system-one-ai/${name}`, version, dependencies, integrity: `sha512-${name}-${version}`, filename: `${name}.tgz` });
 const metadata = value => ({ ...value, dist: { integrity: value.integrity } });
@@ -21,16 +21,13 @@ test('batch preflight, dependency order, partial failure and resume use immutabl
     },
     confirm: async value => assert.equal(registryState(published.get(value.name), value), 'identical'),
     verify: async values => { assert.ok(values.every(value => !value.filename)); events.push('verify'); },
-    latest: async () => '0.5.0',
-    promote: async value => events.push(`latest:${value.name}`),
-    github: async value => events.push(`github:${value.name}`),
   };
   await assert.rejects(publishBatch(manifest, effects), /simulated/);
   assert.deepEqual(events, [`publish:${core.name}`, `publish:${adapter.name}`]);
   fail = false;
   events.length = 0;
   await publishBatch(manifest, effects);
-  assert.deepEqual(events, [`publish:${adapter.name}`, 'verify', `latest:${core.name}`, `latest:${adapter.name}`, `github:${core.name}`, `github:${adapter.name}`]);
+  assert.deepEqual(events, [`publish:${adapter.name}`, 'verify']);
   // A conflict in the last package prevents publication of the first package as well.
   published.delete(core.name);
   published.set(adapter.name, metadata({ ...adapter, integrity: 'other' }));
@@ -39,24 +36,70 @@ test('batch preflight, dependency order, partial failure and resume use immutabl
   assert.deepEqual(events, []);
 });
 
-test('failed consumer verification withholds promotion/tags; RC and retries never downgrade latest', async () => {
+test('finalization requires acceptance and intact packages; RC and retries never downgrade latest', async () => {
   const candidate = pkg('core');
   const events = [];
   const effects = {
-    metadata: async value => metadata(value), publish: async () => assert.fail(), confirm: async () => {},
-    verify: async () => { throw new Error('consumer failed'); }, latest: async () => '0.7.0',
+    metadata: async value => metadata(value),
+    accept: async () => { throw new Error('consumer failed'); }, latest: async () => '0.7.0',
+    record: async () => {},
     promote: async () => events.push('promote'), github: async () => events.push('github'),
   };
-  await assert.rejects(publishBatch({ dryRun: false, packages: [candidate] }, effects), /consumer failed/);
+  await assert.rejects(finalizeBatch({ dryRun: false, packages: [candidate] }, effects), /consumer failed/);
   assert.deepEqual(events, []);
-  effects.verify = async () => {};
-  await publishBatch({ dryRun: false, packages: [candidate] }, effects);
+  effects.accept = async () => {};
+  await finalizeBatch({ dryRun: false, packages: [candidate] }, effects);
   assert.deepEqual(events, ['github']);
   events.length = 0;
   effects.latest = async () => assert.fail('RC cannot query/promote latest');
-  await publishBatch({ dryRun: false, packages: [pkg('core', '0.6.0-rc.0')] }, effects);
+  await finalizeBatch({ dryRun: false, packages: [pkg('core', '0.6.0-rc.0')] }, effects);
   assert.deepEqual(events, ['github']);
   await assert.rejects(publishBatch({ dryRun: true, packages: [candidate] }, effects), /Dry-run/);
+  await assert.rejects(finalizeBatch({ dryRun: true, packages: [candidate] }, effects), /Dry-run/);
+  effects.metadata = async () => null;
+  await assert.rejects(finalizeBatch({ dryRun: false, packages: [candidate] }, effects), /disappeared/);
+});
+
+test('promotion resumes partial tag updates and withholds GitHub releases until every tag is confirmed', async () => {
+  const core = pkg('core');
+  const adapter = pkg('adapter-llm', '0.6.0', { [core.name]: '^0.6.0' });
+  const manifest = { dryRun: false, packages: [adapter, core] };
+  const tags = new Map([[core.name, '0.6.0-rc.0']]);
+  const events = [];
+  let fail = true;
+  const effects = {
+    accept: async () => {}, metadata: async value => metadata(value), latest: async name => tags.get(name),
+    promote: async value => {
+      events.push(`promote:${value.name}`);
+      if (value === adapter && fail) throw new Error('tag authorization failed');
+      tags.set(value.name, value.version);
+    },
+    record: async values => { assert.equal(values.length, 2); events.push('record'); },
+    github: async value => events.push(`github:${value.name}`),
+  };
+  await assert.rejects(finalizeBatch(manifest, effects), /authorization failed/);
+  assert.deepEqual(events, [`promote:${core.name}`, `promote:${adapter.name}`]);
+  fail = false; events.length = 0;
+  await finalizeBatch(manifest, effects);
+  assert.deepEqual(events, [`promote:${adapter.name}`, 'record', `github:${core.name}`, `github:${adapter.name}`]);
+  // Check the whole batch before changing the first tag.
+  tags.set(core.name, '0.6.0-rc.0'); tags.set(adapter.name, '0.7.0-rc.0'); events.length = 0;
+  await assert.rejects(finalizeBatch(manifest, effects), /Newer prerelease/);
+  assert.deepEqual(events, []);
+  tags.delete(adapter.name);
+  effects.promote = async () => {};
+  await assert.rejects(finalizeBatch(manifest, effects), /not confirmed/);
+  assert.deepEqual(events, []);
+});
+
+test('registry acceptance is bound to the exact source, manifest and installed package bytes', () => {
+  const core = pkg('core');
+  const manifest = { source: { commit: 'source' }, packages: [core] };
+  const receipt = { status: 'passed', commit: 'source', manifestSha256: 'digest', packages: [{ name: core.name, version: core.version, integrity: core.integrity }] };
+  validateVerification(manifest, receipt, 'digest');
+  for (const changed of [{ status: 'failed' }, { commit: 'other' }, { manifestSha256: 'other' }, { packages: [] }, { packages: [{ ...receipt.packages[0], integrity: 'other' }] }]) {
+    assert.throws(() => validateVerification(manifest, { ...receipt, ...changed }, 'digest'));
+  }
 });
 
 test('unchanged dependencies use published bytes and minimum ranges, never repacked historical bytes', async () => {

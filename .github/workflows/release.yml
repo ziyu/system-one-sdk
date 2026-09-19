@@ -83,7 +83,7 @@ jobs:
     timeout-minutes: 45
     environment: npm
     permissions:
-      contents: write
+      contents: read
       actions: read
       id-token: write
     env:
@@ -108,12 +108,65 @@ jobs:
           path: .artifacts/
           run-id: ${{ inputs.artifact-run-id || github.run_id }}
           github-token: ${{ github.token }}
-      - name: Publish exact tarballs, verify npm consumers, then promote and tag
+      - name: Check stable tag credentials before uploading
+        run: node scripts/release.mjs check-tag-auth
+        env:
+          NPM_TAG_TOKEN: ${{ secrets.NPM_TAG_TOKEN }}
+      - name: Publish exact tarballs to next and verify npm consumers
         run: npm run release:publish
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: registry-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          name: registry-verification-${{ github.run_id }}
           path: .artifacts/registry-verification.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          overwrite: true
+  finalize:
+    name: Approve verified release, promote latest and finalize
+    needs: publish
+    if: ${{ always() && needs.publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Approve this deployment only after the exact stable packages pass live model acceptance.
+    environment: npm
+    permissions:
+      contents: write
+      actions: read
+    env:
+      RELEASE_COMMIT: ${{ inputs.commit || github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ inputs.commit || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+      - run: npm install --global npm@11.17.0 --ignore-scripts
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-${{ inputs.commit || github.sha }}
+          path: .artifacts/
+          run-id: ${{ inputs.artifact-run-id || github.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: registry-verification-${{ github.run_id }}
+          path: .artifacts/
+      - name: Verify receipt, promote stable tags and create releases
+        run: node scripts/release.mjs finalize
+        env:
+          NPM_TAG_TOKEN: ${{ secrets.NPM_TAG_TOKEN }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: release-result-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .artifacts/release-result.json
           include-hidden-files: true
           if-no-files-found: ignore
