@@ -2,6 +2,18 @@
 
 本文件保留当前 workspace 验证及历史 SDK 发布记录；不同版本的真实请求分别记录。
 
+## 2026-09-19 正式版 0.6.0 验收与自动晋级
+
+11 个独立包均已发布稳定版 `0.6.0`，内部依赖为稳定范围 `^0.6.0`，`latest` 与 `next` 均指向本批正式版本。源码为 `aa4c0173ba56c48f25c260002139d464382010db`（[Release PR #7](https://github.com/ziyu/sytem-one-sdk/pull/7)）；[Release 工作流](https://github.com/ziyu/sytem-one-sdk/actions/runs/35436132802)首轮全部成功，已创建 11 个正式 GitHub release，例如 [core 0.6.0](https://github.com/ziyu/sytem-one-sdk/releases/tag/core-v0.6.0)。
+
+CI 完成 232 项回归、13 项场景、类型与构建检查、11 个包的 ESM/CJS/声明隔离安装和 workerd 验证；Node 20/22/24 消费测试使用同一份冻结 tarball。发布 job 使用 npm Trusted Publishing/OIDC 上传到 `next`，逐包核对 registry SHA-512 并完成安装验收。全部包的来源记录与该源码提交及 `.github/workflows/release.yml` 一致；另在仓库外的 npm 消费项目执行 `npm audit signatures`，11 个 registry signatures 和 11 个 attestations 全部验证通过。
+
+正式候选 tarball 和发布后的 npm 安装分别执行真实模型检查：每轮 TypeSafe `jev-1.13.0` 7 次（choice、score、boolean、decisions、policies、batch），DeepSeek `deepseek-flash` 2 次（probabilities、discrete）。两轮共 18 次均 HTTP 200，无重试，语义与结果结构断言通过。候选验收完成于 `2026-09-19T10:01:07.106Z`；npm 安装验收完成于 `2026-09-19T10:18:11.397Z`，报告确认 `fromRegistry: true`。Cloudflare 仍仅验证 workerd fixture；本轮未实测其他供应商推理。
+
+两轮验收、registry receipt 和晋级报告绑定同一 manifest SHA-256：`88698086eeba2d50afa9962b8bd3019a73367fc927e31d9ea8248c74e5552fcf`。本地原始产物和模型报告保存在 `.artifacts/stable-release/`；模型完整结果及凭据未上传公共 GitHub。公开 release 附件包含 tarball、manifest、checksums、registry receipt 和 `release-result.json`。
+
+发布与晋级分别通过 `npm` environment 审批。候选真实验收通过后批准上传；registry 真实验收及验签通过后批准晋级。标签写入使用仅覆盖 11 个新包的 environment secret，上传仍使用 OIDC；每个 `latest` 回读成功后才生成 GitHub release。此批已实际验证两种鉴权路径；RC 的默认标签问题通过真实稳定版晋级解决。旧 SDK 迁移提示单独使用维护者认证，npm 回读确认 7 个历史版本均已添加迁移链接；旧包 `latest` 仍为 `0.5.3`，历史 tarball 保留可安装。
+
 ## 2026-09-19 已发布 RC 的安装与真实模型验收
 
 11 个独立包均已发布 `0.6.0-rc.0`，`next` 指向本批 RC；源码为 `09d4a2ead1e26dbc9804468b267303e6dd8ca22e`（[Release PR #3](https://github.com/ziyu/sytem-one-sdk/pull/3)）。[Release 工作流第 3 次执行](https://github.com/ziyu/sytem-one-sdk/actions/runs/35430490022)成功：构建和冻结产物、Node 20/22/24 消费检查、registry 完整性与 ESM/CJS/声明验收通过，生成 11 个逐包 prerelease。各 release 附有原始 tarball、manifest、checksums 和 registry 验证报告，例如 [core RC](https://github.com/ziyu/sytem-one-sdk/releases/tag/core-v0.6.0-rc.0)。
@@ -18,9 +30,9 @@ node scripts/test-release-live.mjs /path/to/typesafe.env /path/to/llm.env --regi
 
 首次创建包时尚不能预配置 Trusted Publisher，因此本批使用已验证的 CI tarball 完成一次本地 bootstrap，SHA-512 与清单一致；这次上传没有 npm provenance。随后 11 个包均已配置并回读 GitHub Trusted Publisher（`ziyu/sytem-one-sdk`、`release.yml`、`npm` environment）。成功重跑核验并复用已存在版本，没有再次上传；后续新版本的 OIDC 上传仍需首次执行验证。首次 metadata 可见早于安装索引，曾导致 registry 安装 404；索引同步后原批次恢复成功。
 
-npm 为首次创建的包自动添加了 `latest`，即使上传指定 `next`。清理时用户两次成功完成安全密钥认证，但 npm 11.17.0 的 `npm dist-tag rm @system-one-ai/core latest` 均被 registry 以 HTTP 400 拒绝；捕获的正文仅为 `Request failed with status code 400`，未给出具体原因，不能归因为登录失效，也不能据此断言 npm 永久禁止删除 `latest`。停止重复认证和删除重试。`2026-09-19T09:17:11.213Z` 回读确认 11 个包的 `next` 与自动 `latest` 都仍为 `0.6.0-rc.0`；无标签或 `@latest` 安装也会选择 RC。脱敏阻塞记录保存在 `.artifacts/rc-release/rc-dist-tags.json`。稳定版未发布，标签清理仍受服务端错误阻塞。
+npm 为首次创建的包自动添加了 `latest`，即使上传指定 `next`。清理时用户两次成功完成安全密钥认证，但 npm 11.17.0 的 `npm dist-tag rm @system-one-ai/core latest` 均被 registry 以 HTTP 400 拒绝；捕获的正文仅为 `Request failed with status code 400`，未给出具体原因，不能归因为登录失效，也不能据此断言 npm 永久禁止删除 `latest`。停止重复认证和删除重试。`2026-09-19T09:17:11.213Z` 回读确认 11 个包的 `next` 与自动 `latest` 都仍为 `0.6.0-rc.0`；无标签或 `@latest` 安装也会选择 RC。脱敏阻塞记录保存在 `.artifacts/rc-release/rc-dist-tags.json`。这是当时的 RC 状态；上方正式版 `0.6.0` 已通过稳定晋级替换全部 `latest`。
 
-旧 `@system-one-ai/sdk@latest` 保持 `0.5.3`，没有 deprecation。GitHub `npm` environment 已创建，但尚未配置审批保护；稳定发布前需完成保护设置和 dist-tag 鉴权验收。
+RC 发布时，旧 `@system-one-ai/sdk@latest` 保持 `0.5.3`，没有 deprecation，GitHub `npm` environment 尚未配置审批保护。稳定 P4 随后完成了 main 分支限制、维护者审批、禁止管理员绕过和标签鉴权验收。
 
 ## 2026-09-19 规范发布流程与 RC 产物演练
 

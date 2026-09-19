@@ -8,7 +8,7 @@ Use Node 24 and `npm ci --ignore-scripts`. Add a changeset with `npm run changes
 
 The Version packages workflow runs Changesets on main and opens a Release PR. `npm run version:packages` also updates the lockfile and `.changeset/release.json`, which names exactly the changed versions. Review this batch, dependency ranges and each package's CHANGELOG. Never edit package versions or the batch manually. Pure documentation/CI changes may omit a changeset with a reason.
 
-The initial changeset and prerelease state are committed, but version generation happens in the Release PR. Another changeset produces the next RC. To leave RC mode, run `npm run changeset -- pre exit`, commit that state, and merge the generated stable Release PR. Stable tarballs are new bytes and must pass their own verification.
+Version generation happens in the Release PR. During an active prerelease, another changeset produces the next RC. To leave RC mode, run `npm run changeset -- pre exit`, commit that state, and merge the generated stable Release PR. Stable tarballs are new bytes and must pass their own verification.
 
 ## Frozen artifacts and release gate
 
@@ -35,11 +35,11 @@ npm OIDC currently authorizes publishing, but not standalone dist-tag changes ([
 
 Check scope ownership and package-name permissions separately. Public registry 404 is not evidence of publish permission. If a first package cannot configure OIDC before it exists, a maintainer must bootstrap it once using the exact verified tarball and `next`, then enable Trusted Publishing and resume the same batch. This first publication remains a separate authorized operation. See [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/).
 
-The `0.6.0-rc.0` batch used this bootstrap exception without provenance. All 11 Trusted Publisher configurations have been read back. Stable P4 must exercise a real OIDC upload and the separate tag credentials; a configured credential alone is not evidence that either mutation works.
+The `0.6.0-rc.0` batch used this bootstrap exception without provenance. All 11 Trusted Publisher configurations have been read back. Stable `0.6.0` subsequently exercised both paths successfully: all 11 packages were uploaded with OIDC/provenance, verified by `npm audit signatures`, and promoted with the protected tag credential. The initial tag token expires on 2026-12-18; rotate the environment secret before then.
 
 For a new package, npm can initialize `latest` even when publication requests `next`. Inspect every package's dist-tags after bootstrap. If `latest` equals the RC, remove only that tag with `npm dist-tag rm PACKAGE latest`, then confirm `next` still resolves to the RC. Do not remove an existing stable or newer version's tag. npm may require separate security-key authentication for tag changes; the publish/trust authentication cooldown does not cover them. Before stable promotion, verify authentication for `npm dist-tag` separately: npm CLI's automatic OIDC exchange for `npm publish` does not authenticate tag mutations.
 
-For `0.6.0-rc.0`, two authenticated removal attempts returned registry HTTP 400 with only `Request failed with status code 400`. The cause remains unknown; further authentication retries are not a verified remedy. All 11 automatic `latest` tags remain alongside `next`, so untagged installs also select the RC. Record this exception and the registry response; do not claim a `next`-only release, republish existing bytes, or publish a stable placeholder to hide it. Tag cleanup remains blocked pending resolution of the registry error.
+For `0.6.0-rc.0`, two authenticated removal attempts returned registry HTTP 400 with only `Request failed with status code 400`. The cause remains unknown; further authentication retries are not a verified remedy. This left all 11 automatic `latest` tags pointing to RC until the verified `0.6.0` release replaced them through normal stable promotion. Both `latest` and `next` now resolve to `0.6.0`. The historical deletion error remains unexplained; no placeholder version or republished bytes were used.
 
 ## Recovery
 
