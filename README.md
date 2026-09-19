@@ -22,7 +22,7 @@ The repository is a private npm workspace. Runtime code lives in independently p
 | `policies` | Probability, margin and confidence gates | core |
 | `batch` | Bounded concurrency, ordered results and partial failures | core |
 
-Core imports no concrete adapter or transport. Each package provides ESM, CommonJS and TypeScript declarations. Runtime packages use Web APIs and have no third-party dependencies. Node.js 20+ is the supported target; browser/Worker runtime execution is not yet verified. Keep model credentials on the server.
+Core imports no concrete adapter or transport. Each package provides ESM, CommonJS and TypeScript declarations. Runtime packages use Web APIs and have no third-party dependencies. Node.js 20+ is the supported target; the native Cloudflare binding is verified separately in workerd. Keep model credentials on the server.
 
 ## Install and use
 
@@ -135,6 +135,7 @@ See [verification records](docs/validation.md) for current and historical eviden
 - [Package boundaries](docs/architecture-plan.zh-CN.md) and [design](docs/design.md)
 - [OpenRouter](docs/openrouter.md), [Cloudflare](docs/cloudflare.md), [Jev API research](docs/jev-api.md)
 - [File/support workflows](docs/decision-workflows.md) and [browser example](docs/browser-decisions.md)
+- [Native Cloudflare Workers binding](docs/cloudflare-workers.md) (`@system-one-ai/adapter-cloudflare/workers`)
 - [Custom adapter example](examples/custom-adapter.ts)
 - [Per-package releases](docs/releasing.md): `<package-directory>-v<version>` tags; private root is never published
 

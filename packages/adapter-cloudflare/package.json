@@ -19,7 +19,17 @@
         "default": "./dist/cjs/index.js"
       }
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./workers": {
+      "import": {
+        "types": "./dist/esm/workers.d.ts",
+        "default": "./dist/esm/workers.js"
+      },
+      "require": {
+        "types": "./dist/cjs/workers.d.ts",
+        "default": "./dist/cjs/workers.js"
+      }
+    }
   },
   "files": [
     "dist",
@@ -31,7 +41,8 @@
   },
   "dependencies": {
     "@system-one-ai/core": "^0.5.2",
-    "@system-one-ai/protocol-system-one": "^0.5.2"
+    "@system-one-ai/protocol-system-one": "^0.5.2",
+    "@system-one-ai/transport-fetch": "^0.5.2"
   },
   "publishConfig": {
     "access": "public",

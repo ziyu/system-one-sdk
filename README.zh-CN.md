@@ -22,7 +22,7 @@
 | `policies` | 概率、差值和 confidence 策略 | core |
 | `batch` | 有界并发、顺序结果和部分失败 | core |
 
-core 不导入具体 adapter 或 transport。各包提供 ESM、CommonJS 和 TypeScript 声明。运行时使用 Web API，无第三方依赖；支持目标为 Node.js 20+，浏览器/Worker 内运行尚未验证。模型密钥应保留在服务端。
+core 不导入具体 adapter 或 transport。各包提供 ESM、CommonJS 和 TypeScript 声明。运行时使用 Web API，无第三方依赖；支持目标为 Node.js 20+，Cloudflare 原生 binding 另有 workerd 运行时验证。模型密钥应保留在服务端。
 
 ## 安装与调用
 
@@ -135,6 +135,7 @@ LLM 文件包含 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`。真实测试按�
 - [包边界](docs/architecture-plan.zh-CN.md)与[设计](docs/design.md)
 - [OpenRouter](docs/openrouter.md)、[Cloudflare](docs/cloudflare.zh-CN.md)、[Jev API 研究](docs/jev-api.md)
 - [文件/客服工作流](docs/decision-workflows.zh-CN.md)与[浏览器示例](docs/browser-decisions.zh-CN.md)
+- [Cloudflare Workers 原生 binding](docs/cloudflare-workers.zh-CN.md)（`@system-one-ai/adapter-cloudflare/workers`）
 - [自定义 adapter 示例](examples/custom-adapter.ts)
 - [按包发布](docs/releasing.md)：使用 `<包目录>-v<版本>` tag，根目录禁止发布
 

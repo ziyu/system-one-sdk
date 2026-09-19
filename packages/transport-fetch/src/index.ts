@@ -101,9 +101,9 @@ export function parseRetryAfter(headers: Headers, now = Date.now()): number | un
   return Number.isFinite(date) ? Math.max(0, date - now) : undefined;
 }
 export function requestIdOf(headers: Headers): string | undefined {
-  return headers.get('x-request-id') ?? headers.get('request-id') ?? undefined;
+  return headers.get('x-request-id') ?? headers.get('request-id') ?? headers.get('cf-ai-req-id') ?? undefined;
 }
-function cancelBody(response: Response): void {
+export function cancelBody(response: Response): void {
   try { void response.body?.cancel().catch(() => {}); } catch { /* Cleanup must not replace the original failure. */ }
 }
 
@@ -146,6 +146,16 @@ async function readJson(response: Response, maxBytes: number, scope: RequestScop
   }
 }
 
+/** Shared bounded Response handling for HTTP clients and native bindings. */
+export async function readJsonResponse(response: Response, maxBytes: number, scope: RequestScope): Promise<{ payload: unknown; status: number; requestId: string | undefined }> {
+  const requestId = requestIdOf(response.headers);
+  if (!response.ok) {
+    cancelBody(response);
+    throw new APIError(response.status, requestId, parseRetryAfter(response.headers));
+  }
+  return { payload: await readJson(response, maxBytes, scope), status: response.status, requestId };
+}
+
 export async function postJson(fetcher: Fetch, url: string, headers: Headers, body: string, maxBytes: number, scope: RequestScope): Promise<{ payload: unknown; status: number; requestId: string | undefined }> {
   let response: Response;
   try {
@@ -159,12 +169,7 @@ export async function postJson(fetcher: Fetch, url: string, headers: Headers, bo
     if (error instanceof SystemOneError) throw error;
     throw new ConnectionError();
   }
-  const requestId = requestIdOf(response.headers);
-  if (!response.ok) {
-    cancelBody(response);
-    throw new APIError(response.status, requestId, parseRetryAfter(response.headers));
-  }
-  return { payload: await readJson(response, maxBytes, scope), status: response.status, requestId };
+  return readJsonResponse(response, maxBytes, scope);
 }
 
 /** The Fetch implementation is optional; globalThis.fetch is resolved at call time. */

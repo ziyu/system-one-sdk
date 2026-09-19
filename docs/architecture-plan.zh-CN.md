@@ -13,7 +13,7 @@
 | `@system-one-ai/protocol-system-one` | 三个服务共用的 `boolean/noul`、token 和 rounding 编解码 | core |
 | `@system-one-ai/adapter-system-one` | TypeSafe 地址、默认模型和原生请求 | core、protocol-system-one |
 | `@system-one-ai/adapter-openrouter` | Decisions 地址、options、generation/cost 元数据 | core、protocol-system-one |
-| `@system-one-ai/adapter-cloudflare` | 账户路径、REST/runner envelope 校验 | core、protocol-system-one |
+| `@system-one-ai/adapter-cloudflare` | 账户路径、REST/runner envelope 校验及独立 Workers 入口 | core、protocol-system-one、transport-fetch |
 | `@system-one-ai/adapter-vercel` | Evaluation v4 请求和响应 | core |
 | `@system-one-ai/adapter-llm` | 现有 LLM 协议、prompt、schema、答案转换 | core |
 | `@system-one-ai/decisions` | 动作、候选项及参数组合 | core |
@@ -37,7 +37,7 @@ graph TD
   Batch["batch"] --> Core
 ```
 
-core 不导入任何具体 adapter、transport 或供应商 SDK。adapter 之间不互相导入，也不发网络请求。`protocol-system-one` 只共享已经被三个服务使用的 wire codec，没有 endpoint、默认模型、认证或请求生命周期。
+core 不导入任何具体 adapter、transport 或供应商 SDK。adapter 之间不互相导入。REST adapter 只做编解码；Cloudflare 的独立 workers 入口实现 EvaluationClient，复用 transport-fetch 的响应和期限工具，调用原生 binding。`protocol-system-one` 只共享已经被三个服务使用的 wire codec，没有 endpoint、默认模型、认证或请求生命周期。
 
 core 仍保留当前 HTTP codec 契约中的 URL、headers 和配置类型，以及独立的 `core/http` 校验工具。它不调用 Fetch，不解析供应商特有字段。此次先明确代码所有权与执行边界，保持现有请求语义；如将来需要非 HTTP 执行，再根据具体调用场景调整契约。
 

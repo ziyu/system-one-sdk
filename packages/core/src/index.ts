@@ -1,7 +1,7 @@
 export { SystemOne, createSystemOne } from './client.js';
 export { choice, score, booleanQuestion, defineQuestions } from './questions.js';
 export {
-  APIError, ConfigurationError, ConnectionError, RequestAbortedError,
+  APIError, BindingError, ConfigurationError, ConnectionError, RequestAbortedError,
   ResponseValidationError, SystemOneError, TimeoutError, UnsupportedFeatureError, ValidationError,
 } from './errors.js';
 export type { ErrorCode } from './errors.js';

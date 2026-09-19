@@ -56,6 +56,11 @@ export async function checkPackage(name, format = 'esm') {
     assert.equal('llmAdapter' in core, false);
     assert.equal('systemOneAdapter' in core, false);
   }
+  if (name === 'adapter-cloudflare') {
+    const workers = await load('@system-one-ai/adapter-cloudflare/workers');
+    const nativeClient = workers.createCloudflareWorkers({ binding: { run: async () => Response.json(native) } });
+    assert.equal((await nativeClient.evaluate(request)).answers.on.probability, 0.9);
+  }
   if (name === 'batch') {
     const report = await pkg.evaluateMany(client, [{ id: 'one', request }]);
     assert.equal(report.items[0].status, 'fulfilled');

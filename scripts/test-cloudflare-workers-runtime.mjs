@@ -1,0 +1,125 @@
+import { buildOrder } from './workspaces.mjs';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Opt-in integration check: installs pinned tooling in an isolated temporary consumer.
+// Requires npm network access, but no Cloudflare credentials and makes no model calls.
+const root = fileURLToPath(new URL('../', import.meta.url));
+const temporary = await mkdtemp(path.join(tmpdir(), 'system-one-workers-'));
+const require = createRequire(import.meta.url);
+const env = { ...process.env, WRANGLER_SEND_METRICS: 'false', CLOUDFLARE_CF_FETCH_ENABLED: 'false' };
+const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+function run(command, args, cwd = temporary) {
+  return execFileSync(command, args, { cwd, env, encoding: 'utf8', stdio: 'pipe', timeout: 180_000, maxBuffer: 4 * 1024 * 1024 });
+}
+let mf;
+try {
+  await writeFile(path.join(temporary, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
+  const selected = new Map();
+  for (const name of ['adapter-cloudflare', 'decisions', 'policies', 'batch']) {
+    for (const workspace of buildOrder(name)) selected.set(workspace.manifest.name, workspace);
+  }
+  const tarballs = [];
+  for (const workspace of selected.values()) {
+    const [pack] = JSON.parse(run(npm, ['pack', '--ignore-scripts', '--json', '--pack-destination', temporary], workspace.cwd));
+    if (workspace.directory === 'adapter-cloudflare') {
+      for (const format of ['esm', 'cjs']) for (const extension of ['js', 'd.ts']) {
+        assert.ok(pack.files.some(file => file.path === `dist/${format}/workers.${extension}`));
+      }
+    }
+    tarballs.push(path.join(temporary, pack.filename));
+  }
+  console.log('Installing Wrangler 4.135.0 and independent package tarballs in an isolated consumer.');
+  run(npm, ['install', '--ignore-scripts', '--no-audit', '--no-fund', 'wrangler@4.135.0', ...tarballs]);
+  const consumerRequire = createRequire(path.join(temporary, 'package.json'));
+  const wranglerPackage = consumerRequire.resolve('wrangler/package.json');
+  const tooling = createRequire(wranglerPackage);
+  const { build } = tooling('esbuild');
+  const { Miniflare } = tooling('miniflare');
+  const wrangler = path.join(path.dirname(wranglerPackage), 'bin/wrangler.js');
+
+  // Actual installed ESM and CommonJS entry points, not package self-resolution.
+  await writeFile(path.join(temporary, 'package-smoke.mjs'), `
+    import assert from 'node:assert/strict';
+    import { createRequire } from 'node:module';
+    import * as esmCore from '@system-one-ai/core';
+    const require = createRequire(import.meta.url);
+    const cjsCore = require('@system-one-ai/core');
+    assert.equal('CloudflareWorkers' in esmCore, false);
+    assert.equal('CloudflareWorkers' in cjsCore, false);
+    assert.ok(!Object.keys(require.cache).some(file => file.endsWith('/workers.js')));
+    const esm = await import('@system-one-ai/adapter-cloudflare/workers');
+    const cjs = require('@system-one-ai/adapter-cloudflare/workers');
+    for (const [core, native] of [[esmCore, esm], [cjsCore, cjs]]) {
+      const client = native.createCloudflareWorkers({ binding: { run: async () => Response.json({ answers: { yes: { type: 'noul', noul: 0.9 } } }) } });
+      const result = await client.evaluate({ state: {}, questions: { yes: core.booleanQuestion('Yes?') } });
+      assert.equal(result.answers.yes.probability, 0.9);
+    }
+  `);
+  run(process.execPath, ['package-smoke.mjs']);
+  console.log('Installed tarball: ESM/CJS native entry and core isolation passed.');
+
+  // Wrangler emits an extensionless import for this entry; use the normal .ts Worker layout.
+  await writeFile(path.join(temporary, 'worker.ts'), 'export default { fetch() { return new Response("types"); } };\n');
+  await writeFile(path.join(temporary, 'wrangler.json'), JSON.stringify({ name: 'system-one-types-check', main: 'worker.ts', compatibility_date: '2026-09-18', ai: { binding: 'AI' } }));
+  run(process.execPath, [wrangler, 'types', 'worker-configuration.d.ts', '--config', 'wrangler.json']);
+  const typeConsumer = `
+    import { choice, type EvaluationClient } from '@system-one-ai/core';
+    import { createCloudflareWorkers } from '@system-one-ai/adapter-cloudflare/workers';
+    declare const env: Env;
+    // Env.AI and all Web APIs below come from Wrangler's actual generated runtime types.
+    const client = createCloudflareWorkers({ binding: env.AI, timeoutMs: 1500, maxRetries: 0 });
+    const common: EvaluationClient = client;
+    async function verify() {
+      const result = await client.evaluate({ state: {}, questions: { action: choice('Act', { run: null, stop: null }) } });
+      const action: 'run' | 'stop' = result.answers.action.choice;
+      // @ts-expect-error Installed declaration must preserve the closed choice union.
+      const invalid: 'fly' = result.answers.action.choice;
+      return [action, invalid];
+    }
+    void [common, verify];
+  `;
+  for (const extension of ['mts', 'cts']) await writeFile(path.join(temporary, `consumer.${extension}`), typeConsumer);
+  // Workers are bundled. Preserve/Bundler handles the runtime's export assignments
+  // and extensionless generated Worker references while keeping declaration checks on.
+  await writeFile(path.join(temporary, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
+    target: 'ES2022', module: 'Preserve', moduleResolution: 'Bundler', lib: ['ESNext'], types: [],
+    strict: true, skipLibCheck: false, noEmit: true,
+  }, files: ['worker-configuration.d.ts', 'consumer.mts', 'consumer.cts'] }));
+  run(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', 'tsconfig.json']);
+  console.log('Wrangler-generated Env.AI and Workers Web API types: bundled consumers passed without casts or DOM/Node globals.');
+
+  // Bundle an installed consumer so workerd runs the published layout rather than TS sources.
+  const fixture = await readFile(path.join(root, 'tests/workers/cloudflare-workers.mjs'), 'utf8');
+  const bundled = await build({ stdin: { contents: fixture, resolveDir: temporary, sourcefile: 'binding-fixture.mjs', loader: 'js' }, bundle: true, write: false, format: 'esm', platform: 'browser', target: 'es2022' });
+  // Miniflare shipped with this Wrangler uses the Build Output configuration schema.
+  mf = new Miniflare({ cf: false, workers: [{ config: {
+    type: 'worker', name: 'binding-fixture', compatibilityDate: '2026-09-18',
+    manifest: { mainModule: 'index.js', modulesRoot: temporary, modules: {
+      'index.js': { type: 'esm', contents: bundled.outputFiles[0].text },
+    } },
+  } }] });
+  for (const scenario of ['success', 'retry', 'cancel', 'timeout', 'invalid', 'oversized', 'parallel', 'composition']) {
+    const response = await mf.dispatchFetch(`http://localhost/${scenario}`);
+    const body = await response.text();
+    assert.equal(response.status, 200, `${scenario}: ${body}`);
+    assert.deepEqual(JSON.parse(body), { passed: scenario });
+    console.log(`workerd fixture: ${scenario} passed.`);
+  }
+  console.log('Workers checks passed. Fixture inference only: no Cloudflare account access or real model call was verified.');
+} catch (error) {
+  if (error && typeof error === 'object') {
+    if (error.stdout) process.stdout.write(String(error.stdout));
+    if (error.stderr) process.stderr.write(String(error.stderr));
+  }
+  throw error;
+} finally {
+  if (mf) await mf.dispose();
+  // Delete only the isolated consumer created by this script.
+  await rm(temporary, { recursive: true, force: true });
+}

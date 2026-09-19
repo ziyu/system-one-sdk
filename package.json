@@ -42,7 +42,8 @@
     "test:browser": "npm run examples:build && node --test tests/browser/*.test.mjs",
     "example:uncertainty": "npm run examples:build && node --env-file=.env .examples/examples/uncertainty.js",
     "example:batch": "npm run examples:build && node --env-file=.env .examples/examples/batch.js",
-    "test:live:llm": "node scripts/build-packages.mjs adapter-llm && node scripts/build-packages.mjs transport-fetch && node scripts/test-llm-live.mjs"
+    "test:live:llm": "node scripts/build-packages.mjs adapter-llm && node scripts/build-packages.mjs transport-fetch && node scripts/test-llm-live.mjs",
+    "test:workers": "npm run build && node scripts/test-cloudflare-workers-runtime.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.3",
