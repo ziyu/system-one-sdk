@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/protocol-system-one",
-  "version": "0.5.2",
+  "version": "0.6.0-rc.0",
   "description": "System One protocol-system-one.",
   "license": "MIT",
   "type": "module",
@@ -31,7 +31,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@system-one-ai/core": "^0.5.2"
+    "@system-one-ai/core": "^0.6.0-rc.0"
   },
   "publishConfig": {
     "access": "public",
