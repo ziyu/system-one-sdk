@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/adapter-cloudflare",
-  "version": "0.6.0-rc.0",
+  "version": "0.6.0",
   "description": "Cloudflare AI runner adapter.",
   "license": "MIT",
   "type": "module",
@@ -41,9 +41,9 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@system-one-ai/core": "^0.6.0-rc.0",
-    "@system-one-ai/protocol-system-one": "^0.6.0-rc.0",
-    "@system-one-ai/transport-fetch": "^0.6.0-rc.0"
+    "@system-one-ai/core": "^0.6.0",
+    "@system-one-ai/protocol-system-one": "^0.6.0",
+    "@system-one-ai/transport-fetch": "^0.6.0"
   },
   "publishConfig": {
     "access": "public",

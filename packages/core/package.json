@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/core",
-  "version": "0.6.0-rc.0",
+  "version": "0.6.0",
   "description": "Core contracts and evaluation client for System One decisions.",
   "license": "MIT",
   "type": "module",
