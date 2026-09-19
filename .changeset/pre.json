@@ -14,5 +14,7 @@
     "@system-one-ai/protocol-system-one": "0.5.2",
     "@system-one-ai/transport-fetch": "0.5.2"
   },
-  "changesets": []
+  "changesets": [
+    "modular-packages"
+  ]
 }
