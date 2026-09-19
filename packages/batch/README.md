@@ -6,4 +6,4 @@ Bounded concurrent evaluations with ordered results, cancellation and partial fa
 import { evaluateMany } from '@system-one-ai/batch';
 ```
 
-Requires Node.js 20+. This workspace is not yet published separately. Build from the repository with `npm run build --workspace @system-one-ai/batch`.
+Requires Node.js 20+. Build from the repository with `npm run build --workspace @system-one-ai/batch`.

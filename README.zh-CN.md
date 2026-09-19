@@ -15,7 +15,7 @@
 | `protocol-system-one` | 共用原生 boolean/noul 与响应编解码 | core |
 | `adapter-system-one` | TypeSafe 原生协议 | core、protocol-system-one |
 | `adapter-openrouter` | OpenRouter Decisions | core、protocol-system-one |
-| `adapter-cloudflare` | Cloudflare Jev REST 与 runner 包装 | core、protocol-system-one |
+| `adapter-cloudflare` | Cloudflare REST 与 Workers 原生 binding | core、protocol-system-one、transport-fetch |
 | `adapter-vercel` | Vercel Evaluation v4 | core |
 | `adapter-llm` | OpenAI Responses/Chat Completions、Anthropic Messages | core |
 | `decisions` | 动态候选和类型化动作参数 | core |
@@ -34,7 +34,7 @@ npm run check
 npm run test:package
 ```
 
-在消费项目中安装 `.artifacts/` 内所选包及其依赖。例如 LLM 只需 `system-one-ai-core-0.5.2.tgz`、`system-one-ai-transport-fetch-0.5.2.tgz`、`system-one-ai-adapter-llm-0.5.2.tgz`；原生 TypeSafe 还依赖 `protocol-system-one`。独立发布后可使用对应 npm 安装命令：
+在消费项目中安装 `.artifacts/` 内所选包及其依赖。例如 LLM 只需 `system-one-ai-core-<version>.tgz`、`system-one-ai-transport-fetch-<version>.tgz`、`system-one-ai-adapter-llm-<version>.tgz`；原生 TypeSafe 还依赖 `protocol-system-one`。独立发布后可使用对应 npm 安装命令：
 
 ```sh
 npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-system-one
@@ -137,6 +137,7 @@ LLM 文件包含 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`。真实测试按�
 - [文件/客服工作流](docs/decision-workflows.zh-CN.md)与[浏览器示例](docs/browser-decisions.zh-CN.md)
 - [Cloudflare Workers 原生 binding](docs/cloudflare-workers.zh-CN.md)（`@system-one-ai/adapter-cloudflare/workers`）
 - [自定义 adapter 示例](examples/custom-adapter.ts)
-- [按包发布](docs/releasing.md)：使用 `<包目录>-v<版本>` tag，根目录禁止发布
+- [版本与发布](docs/releasing.md)：Changesets Release PR、固定产物与整批验证；根目录禁止发布
+- [从 SDK 0.5.3 迁移](docs/migration-0.6.md)：包、入口与配置映射
 
 [MIT 许可证](LICENSE)。

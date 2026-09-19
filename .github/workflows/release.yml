@@ -1,56 +1,119 @@
 name: Release
-
 on:
   push:
-    tags: ['*-v*']
+    branches: [main]
+    paths: ['.changeset/release.json']
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Existing version tag to publish or resume, such as adapter-llm-v0.5.2'
-        required: true
+      commit:
+        description: 'Full source commit on main (empty means this workflow commit)'
         type: string
-
+      artifact-run-id:
+        description: 'Resume using this original Release run artifact; also supply its full commit'
+        type: string
 permissions:
   contents: read
-
-# Serialize releases, including manual retries. Never cancel an active publication.
+  actions: read
 concurrency:
   group: npm-and-github-release
   cancel-in-progress: false
-
 jobs:
-  release:
-    if: github.repository == 'ziyu/sytem-one-sdk'
+  prepare:
+    if: github.repository == 'ziyu/sytem-one-sdk' && !inputs.artifact-run-id
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE_COMMIT: ${{ inputs.commit || github.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ inputs.commit || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run test:package
+      - name: Check the same packed bytes in workerd
+        run: node scripts/test-cloudflare-workers-runtime.mjs --manifest .artifacts/package-manifest.json
+      - run: npm run release:prepare
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-${{ inputs.commit || github.sha }}
+          path: .artifacts/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+  consumers:
+    needs: prepare
+    if: ${{ always() && github.repository == 'ziyu/sytem-one-sdk' && (needs.prepare.result == 'success' || (needs.prepare.result == 'skipped' && inputs.artifact-run-id)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22', '24']
+    env:
+      RELEASE_COMMIT: ${{ inputs.commit || github.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ inputs.commit || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-${{ inputs.commit || github.sha }}
+          path: .artifacts/
+          run-id: ${{ inputs.artifact-run-id || github.run_id }}
+          github-token: ${{ github.token }}
+      - run: node scripts/release.mjs verify
+  publish:
+    needs: [prepare, consumers]
+    if: ${{ always() && needs.consumers.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: npm
     permissions:
       contents: write
+      actions: read
       id-token: write
     env:
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      RELEASE_COMMIT: ${{ inputs.commit || github.sha }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.commit || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
-      - name: Validate version, tag, and source branch
-        run: node scripts/release.mjs validate
-      - name: Install npm with trusted publishing support
-        run: npm install --global npm@11.17.0 --ignore-scripts
+      - run: npm install --global npm@11.17.0 --ignore-scripts
       - run: npm ci --ignore-scripts
-      - run: npm run check
-      - name: Build and test the exact package to publish
-        run: npm run test:package
-      - name: Publish to npm using OIDC and verify package integrity
-        run: node scripts/release.mjs publish
-      - name: Create GitHub Release and upload the verified package
-        run: node scripts/release.mjs github
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-${{ inputs.commit || github.sha }}
+          path: .artifacts/
+          run-id: ${{ inputs.artifact-run-id || github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Publish exact tarballs, verify npm consumers, then promote and tag
+        run: npm run release:publish
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: registry-verification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .artifacts/registry-verification.json
+          include-hidden-files: true
+          if-no-files-found: ignore

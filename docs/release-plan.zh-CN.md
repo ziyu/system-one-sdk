@@ -1,6 +1,6 @@
 # 下一次发布规划
 
-状态：实施中，2026-09-19。P0 已迁入 0.5.3 的 Workers 能力，231 项回归、类型检查和 8 项 workerd 场景通过；其余批次继续按下文实施。尚未发布 npm 包或创建远端 tag。现行操作说明仍见 [releasing.md](releasing.md)。
+状态：P0–P2 已实施并完成本地演练，2026-09-19。Changesets RC/稳定版本转换、整批发布与恢复保护、固定产物的 Node 20/22/24 消费检查、230 项回归、13 项场景和 8 项 workerd 检查通过；候选包的 7 次 TypeSafe 与 2 次 LLM 真实调用通过。尚未发布 npm 包或运行远端发布工作流。操作说明见 [releasing.md](releasing.md)，证据见 [validation.md](validation.md)。
 
 ## 1. 本次发布的定位与基线
 
@@ -16,7 +16,7 @@
 | npm 旧 SDK | `@system-one-ai/sdk@latest` 为 **0.5.3** |
 | 当前 11 个独立包名 | 公共 registry 均返回 404；这不等于已确认发布权限 |
 
-**首要阻塞项：当前分支没有完整覆盖已发布的 0.5.3。** 远端新增了 Cloudflare Workers 原生 binding、`BindingError`、共享 Cloudflare codec、示例、类型测试及 workerd 检查。先对齐这些变化，再冻结新版本。迁入实现时使用独立包结构，根目录继续保持 private。
+**已解决的首要差异：规划时开发分支没有完整覆盖已发布的 0.5.3。** 远端新增了 Cloudflare Workers 原生 binding、`BindingError`、共享 Cloudflare codec、示例、类型测试及 workerd 检查。先对齐这些变化，再冻结新版本。迁入实现时使用独立包结构，根目录继续保持 private。
 
 建议 Workers 能力归属 Cloudflare 包，通过 `@system-one-ai/adapter-cloudflare/workers` 独立入口提供，继续实现 `EvaluationClient`。REST 与原生 binding 保留各自执行方式，复用已有 codec 和必要工具。具体依赖边界在迁入时核对，不因发布而引入通用执行框架。
 
@@ -117,4 +117,4 @@ Changesets Release PR 成为统一入口后，停止通过任意 package tag 直
 
 后续开发统一要求：明确代码所属包；说明公开契约和兼容影响；附可复现验证；按需提供 changeset 和迁移说明。发布流程维护与库运行时改动分别提交，便于审查。
 
-下一步从 P0 开始。P0 完成前不冻结候选版本；P2 完成前不开始首批对外发布。
+下一步进入 P3：先确认逐包 npm scope/名称权限、Trusted Publisher 和 GitHub npm environment，再合并实现与 Release PR，发布 RC 到 next 并执行 registry 消费及真实模型验收。P0–P2 的实现和 dry-run 已完成；真实发布、稳定提升、公告和旧 SDK deprecation 尚未执行。

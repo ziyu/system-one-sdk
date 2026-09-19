@@ -1,53 +1,54 @@
-# Releasing workspace packages
+# Release operations
 
-The repository root is private and cannot be published. Every runtime package under `packages/` is independently versioned. The release workflow publishes one package selected by a tag such as `core-v0.5.2` or `adapter-llm-v0.6.0-rc.1`. Old `v*` SDK tags no longer trigger publication.
+Packages under `packages/` are independently versioned. The root is private. Changesets owns versions, dependency changes and package changelogs. No fixed/linked groups exist. The first batch is `0.6.0-rc.N`, then `0.6.0`; LLM remains one package.
 
-## CI and artifacts
+## Development and Release PR
 
-CI runs on Node.js 20, 22 and 24. It checks types, builds all packages, runs offline regression and workflow tests, then installs each package's tarball with only its dependency closure outside the repository. ESM/CJS runtime contracts and all installed declaration inference checks must pass. Neither CI nor releases read local credentials or call paid models.
+Use Node 24 and `npm ci --ignore-scripts`. Add a changeset with `npm run changeset` for consumer-visible changes. Patches fix compatible behavior, minors add compatible behavior; before 1.0 a breaking change requires a minor bump, a BREAKING note and migration instructions. Public helper subpaths and types follow the same policy.
 
-`npm run test:package` records workspace filenames and SHA-512 integrities in `.artifacts/package-manifest.json` only after every package passes. Release commands use these exact tarballs; they do not rebuild during publication.
+The Version packages workflow runs Changesets on main and opens a Release PR. `npm run version:packages` also updates the lockfile and `.changeset/release.json`, which names exactly the changed versions. Review this batch, dependency ranges and each package's CHANGELOG. Never edit package versions or the batch manually. Pure documentation/CI changes may omit a changeset with a reason.
 
-## npm setup
+The initial changeset and prerelease state are committed, but version generation happens in the Release PR. Another changeset produces the next RC. To leave RC mode, run `npm run changeset -- pre exit`, commit that state, and merge the generated stable Release PR. Stable tarballs are new bytes and must pass their own verification.
 
-Configure npm Trusted Publishing separately for each package, with GitHub Actions publisher, owner `ziyu`, repository `sytem-one-sdk`, workflow `release.yml`, and environment `npm`. Create the GitHub environment with that name. The workflow uses Node.js 24, npm 11.17.0 and OIDC; no stored `NPM_TOKEN` is used.
+## Frozen artifacts and release gate
 
-Package metadata must retain the repository URL and its own `repository.directory`. For packages that do not yet exist on npm, complete the initial package/bootstrap setup permitted by your npm account before relying on OIDC. No package has been published by the workspace refactor. See [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) for current requirements.
+Merging a Release PR changes `release.json` and starts one Release workflow for the entire batch. Package tags do not trigger publication.
 
-## Prepare a release
+1. Node 24 runs types, regression/scenario tests and isolated tarball ESM/CJS/type checks. workerd checks the same packed bytes.
+2. `release:prepare` verifies clean source on main, lockfile/versions/changelogs, receipt and hashes. It installs unchanged dependencies from npm at compatible minimum versions and tests combinations with the new artifacts. If a changed dependency's range also allows an older version, that lower-bound combination is checked separately.
+3. `.artifacts/release-manifest.json` freezes commit, lock digest, Node/npm versions, package dependency graphs, SHA-512/SHA-256, changelog notes and verification receipt. Tarballs and manifest are saved for 90 days.
+4. Node 20/22/24 install and verify that exact artifact set, with no rebuild.
+5. The protected `npm` job downloads those artifacts, preflights every existing version/tag and publishes missing packages in dependency order using OIDC/provenance. All uploads initially use `next`.
+6. All packages are installed from the public registry at the recorded exact versions, integrity checked, and exercised as ESM/CJS/type consumers. Only then are stable versions promoted to `latest`; an already newer `latest` is never downgraded. RCs stay on `next`.
+7. Per-package tags are created at the source commit and GitHub releases use that package's changelog. The matching tarball, manifest, checksums and registry verification report are attached.
 
-Choose an unpublished version for the affected package. For example:
+Internal packages currently have no third-party runtime dependencies. The resolver deliberately enforces one shared version per internal package and fails on incompatible ranges. Adding an external runtime dependency requires extending artifact verification first. Never silently drop dependency verification to make a release pass.
 
-```sh
-npm version patch --workspace @system-one-ai/adapter-llm --no-git-tag-version
-npm install --ignore-scripts
-npm run check
-npm run test:package
-```
+Run `npm run test:release` for a disposable, non-publishing rehearsal of the initial RC and stable Changesets transitions, builds, packages, consumer checks, and tamper rejection. The temporary checkout and RC artifacts are retained for inspection/live testing. Offline unit checks also simulate partial publication and recovery. After the initial release, update this first-release rehearsal's expected versions when changing the release baseline.
 
-Update dependent package ranges when changing a shared contract, especially across a major version. Commit the manifest and lockfile changes, merge them into `main`, and tag that commit with the package directory and its exact version:
+## npm and GitHub setup
 
-```sh
-git tag -a adapter-llm-v0.5.3 -m "Release adapter-llm 0.5.3"
-git push origin adapter-llm-v0.5.3
-```
+Enable GitHub Actions to create pull requests. Create a protected GitHub environment named `npm`; configure npm Trusted Publishing for **each** package with owner `ziyu`, repository `sytem-one-sdk`, workflow `release.yml`, environment `npm`. Publication uses Node 24 and npm 11.17.0. No long-lived npm token is stored in the workflow.
 
-The version above is illustrative; it must match `packages/adapter-llm/package.json` and the workspace entry in the lockfile. The release guard also requires the tagged commit to match the checkout, belong to `origin/main`, and have clean tracked source. Private packages and unexpected repository/registry settings are rejected.
+Check scope ownership and package-name permissions separately. Public registry 404 is not evidence of publish permission. If a first package cannot configure OIDC before it exists, a maintainer must bootstrap it once using the exact verified tarball and `next`, then enable Trusted Publishing and resume the same batch. This first publication remains a separate authorized operation. See [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/).
 
-Publish dependencies first: core; protocol-system-one and transport-fetch; adapters and composition packages. A package release verifies that every local dependency in its closure is already on npm with the exact version and SHA-512 integrity tested by that run. It never publishes dependencies automatically. If an unchanged dependency's bytes differ from its published artifact, resolve the build/source mismatch or release a new dependency version before proceeding.
+## Recovery
 
-The workflow publishes the selected tarball with provenance, verifies npm's SHA-512 integrity, then creates a GitHub Release with the tarball and `SHA256SUMS`. Stable releases use `latest`; prereleases use `next`. Release runs are serialized. Publish versions in ascending order for each package.
-
-## Resume a failed release
-
-Fix the external configuration and rerun the failed workflow, or dispatch the existing tag:
+Prefer **Re-run failed jobs**: successful prepare jobs retain the original artifact. If manually resuming, supply both the original full commit and original run ID:
 
 ```sh
-gh workflow run release.yml --repo ziyu/sytem-one-sdk --ref main -f tag=adapter-llm-v0.5.3
+gh workflow run release.yml --repo ziyu/sytem-one-sdk --ref main \
+  -f commit=FULL_SOURCE_SHA -f artifact-run-id=ORIGINAL_RUN_ID
 ```
 
-Tags are never created or moved by the workflow. An existing npm version is reused only when its integrity matches the tested tarball exactly; different contents require a new version. After publication, the script waits for public metadata for up to 61 attempts with five-second delays and bounded request time. It does not repeat `npm publish` during that wait. GitHub Release creation requires successful npm verification.
+The workflow downloads `release-FULL_SOURCE_SHA`, verifies its source, receipt and hashes, and never rebuilds it in the publisher. Existing candidate versions are reused only if npm SHA-512 matches. Unchanged dependencies use their registry SHA-512; their locally rebuilt bytes are irrelevant. A conflicting version or Git tag blocks the entire batch before new uploads. Never replace a published version or move a tag.
 
-## Live verification
+An npm upload can succeed before metadata appears. The job polls bounded requests for up to 61 attempts with five-second delays, never repeating publication during that wait. A later retry rechecks metadata. A failed consumer check leaves `latest` unchanged and creates no new package tags. Partial stable promotion/tag creation is safe to resume. npm has no atomic multi-package publish or tag update; announce completion only after the workflow succeeds. Preserve the original artifacts beyond retention if recovery is still needed.
 
-Run `npm run test:live:llm -- /path/to/llm.env` for an OpenAI-compatible LLM service, or the dedicated TypeSafe/OpenRouter/Cloudflare live commands with their credentials. These are separate from publication, consume actual usage, and keep credentials and generated reports out of npm and Git.
+## Real model checks and migration
+
+`npm run test:release:live -- /path/to/typesafe.env /path/to/llm.env` tests the frozen manifest in an isolated consumer, using seven native TypeSafe requests and two LLM requests. Run from the candidate checkout after `release:prepare`. Supply only the first env file to check TypeSafe alone. Reports include source/manifest digests, exact package integrities, models, times and results. Credentials are never copied into artifacts. These checks are explicit, can incur model usage, and do not run in ordinary PR CI.
+
+For the RC, run these checks again on a manifest with `--registry` after publication to test npm-installed bytes. Cloudflare's workerd tests use fixture inference; real Cloudflare inference needs separate credentials. See [0.5.3 migration](migration-0.6.md) for import mappings and runnable examples.
+
+After every stable package is available and verified, authorize the migration announcement and old SDK deprecation separately. Keep historical SDK versions installable. Fix published bugs with a new version; if necessary, restore `latest` to a previously verified stable version manually.

@@ -1,0 +1,18 @@
+{
+  "mode": "pre",
+  "tag": "rc",
+  "initialVersions": {
+    "@system-one-ai/adapter-cloudflare": "0.5.2",
+    "@system-one-ai/adapter-llm": "0.5.2",
+    "@system-one-ai/adapter-openrouter": "0.5.2",
+    "@system-one-ai/adapter-system-one": "0.5.2",
+    "@system-one-ai/adapter-vercel": "0.5.2",
+    "@system-one-ai/batch": "0.5.2",
+    "@system-one-ai/core": "0.5.2",
+    "@system-one-ai/decisions": "0.5.2",
+    "@system-one-ai/policies": "0.5.2",
+    "@system-one-ai/protocol-system-one": "0.5.2",
+    "@system-one-ai/transport-fetch": "0.5.2"
+  },
+  "changesets": []
+}

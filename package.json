@@ -43,11 +43,19 @@
     "example:uncertainty": "npm run examples:build && node --env-file=.env .examples/examples/uncertainty.js",
     "example:batch": "npm run examples:build && node --env-file=.env .examples/examples/batch.js",
     "test:live:llm": "node scripts/build-packages.mjs adapter-llm && node scripts/build-packages.mjs transport-fetch && node scripts/test-llm-live.mjs",
-    "test:workers": "npm run build && node scripts/test-cloudflare-workers-runtime.mjs"
+    "test:workers": "npm run build && node scripts/test-cloudflare-workers-runtime.mjs",
+    "changeset": "changeset",
+    "version:packages": "node scripts/version.mjs",
+    "release:prepare": "node scripts/release.mjs prepare",
+    "release:publish": "node scripts/release.mjs publish",
+    "test:release": "node scripts/test-release.mjs",
+    "test:release:live": "node scripts/test-release-live.mjs"
   },
   "devDependencies": {
+    "@changesets/cli": "2.31.1",
     "@types/node": "22.20.3",
     "playwright": "1.63.0",
+    "semver": "7.8.5",
     "typescript": "5.9.3"
   },
   "private": true

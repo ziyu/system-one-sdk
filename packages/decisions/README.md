@@ -6,4 +6,4 @@ Typed candidates and action parameters over an EvaluationClient.
 import { choiceFrom, defineDecision } from '@system-one-ai/decisions';
 ```
 
-Requires Node.js 20+. This workspace is not yet published separately. Build from the repository with `npm run build --workspace @system-one-ai/decisions`.
+Requires Node.js 20+. Build from the repository with `npm run build --workspace @system-one-ai/decisions`.

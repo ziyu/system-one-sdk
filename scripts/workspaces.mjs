@@ -9,7 +9,7 @@ export const workspaces = readdirSync(path.join(root, 'packages')).map(directory
 });
 
 /** Include local dependencies first, using package manifests as the only package list. */
-export function buildOrder(selected) {
+export function buildOrder(selected, items = workspaces) {
   const result = [];
   const visiting = new Set();
   const visited = new Set();
@@ -19,14 +19,14 @@ export function buildOrder(selected) {
     if (visited.has(workspace)) return;
     visiting.add(workspace);
     for (const dependency of Object.keys(workspace.manifest.dependencies ?? {})) {
-      const local = workspaces.find(item => item.manifest.name === dependency);
+      const local = items.find(item => item.manifest.name === dependency);
       if (local) visit(local);
     }
     visiting.delete(workspace);
     visited.add(workspace);
     result.push(workspace);
   }
-  if (selected) visit(workspaces.find(item => item.directory === selected || item.manifest.name === selected));
-  else for (const workspace of workspaces) visit(workspace);
+  if (selected) visit(items.find(item => item.directory === selected || item.manifest.name === selected));
+  else for (const workspace of items) visit(workspace);
   return result;
 }

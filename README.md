@@ -15,7 +15,7 @@ The repository is a private npm workspace. Runtime code lives in independently p
 | `protocol-system-one` | Shared native boolean/noul and response codecs | core |
 | `adapter-system-one` | TypeSafe native protocol | core, protocol-system-one |
 | `adapter-openrouter` | OpenRouter Decisions | core, protocol-system-one |
-| `adapter-cloudflare` | Cloudflare Jev REST and runner envelopes | core, protocol-system-one |
+| `adapter-cloudflare` | Cloudflare REST and native Workers binding | core, protocol-system-one, transport-fetch |
 | `adapter-vercel` | Vercel Evaluation v4 | core |
 | `adapter-llm` | OpenAI Responses/Chat Completions and Anthropic Messages | core |
 | `decisions` | Dynamic candidates and typed action parameters | core |
@@ -34,7 +34,7 @@ npm run check
 npm run test:package
 ```
 
-In a consuming project, install only the chosen package closure from `.artifacts/`. For example, LLM requires `system-one-ai-core-0.5.2.tgz`, `system-one-ai-transport-fetch-0.5.2.tgz` and `system-one-ai-adapter-llm-0.5.2.tgz`. Native TypeSafe also requires the `protocol-system-one` tarball. After independent publication, the equivalent installation is:
+In a consuming project, install only the chosen package closure from `.artifacts/`. For example, LLM requires `system-one-ai-core-<version>.tgz`, `system-one-ai-transport-fetch-<version>.tgz` and `system-one-ai-adapter-llm-<version>.tgz`. Native TypeSafe also requires the `protocol-system-one` tarball. After independent publication, the equivalent installation is:
 
 ```sh
 npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-system-one
@@ -137,6 +137,7 @@ See [verification records](docs/validation.md) for current and historical eviden
 - [File/support workflows](docs/decision-workflows.md) and [browser example](docs/browser-decisions.md)
 - [Native Cloudflare Workers binding](docs/cloudflare-workers.md) (`@system-one-ai/adapter-cloudflare/workers`)
 - [Custom adapter example](examples/custom-adapter.ts)
-- [Per-package releases](docs/releasing.md): `<package-directory>-v<version>` tags; private root is never published
+- [Versions and releases](docs/releasing.md): Changesets Release PRs, fixed artifacts and batch verification
+- [Migrate from SDK 0.5.3](docs/migration-0.6.md): package, entry point and configuration mappings
 
 [MIT License](LICENSE).

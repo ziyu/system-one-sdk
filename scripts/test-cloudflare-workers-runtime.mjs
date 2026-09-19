@@ -25,7 +25,13 @@ try {
     for (const workspace of buildOrder(name)) selected.set(workspace.manifest.name, workspace);
   }
   const tarballs = [];
-  for (const workspace of selected.values()) {
+  const manifestArg = process.argv.indexOf('--manifest');
+  const testedPackages = manifestArg < 0 ? null : JSON.parse(await readFile(path.resolve(process.argv[manifestArg + 1]), 'utf8')).packages;
+  if (testedPackages) {
+    assert.ok(testedPackages.some(pkg => pkg.name === '@system-one-ai/adapter-cloudflare'), 'Manifest must include the Workers package.');
+    for (const pkg of testedPackages) tarballs.push(pkg.filename ? path.resolve('.artifacts', pkg.filename) : `${pkg.name}@${pkg.version}`);
+  }
+  for (const workspace of testedPackages ? [] : selected.values()) {
     const [pack] = JSON.parse(run(npm, ['pack', '--ignore-scripts', '--json', '--pack-destination', temporary], workspace.cwd));
     if (workspace.directory === 'adapter-cloudflare') {
       for (const format of ['esm', 'cjs']) for (const extension of ['js', 'd.ts']) {
@@ -36,6 +42,13 @@ try {
   }
   console.log('Installing Wrangler 4.135.0 and independent package tarballs in an isolated consumer.');
   run(npm, ['install', '--ignore-scripts', '--no-audit', '--no-fund', 'wrangler@4.135.0', ...tarballs]);
+  if (testedPackages) {
+    const lock = JSON.parse(await readFile(path.join(temporary, 'package-lock.json'), 'utf8'));
+    for (const pkg of testedPackages) {
+      assert.equal(lock.packages[`node_modules/${pkg.name}`]?.version, pkg.version);
+      assert.equal(lock.packages[`node_modules/${pkg.name}`]?.integrity, pkg.integrity);
+    }
+  }
   const consumerRequire = createRequire(path.join(temporary, 'package.json'));
   const wranglerPackage = consumerRequire.resolve('wrangler/package.json');
   const tooling = createRequire(wranglerPackage);

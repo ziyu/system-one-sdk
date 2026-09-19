@@ -2,6 +2,25 @@
 
 本文件保留当前 workspace 验证及历史 SDK 发布记录；不同版本的真实请求分别记录。
 
+## 2026-09-19 规范发布流程与 RC 产物演练
+
+Changesets 2.31.1 在仓库外的临时 checkout 实际生成 11 个 `0.6.0-rc.0` 包、逐包 changelog、内部 RC 依赖、lockfile 和批次清单；退出预发布模式后生成 `0.6.0` 及稳定依赖。演练候选提交为 `6630425a01012dfdcafdbb73ed4e274f592db0f5`，属于临时仓库，不是远端已发布 tag。主工作区保留初始 changeset，由 Release PR 正式生成版本。
+
+使用 Node 24.21.0 / npm 11.17.0 构建并冻结同一批 tarball：230 项回归、13 项场景、类型检查和 ESM/CJS 构建通过；11 个包在 Node 20.20.2、22.23.2、24.21.0 分别隔离安装，ESM/CJS 契约与声明推导检查全部通过。Wrangler 4.135.0 的真实生成类型与 workerd 的 8 项场景也通过，使用的仍是这批固定 tarball。GitHub Actions 配置通过 actionlint 1.7.12。
+
+发布离线测试覆盖整批预检、依赖顺序、中途失败后的幂等续跑、已发布依赖使用 registry 原始摘要、最低兼容依赖、RC 范围、循环依赖、版本/仓库/锁文件保护、失败时禁止稳定 tag 提升，以及不降级已有 latest。演练另外实测篡改 tarball 被拒绝、dry-run 清单不能发布。
+
+实际从上述 tarball 安装到仓库外的消费项目，再使用主分支 `.env` 和用户提供的 LLM 文件调用真实服务：
+
+| 服务 | 请求 | 结果 |
+| --- | --- | --- |
+| TypeSafe `jev-1.13.0` | 4 项 choice/score/boolean + 3 项 decisions/policies/batch | 7 次 HTTP 200，无重试；已知语义、分布、评分和原对象映射断言全部通过 |
+| DeepSeek `deepseek-flash` | probabilities、discrete | 2 次 HTTP 200，无重试；choice/boolean/score 断言全部通过 |
+
+首次并发启动的 live 测试进程在输出结果前以 137 退出；单独重跑后上述 9 次调用全部通过。Cloudflare 仅验证 workerd fixture，未声称真实 Cloudflare 推理。GitHub 远端工作流、scope 发布权限和 OIDC 尚未实际执行；未发布 npm 包、推送或创建远端 tag。
+
+完整候选包、清单、SHA256SUMS、脱敏模型报告与验证日志保存在 `.artifacts/release-rc.0-rehearsal/`；`release-live.json` 绑定候选提交、manifest SHA-256 和每个包的 SHA-512。密钥未写入源码、报告或 tarball。
+
 ## 2026-09-19 主分支配置的原生 System One 实测
 
 配置直接读取主分支工作目录 /Users/ziyu/Work/projs/sytem-one-sdk/.env；测试执行的是当前拆分后的独立包。配置模型为 jev-latest，服务为 TypeSafe 官方接口，7 次响应均返回实际模型 jev-1.13.0、HTTP 200，均只尝试 1 次，未重试。
