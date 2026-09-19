@@ -63,7 +63,7 @@ export function buildHeaders(adapter: SystemOneAdapter, prepared: PreparedReques
     ? headersFrom(adapter.authenticate(key))
     : headersFrom(key === null ? undefined : { authorization: `Bearer ${key}` });
   auth.forEach((value, name) => headers.set(name, value));
-  const reserved = new Set(['authorization', 'host', 'content-length', ...headers.keys()]);
+  const reserved = new Set(['authorization', 'host', 'content-length', ...headers.keys(), ...auth.keys()]);
   for (const extra of custom) {
     headersFrom(extra).forEach((value, name) => {
       if (reserved.has(name)) throw new ConfigurationError(`Header ${name} is managed by the SDK or adapter and cannot be overridden.`);

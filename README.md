@@ -330,6 +330,27 @@ To migrate from 0.1.0, remove the `protocol` setting. Vercel users should import
 
 Switching only the URL and key requires the service to support the same protocol, question types, and model capabilities. Future providers may use different authentication, paths, or fields. Implement those differences once in an adapter while retaining the same `evaluate` calls in application code. The SDK does not guess that an unknown protocol is an OpenAI chat endpoint.
 
+## LLM-backed adapter
+
+The optional `adapters/llm` export ports the Python adapter's core behavior to the existing `SystemOne` client. It builds a per-request JSON schema from the questions, calls OpenAI Responses or Chat Completions, or Anthropic Messages, and converts probability maps or discrete answers into the normal SDK result types. It uses Fetch and adds no provider SDK dependency.
+
+```ts
+import { SystemOne, choice, llmAdapter } from '@system-one-ai/sdk';
+
+const client = new SystemOne({
+  adapter: llmAdapter({ provider: 'openai', llmAnswerMode: 'probabilities', structuredOutputs: true }),
+  apiKey: process.env.OPENAI_API_KEY!,
+  model: 'gpt-4o-mini',
+});
+
+const result = await client.evaluate({
+  state: 'The customer wants a refund for a duplicate charge.',
+  questions: { action: choice('What should support do?', { refund: 'Refund', investigate: 'Investigate' }) },
+});
+```
+
+OpenAI uses Responses on `api.openai.com` and Chat Completions for custom base URLs unless `api` is set explicitly. Anthropic sends `x-api-key`, `anthropic-version`, and `output_config.format`. The regular SDK timeout, cancellation, transport retries, answer validation, decisions, policies, and batch helpers continue to apply.
+
 ## Request controls and errors
 
 ```ts

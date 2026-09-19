@@ -330,6 +330,27 @@ const gateway = new SystemOne({
 
 “修改地址和密钥即可切换”以服务兼容已支持的协议、问题类型和模型能力为前提。任意未来供应商可能使用不同的鉴权、路径或字段；这类差异通过适配器接入一次，业务侧仍使用同一个 `evaluate`。SDK 不会把未知协议猜成 OpenAI 聊天接口。
 
+## LLM backed adapter
+
+可选入口 `adapters/llm` 将 Python 适配器的核心行为接入现有 `SystemOne` 客户端：根据每次请求的问题生成 JSON schema，调用 OpenAI Responses/Chat Completions 或 Anthropic Messages，再把概率分布或离散答案转换成 SDK 统一的结果。实现使用 Fetch，不新增供应商 SDK 依赖。
+
+```ts
+import { SystemOne, choice, llmAdapter } from '@system-one-ai/sdk';
+
+const client = new SystemOne({
+  adapter: llmAdapter({ provider: 'openai', llmAnswerMode: 'probabilities', structuredOutputs: true }),
+  apiKey: process.env.OPENAI_API_KEY!,
+  model: 'gpt-4o-mini',
+});
+
+const result = await client.evaluate({
+  state: '客户因重复扣款申请退款。',
+  questions: { action: choice('客服应如何处理？', { refund: '退款', investigate: '调查' }) },
+});
+```
+
+OpenAI 在 `api.openai.com` 默认使用 Responses，自定义 base URL 默认使用 Chat Completions，也可以显式传 `api`。Anthropic 会发送 `x-api-key`、`anthropic-version` 和 `output_config.format`。SDK 原有的超时、取消、传输重试、答案校验、decisions、policies 和 batch 辅助模块都继续可用。
+
 ## 请求控制与错误
 
 ```ts

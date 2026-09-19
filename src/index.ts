@@ -1,6 +1,7 @@
 export { SystemOne, createSystemOne } from './client.js';
 export { choice, score, booleanQuestion, defineQuestions } from './questions.js';
 export { systemOneAdapter } from './adapters/system-one.js';
+export { llmAdapter, llmBackedAdapter, createLlmAdapter, createLLMAdapter } from './adapters/llm.js';
 export {
   SystemOneError, ConfigurationError, ValidationError, UnsupportedFeatureError,
   ResponseValidationError, APIError, ConnectionError, TimeoutError, RequestAbortedError,
@@ -12,3 +13,4 @@ export type {
   Answer, AnswerFor, Answers, Usage, Rounding, EvaluateRequest, RequestOptions, EvaluationResult, EvaluationClient,
   AdapterContext, PreparedRequest, ProviderResponse, SystemOneAdapter, Fetch, ApiKey, SystemOneOptions,
 } from './types.js';
+export type { LlmProvider, LlmAnswerMode, LlmApi, LlmAdapterOptions, LLMAdapterOptions } from './adapters/llm.js';
