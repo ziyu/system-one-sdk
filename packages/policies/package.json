@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/policies",
-  "version": "0.6.0-rc.0",
+  "version": "0.6.0",
   "description": "System One policies.",
   "license": "MIT",
   "type": "module",
@@ -31,7 +31,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@system-one-ai/core": "^0.6.0-rc.0"
+    "@system-one-ai/core": "^0.6.0"
   },
   "publishConfig": {
     "access": "public",
