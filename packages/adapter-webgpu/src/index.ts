@@ -344,9 +344,3 @@ export { createBrowserClient, createBrowserRunner } from './browser.js';
 export type { BrowserClient, BrowserClientOptions, BrowserDriverContext, BrowserInferenceDevice, BrowserModelDriver, BrowserModelRunner, BrowserRunnerOptions } from './browser.js';
 export { createLocalClient } from '@system-one-ai/adapter-local';
 export type { LocalEvaluationRequest, LocalModelRunner, LocalRunnerOptions } from '@system-one-ai/adapter-local';
-
-export { createLayaDriver, createLayaBrowserClient, createLayaBrowserRunner, createLayaWebGPUClient, createLayaWebGPURunner } from './laya.js';
-export type {
-  LayaBrowserClient, LayaBrowserOptions, LayaBrowserRunner, LayaInferenceDevice,
-  LayaManifest, LayaTokenizer, LayaProgress, LayaWebGPUOptions, LayaWebGPUClient, LayaWebGPURunner,
-} from './laya.js';

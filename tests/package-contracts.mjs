@@ -32,14 +32,18 @@ export async function checkPackage(name, format = 'esm') {
     return;
   }
   if (name === 'model-laya') {
+    const browser = await load('@system-one-ai/model-laya/browser');
+    const node = await load('@system-one-ai/model-laya/node');
     assert.equal(typeof pkg.parseLayaManifest, 'function');
     assert.equal(typeof pkg.prepareLayaRow, 'function');
     assert.equal(typeof pkg.layaAnswer, 'function');
+    assert.equal(typeof browser.createLayaDriver, 'function');
+    assert.equal(typeof node.createLayaOnnxModel, 'function');
     return;
   }
   if (name === 'runtime-onnx-node') {
     assert.equal(typeof pkg.createOnnxDriver, 'function');
-    assert.equal(typeof pkg.createLayaOnnxModel, 'function');
+    assert.equal(pkg.createLayaOnnxModel, undefined);
     return;
   }
   if (name === 'evaluation') {
@@ -53,11 +57,9 @@ export async function checkPackage(name, format = 'esm') {
     assert.equal(typeof pkg.createBrowserClient, 'function');
     assert.equal(typeof pkg.createBrowserRunner, 'function');
     assert.equal(typeof pkg.createGGUFDriver, 'function');
-    assert.equal(typeof pkg.createLayaDriver, 'function');
     assert.equal(typeof pkg.createOpenJevBrowserClient, 'function');
     assert.equal(typeof pkg.createOpenJevWebGPUClient, 'function');
-    assert.equal(typeof pkg.createLayaBrowserClient, 'function');
-    assert.equal(typeof pkg.createLayaWebGPUClient, 'function');
+    assert.equal(pkg.createLayaDriver, undefined);
     assert.equal(pkg.OPENJEV_MODELS['minicpm5-2b'].url.includes('huggingface.co'), true);
     return;
   }

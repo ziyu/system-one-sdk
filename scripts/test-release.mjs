@@ -10,6 +10,7 @@ import { root } from './workspaces.mjs';
 const directory = await mkdtemp(path.join(tmpdir(), 'system-one-release-'));
 const run = (program, args) => execFileSync(program, args, { cwd: directory, stdio: 'inherit', env: { ...process.env, HUSKY: '0' } });
 const json = async file => JSON.parse(await readFile(path.join(directory, file), 'utf8'));
+const tags = execFileSync('git', ['tag', '--list'], { cwd: root, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
 console.log(`Release rehearsal: ${directory}`);
 // Copy tracked and untracked source without secrets, generated output or workspace links.
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
@@ -22,6 +23,7 @@ run('git', ['config', 'user.name', 'Release rehearsal']);
 run('git', ['config', 'user.email', 'rehearsal@example.invalid']);
 run('git', ['add', '.']);
 run('git', ['commit', '-qm', 'Release rehearsal source']);
+for (const tag of tags) run('git', ['tag', tag]);
 run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund']);
 const stable = process.argv.includes('--stable');
 if (stable) {
@@ -50,7 +52,9 @@ run('npm', ['run', 'test:package']);
 run('node', ['scripts/release.mjs', 'prepare', '--dry-run']);
 // A corrupted artifact must fail the production manifest verifier before any publication.
 const release = await json('.artifacts/release-manifest.json');
-const tarball = path.join(directory, '.artifacts', release.packages[0].filename);
+const artifact = release.packages.find(pkg => pkg.filename);
+assert.ok(artifact?.filename, 'Release rehearsal did not produce a package tarball.');
+const tarball = path.join(directory, '.artifacts', artifact.filename);
 const original = await readFile(tarball);
 await writeFile(tarball, Buffer.concat([original, Buffer.from('tampered')]));
 assert.throws(() => execFileSync('node', ['scripts/release.mjs', 'verify'], { cwd: directory, stdio: 'pipe' }), error => String(error.stderr).includes('Tested tarball has changed'));

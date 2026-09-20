@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createNativeClient } from '@system-one-ai/adapter-local';
-import { createLayaOnnxModel, createOnnxDriver } from '@system-one-ai/runtime-onnx-node';
+import { createOnnxDriver } from '@system-one-ai/runtime-onnx-node';
+import { createLayaOnnxModel } from '@system-one-ai/model-laya/node';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifestPath = path.resolve(process.argv[2] ?? path.join(root, '.artifacts/laya/laya.json'));

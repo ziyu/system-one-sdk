@@ -1,4 +1,5 @@
-import { createBrowserClient, createLayaDriver } from '@system-one-ai/adapter-webgpu';
+import { createBrowserClient } from '@system-one-ai/adapter-webgpu';
+import { createLayaDriver } from '@system-one-ai/model-laya/browser';
 
 const element = id => document.getElementById(id);
 let client;

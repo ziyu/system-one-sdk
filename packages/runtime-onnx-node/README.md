@@ -1,30 +1,23 @@
 # @system-one-ai/runtime-onnx-node
 
-Run local System One ONNX models inside the Node.js process. There is no Python environment, subprocess, HTTP server, or sidecar.
+Run arbitrary ONNX model plugins inside the Node.js process. This package owns ONNX Runtime session lifecycle, device selection, cancellation and disposal; it does not depend on any concrete model package.
 
-Install the native ONNX runtime alongside this package:
+Install the native runtime alongside it:
 
 ```sh
 npm install @system-one-ai/core @system-one-ai/adapter-local @system-one-ai/runtime-onnx-node onnxruntime-node
 ```
 
-The stable client remains model-agnostic:
-
 ```ts
 import { createNativeClient } from '@system-one-ai/adapter-local';
-import { createOnnxDriver, createLayaOnnxModel } from '@system-one-ai/runtime-onnx-node';
+import { createOnnxDriver } from '@system-one-ai/runtime-onnx-node';
+import { myModel } from './my-model.js';
 
 const client = await createNativeClient({
-  driver: createOnnxDriver({
-    model: createLayaOnnxModel({ manifestPath: './models/laya/laya.json' }),
-  }),
+  driver: createOnnxDriver({ model: myModel }),
 });
 ```
 
-Laya tokenization additionally needs `@huggingface/transformers`. Install it when using `createLayaOnnxModel()` without an injected tokenizer.
+A model family implements `OnnxModelPlugin` and supplies its model path, supported question types, session validation and evaluation logic. Laya is one optional implementation, exported from `@system-one-ai/model-laya/node`.
 
-Large ONNX exports may keep weights in external data files. The Node binding resolves those files from the ONNX model path, so the Laya plugin leaves them on disk instead of reading multi-gigabyte weights into JavaScript memory.
-
-CPU is the portable default for `onnxruntime-node`. Set `device: 'coreml'` on macOS to request CoreML with CPU fallback for unsupported graph nodes, or pass an explicit `executionProviders` list for advanced ONNX Runtime configurations. The package does not silently select CUDA or DirectML because those providers are not available on every machine.
-
-`createOnnxDriver()` accepts any `OnnxModelPlugin`, so future System One ONNX model families can reuse the same runtime and native client API.
+CPU is the portable default for `onnxruntime-node`. Set `device: 'coreml'` on macOS to request CoreML with CPU fallback for unsupported graph nodes, or pass an explicit `executionProviders` list for advanced configurations. The package does not silently select CUDA or DirectML because those providers are not available on every machine.

@@ -154,8 +154,8 @@ try {
   } else if (!values.probe) {
     const manifestUrl = `${base}/${path.relative(root, manifest).split(path.sep).join('/')}`;
     report.parity = await bounded(page.evaluate(async manifestUrl => {
-      const [{ createBrowserClient, createLayaDriver }, { prepareLayaRow }, { PreTrainedTokenizer }, ort] = await Promise.all([
-        import('@system-one-ai/adapter-webgpu'), import('/packages/adapter-webgpu/dist/esm/laya-format.js'),
+      const [{ createBrowserClient }, { createLayaDriver }, { prepareLayaRow }, { PreTrainedTokenizer }, ort] = await Promise.all([
+        import('@system-one-ai/adapter-webgpu'), import('@system-one-ai/model-laya/browser'), import('@system-one-ai/model-laya'),
         import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js'),
         import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs'),
       ]);

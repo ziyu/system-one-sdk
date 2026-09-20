@@ -1,6 +1,7 @@
 import { booleanQuestion, type EvaluationClient } from '@system-one-ai/core';
 import { createNativeClient, type NativeModelDriver } from '@system-one-ai/adapter-local';
-import { createLayaOnnxModel, createOnnxDriver, type OnnxModelPlugin } from '@system-one-ai/runtime-onnx-node';
+import { createOnnxDriver, type OnnxModelPlugin } from '@system-one-ai/runtime-onnx-node';
+import { createLayaOnnxModel } from '@system-one-ai/model-laya/node';
 
 async function verifyNativeOnnxTypes() {
   const model: OnnxModelPlugin = createLayaOnnxModel({ manifestPath: './laya.json', tokenizer: { encode: () => [1] } });
