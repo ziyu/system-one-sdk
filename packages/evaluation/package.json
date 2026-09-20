@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/evaluation",
-  "version": "0.7.0",
+  "version": "0.1.0",
   "description": "Provider-agnostic quality, calibration, latency, and context-stress evaluation for System One clients.",
   "license": "MIT",
   "type": "module",
