@@ -1,10 +1,12 @@
-import { ConfigurationError, ResponseValidationError, UnsupportedFeatureError } from '@system-one-ai/core';
-import type { AdapterContext, Answer, Description, JsonObject, PreparedRequest, ProviderResponse, Question, Questions, SystemOneAdapter, Usage } from '@system-one-ai/core';
-import { hasOwn, isRecord, parseBaseURL, responseRecord } from '@system-one-ai/core/validation';
+import { ConfigurationError, RequestAbortedError, ResponseValidationError, TimeoutError, UnsupportedFeatureError } from '@system-one-ai/core';
+import type { AdapterContext, Answer, Description, EvaluateRequest, EvaluationClient, EvaluationResult, JsonObject, PreparedRequest, ProviderResponse, Question, Questions, RequestOptions, SystemOneAdapter, Usage } from '@system-one-ai/core';
+import { hasOwn, isRecord, parseBaseURL, responseRecord, snapshotRequest } from '@system-one-ai/core/validation';
 
 export type LlmProvider = 'openai' | 'anthropic';
 export type LlmAnswerMode = 'probabilities' | 'discrete';
 export type LlmApi = 'responses' | 'chat_completions';
+
+export class MalformedLlmOutputError extends ResponseValidationError {}
 
 export interface LlmAdapterOptions {
   /** Provider used by the adapter. Defaults to OpenAI. */
@@ -21,6 +23,21 @@ export interface LlmAdapterOptions {
   readonly maxTokens?: number;
   /** Anthropic API version header. */
   readonly anthropicVersion?: string;
+}
+
+export interface LlmEvaluationClientOptions {
+  /** Maximum questions sent in one model call. Defaults to 16. */
+  readonly questionsPerCall?: number;
+  /** Maximum total choice/score outcomes in one model call. Boolean questions count as one. Defaults to 128. */
+  readonly outcomesPerCall?: number;
+  /** Corrective retries after schema-valid HTTP responses with malformed decision output. Defaults to 2. */
+  readonly malformedRetries?: number;
+}
+
+interface PreparedQuestion {
+  readonly key: string;
+  readonly internalId: string;
+  readonly question: Question;
 }
 
 type LlmConfig = Required<Pick<LlmAdapterOptions, 'provider' | 'structuredOutputs' | 'llmAnswerMode' | 'normalizeProbabilities' | 'maxTokens' | 'anthropicVersion'>> & Pick<LlmAdapterOptions, 'api'>;
@@ -62,10 +79,18 @@ function requestConfig(request: AdapterContext['request'], base: LlmConfig): Llm
   }
   const raw = options.llm;
   if (!isRecord(raw)) throw new ConfigurationError('providerOptions.llm must be an object.');
-  const allowed = ['structuredOutputs', 'llmAnswerMode', 'normalizeProbabilities', 'api', 'maxTokens', 'anthropicVersion'];
+  const allowed = ['structuredOutputs', 'llmAnswerMode', 'normalizeProbabilities', 'api', 'maxTokens', 'anthropicVersion', 'correction'];
   if (Object.keys(raw).some(key => !allowed.includes(key))) throw new UnsupportedFeatureError('Unsupported providerOptions.llm field.');
-  const merged = { ...base, ...raw } as LlmAdapterOptions;
+  const { correction: _correction, ...config } = raw;
+  const merged = { ...base, ...config } as LlmAdapterOptions;
   return configOf(merged);
+}
+
+function correctionOf(request: AdapterContext['request']): string | undefined {
+  const llm = request.providerOptions?.llm;
+  if (!isRecord(llm) || llm.correction === undefined) return undefined;
+  if (typeof llm.correction !== 'string' || llm.correction.trim() === '') throw new ConfigurationError('providerOptions.llm.correction must be a nonempty string.');
+  return llm.correction;
 }
 
 function effectiveConfig(config: LlmConfig, baseURL: string): LlmConfig {
@@ -98,11 +123,15 @@ function questionDescription(question: Question, mode: LlmAnswerMode): string {
   return description;
 }
 
-function outputSchema(questions: Questions, mode: LlmAnswerMode): JsonObject {
-  const properties = Object.fromEntries(Object.entries(questions).map(([id, question]) => [id, questionSchema(question, mode)]));
+function prepareQuestions(questions: Questions): PreparedQuestion[] {
+  return Object.entries(questions).map(([key, question], index) => ({ key, internalId: `q${index + 1}`, question }));
+}
+
+function outputSchema(questions: readonly PreparedQuestion[], mode: LlmAnswerMode): JsonObject {
+  const properties = Object.fromEntries(questions.map(({ internalId, question }) => [internalId, questionSchema(question, mode)]));
   return {
     type: 'object', additionalProperties: false,
-    properties: { answers: { type: 'object', additionalProperties: false, properties, required: Object.keys(questions) } },
+    properties: { answers: { type: 'object', additionalProperties: false, properties, required: questions.map(question => question.internalId) } },
     required: ['answers'],
   } as unknown as JsonObject;
 }
@@ -133,11 +162,12 @@ function serializeState(value: unknown): string {
   return `<document>\n${JSON.stringify(value).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e')}\n</document>`;
 }
 
-function promptFor(request: AdapterContext['request'], config: LlmConfig, schema: JsonObject): { system: string; user: string } {
+function promptFor(request: AdapterContext['request'], config: LlmConfig, schema: JsonObject, correction?: string): { system: string; user: string } {
   let system = config.llmAnswerMode === 'probabilities'
     ? `${BASE_PROMPT}\nFor boolean questions, return the probability that the answer is yes or true. For choice and score questions, return an object mapping every allowed label to its probability. Preserve genuine uncertainty. Include every allowed label, do not add labels, keep each probability between 0 and 1, and make the probabilities sum to 1.`
     : `${BASE_PROMPT}\nReturn exactly one allowed value for each question.`;
   if (!config.structuredOutputs) system += `\n\nReturn one JSON object that matches this schema exactly:\n\n${JSON.stringify(schema)}\n\nDo not include text or Markdown fencing before or after the JSON object.`;
+  if (correction !== undefined) system += `\n\nYour previous decision output was invalid: ${correction}. Return a corrected answer that exactly follows the schema.`;
   return { system, user: serializeState(request.state) };
 }
 
@@ -160,6 +190,10 @@ function messages(config: LlmConfig, prompt: { system: string; user: string }): 
   return config.structuredOutputs ? [{ role: 'user', content: prompt.user }] : [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
 }
 
+function chatMessages(prompt: { system: string; user: string }): readonly { role: string; content: string }[] {
+  return [{ role: 'system', content: prompt.system }, { role: 'user', content: prompt.user }];
+}
+
 function prepareBody(model: string, config: LlmConfig, prompt: { system: string; user: string }, schema: JsonObject): unknown {
   if (config.provider === 'anthropic') {
     return {
@@ -178,7 +212,7 @@ function prepareBody(model: string, config: LlmConfig, prompt: { system: string;
     };
   }
   return {
-    model, messages: messages(config, prompt),
+    model, messages: chatMessages(prompt),
     response_format: config.structuredOutputs ? { type: 'json_schema', json_schema: { name: 'evaluation', schema, strict: true } } : { type: 'json_object' },
   };
 }
@@ -314,14 +348,22 @@ function usageOf(root: Record<string, unknown>): Usage | undefined {
 
 function decoded(payload: unknown, context: AdapterContext, config: LlmConfig): ProviderResponse {
   const { root, text } = providerText(payload, config);
-  const output = parsedOutput(text);
-  if (Object.keys(output).length !== 1 || !hasOwn(output, 'answers')) throw new ResponseValidationError('response', 'LLM output must contain only answers');
-  const rawAnswers = responseRecord(output.answers, 'response.answers');
-  const answers = Object.fromEntries(Object.entries(context.request.questions).map(([id, question]) => {
-    if (!hasOwn(rawAnswers, id)) throw new ResponseValidationError(`response.answers.${id}`, 'missing answer');
-    return [id, answerFor(question, rawAnswers[id], config, `response.answers.${id}`)];
-  }));
-  if (Object.keys(rawAnswers).length !== Object.keys(context.request.questions).length) throw new ResponseValidationError('response.answers', 'answer keys must match the request exactly');
+  let answers: Record<string, Answer>;
+  try {
+    const output = parsedOutput(text);
+    if (Object.keys(output).length !== 1 || !hasOwn(output, 'answers')) throw new ResponseValidationError('response', 'LLM output must contain only answers');
+    const rawAnswers = responseRecord(output.answers, 'response.answers');
+    const questions = prepareQuestions(context.request.questions);
+    answers = Object.fromEntries(questions.map(({ key, internalId, question }) => {
+      if (!hasOwn(rawAnswers, internalId)) throw new ResponseValidationError(`response.answers.${internalId}`, 'missing answer');
+      return [key, answerFor(question, rawAnswers[internalId], config, `response.answers.${internalId}`)];
+    }));
+    if (Object.keys(rawAnswers).length !== questions.length) throw new ResponseValidationError('response.answers', 'answer keys must match the request exactly');
+  } catch (error) {
+    if (!(error instanceof ResponseValidationError)) throw error;
+    const prefix = `${error.path}: `;
+    throw new MalformedLlmOutputError(error.path, error.message.startsWith(prefix) ? error.message.slice(prefix.length) : error.message);
+  }
   const model = typeof root.model === 'string' && root.model.trim() ? root.model : context.model;
   const usage = usageOf(root);
   return { model, answers, ...(usage === undefined ? {} : { usage }) };
@@ -335,8 +377,8 @@ export function llmAdapter(options: LlmAdapterOptions = {}): SystemOneAdapter {
     supportedQuestionTypes: questionTypes,
     prepare(context: AdapterContext): PreparedRequest {
       const config = effectiveConfig(requestConfig(context.request, base), context.baseURL);
-      const schema = outputSchema(context.request.questions, config.llmAnswerMode);
-      const prompt = promptFor(context.request, config, schema);
+      const schema = outputSchema(prepareQuestions(context.request.questions), config.llmAnswerMode);
+      const prompt = promptFor(context.request, config, schema, correctionOf(context.request));
       const headers = config.provider === 'anthropic' ? { 'anthropic-version': config.anthropicVersion } : undefined;
       return {
         url: endpoint(context.baseURL, config), body: prepareBody(context.model, config, prompt, schema),
@@ -347,6 +389,127 @@ export function llmAdapter(options: LlmAdapterOptions = {}): SystemOneAdapter {
       return decoded(payload, context, effectiveConfig(requestConfig(context.request, base), context.baseURL));
     },
     ...(base.provider === 'anthropic' ? { authenticate: (apiKey: string | null) => apiKey === null ? {} : { 'x-api-key': apiKey } } : {}),
+  });
+}
+
+function positiveInteger(value: number | undefined, name: string, fallback: number, minimum = 1): number {
+  const resolved = value ?? fallback;
+  if (!Number.isSafeInteger(resolved) || resolved < minimum) throw new ConfigurationError(`${name} must be an integer >= ${minimum}.`);
+  return resolved;
+}
+
+function questionOutcomes(question: Question): number {
+  return question.type === 'boolean' ? 1 : question.type === 'choice' ? Object.keys(question.criteria).length : question.criteria.length;
+}
+
+function questionGroups(questions: Questions, questionsPerCall: number, outcomesPerCall: number): Questions[] {
+  const groups: Record<string, Question>[] = [];
+  let current: Record<string, Question> = {};
+  let outcomes = 0;
+  for (const [key, question] of Object.entries(questions)) {
+    const count = questionOutcomes(question);
+    if (Object.keys(current).length > 0 && (Object.keys(current).length >= questionsPerCall || outcomes + count > outcomesPerCall)) {
+      groups.push(current);
+      current = {};
+      outcomes = 0;
+    }
+    current[key] = question;
+    outcomes += count;
+  }
+  if (Object.keys(current).length > 0) groups.push(current);
+  return groups;
+}
+
+function retryRequest<Q extends Questions>(request: EvaluateRequest<Q>, questions: Questions, correction?: string): EvaluateRequest<Questions> {
+  const provider = request.providerOptions ?? {};
+  const llm = isRecord(provider.llm) ? provider.llm : {};
+  return {
+    state: request.state,
+    questions,
+    ...(request.model === undefined ? {} : { model: request.model }),
+    ...(Object.keys(provider).length === 0 && correction === undefined ? {} : {
+      providerOptions: {
+        ...provider,
+        llm: { ...llm, ...(correction === undefined ? {} : { correction }) },
+      },
+    }),
+  };
+}
+
+function mergeResults<Q extends Questions>(request: EvaluateRequest<Q>, results: readonly EvaluationResult<Questions>[], startedAt: number, calls: number, malformedRetries: number): EvaluationResult<Q> {
+  if (!results.length) throw new ConfigurationError('LLM evaluation produced no result groups.');
+  const first = results[0]!;
+  const answers = Object.assign({}, ...results.map(result => result.answers));
+  const input = results.map(result => result.usage.inputTokens);
+  const output = results.map(result => result.usage.outputTokens);
+  const usage = {
+    ...(input.every(value => value !== undefined) ? { inputTokens: input.reduce((sum, value) => sum + value!, 0) } : {}),
+    ...(output.every(value => value !== undefined) ? { outputTokens: output.reduce((sum, value) => sum + value!, 0) } : {}),
+  };
+  const withTotal = usage.inputTokens !== undefined && usage.outputTokens !== undefined ? { ...usage, totalTokens: usage.inputTokens + usage.outputTokens } : usage;
+  return {
+    model: results.every(result => result.model === first.model) ? first.model : request.model ?? first.model,
+    answers: answers as EvaluationResult<Q>['answers'],
+    usage: withTotal,
+    warnings: results.flatMap(result => result.warnings),
+    providerMetadata: {
+      ...(results.length === 1 && first.providerMetadata !== undefined ? first.providerMetadata : {}),
+      llmOrchestration: { groups: results.length, calls, malformedRetries },
+    },
+    response: {
+      status: first.response.status,
+      attempts: 1 + malformedRetries + results.reduce((sum, result) => sum + Math.max(0, result.response.attempts - 1), 0),
+      durationMs: Date.now() - startedAt,
+      adapter: first.response.adapter,
+      ...(results.length === 1 && first.response.requestId !== undefined ? { requestId: first.response.requestId } : {}),
+    },
+  };
+}
+
+/**
+ * Add question/outcome chunking and corrective malformed-output retries to any LLM-backed EvaluationClient.
+ * Network I/O remains owned by the wrapped client/transport.
+ */
+export function createLlmEvaluationClient(client: EvaluationClient, options: LlmEvaluationClientOptions = {}): EvaluationClient {
+  if (!client || typeof client.evaluate !== 'function') throw new ConfigurationError('client must implement EvaluationClient.');
+  const rawOptions: unknown = options;
+  if (rawOptions === null || typeof rawOptions !== 'object' || Array.isArray(rawOptions) || Object.keys(rawOptions).some(key => !['questionsPerCall', 'outcomesPerCall', 'malformedRetries'].includes(key))) throw new ConfigurationError('createLlmEvaluationClient received unsupported options.');
+  const questionsPerCall = positiveInteger(options.questionsPerCall, 'questionsPerCall', 16);
+  const outcomesPerCall = positiveInteger(options.outcomesPerCall, 'outcomesPerCall', 128);
+  const malformedRetries = positiveInteger(options.malformedRetries, 'malformedRetries', 2, 0);
+  return Object.freeze({
+    async evaluate<const Q extends Questions>(request: EvaluateRequest<Q>, requestOptions?: RequestOptions): Promise<EvaluationResult<Q>> {
+      const startedAt = Date.now();
+      const snapshot = snapshotRequest(request);
+      const results: EvaluationResult<Questions>[] = [];
+      let calls = 0;
+      let corrected = 0;
+      const nextOptions = (): RequestOptions | undefined => {
+        if (requestOptions?.signal?.aborted) throw new RequestAbortedError();
+        if (requestOptions?.timeoutMs === undefined) return requestOptions;
+        const remaining = requestOptions.timeoutMs - (Date.now() - startedAt);
+        if (remaining <= 0) throw new TimeoutError();
+        return { ...requestOptions, timeoutMs: remaining };
+      };
+      for (const group of questionGroups(snapshot.questions, questionsPerCall, outcomesPerCall)) {
+        let correction: string | undefined;
+        let result: EvaluationResult<Questions> | undefined;
+        for (let attempt = 0; attempt <= malformedRetries; attempt++) {
+          try {
+            calls++;
+            result = await client.evaluate(retryRequest(snapshot, group, correction), nextOptions());
+            break;
+          } catch (error) {
+            if (!(error instanceof MalformedLlmOutputError) || attempt >= malformedRetries) throw error;
+            corrected++;
+            correction = error.message;
+          }
+        }
+        if (result === undefined) throw new ResponseValidationError('response', 'LLM corrective retry did not produce a result');
+        results.push(result);
+      }
+      return mergeResults(snapshot, results, startedAt, calls, corrected) as EvaluationResult<Q>;
+    },
   });
 }
 

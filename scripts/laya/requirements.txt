@@ -1,0 +1,12 @@
+# Use Python 3.12. These dependencies are export/verification tools, not SDK runtime dependencies.
+torch==2.8.0
+# Match encoder/config.json in the pinned checkpoint (including its RoPE configuration).
+transformers==5.0.0
+onnx>=1.19.0,<1.20
+onnxscript==0.5.6
+# Keep function-inlining behavior matched to this export/version-conversion stack.
+onnx-ir==0.1.12
+onnxruntime==1.23.2
+safetensors>=0.6.2,<0.8
+huggingface-hub>=1.3.0,<2
+numpy>=1.26.4,<3

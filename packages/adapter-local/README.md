@@ -26,6 +26,24 @@ const result = await client.evaluate({
 });
 ```
 
+Native in-process runtimes that need asynchronous model/session initialization use the driver layer:
+
+```ts
+import { createNativeClient, type NativeModelDriver } from '@system-one-ai/adapter-local';
+
+const driver: NativeModelDriver = {
+  id: 'my-runtime',
+  async createRunner() {
+    // Load the native runtime/model once and return a LocalModelRunner.
+    return runner;
+  },
+};
+
+const client = await createNativeClient({ driver });
+```
+
+`createNativeClient()` never spawns a subprocess. Runtime packages such as `@system-one-ai/runtime-onnx-node` keep native dependencies out of this lightweight adapter.
+
 Kev、Laya、Nimble 等 Python、MLX、CUDA 或 sidecar 权重可以通过这个 runner 接入；它们不需要各自复制一套 TypeScript adapter。浏览器里的 OpenJev/SemIf GGUF 权重有现成的 `@system-one-ai/adapter-webgpu` 实现。runner 必须返回 core 的 `ProviderResponse` 形状，core 会继续校验选项、概率、score 和模型 ID。
 
 Requires Node.js 20+. Build from the repository with `npm run build --workspace @system-one-ai/adapter-local`.

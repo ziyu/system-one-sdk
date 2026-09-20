@@ -1,0 +1,26 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.55; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f3f2ed; color: #202a25; }
+main { width: min(100% - 2rem, 920px); margin: 3rem auto; }
+header { max-width: 720px; margin-bottom: 2rem; }
+h1 { font-size: clamp(2rem, 6vw, 3.5rem); line-height: 1.1; margin: .4rem 0 1rem; letter-spacing: -.04em; }
+h2 { font-size: 1.2rem; margin: 0 0 1rem; }
+.eyebrow { font-size: .75rem; letter-spacing: .12em; font-weight: 700; }
+section { margin: 1rem 0; padding: 1.5rem; border: 1px solid #d5d8ce; border-radius: .8rem; background: #fffefa; }
+label { display: block; font-size: .85rem; font-weight: 650; margin: 1rem 0 .35rem; }
+input, textarea, select { display: block; width: 100%; border: 1px solid #adb5aa; border-radius: .3rem; padding: .7rem; background: #fff; color: #202a25; font: inherit; }
+select { margin-bottom: 1rem; }
+textarea { resize: vertical; }
+#questions, input, pre, code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .85rem; }
+.hint, footer { font-size: .85rem; color: #536054; }
+.actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+button { cursor: pointer; padding: .65rem 1rem; border: 1px solid #294e37; border-radius: .3rem; color: #fff; background: #294e37; font: inherit; font-weight: 600; }
+button:disabled { cursor: default; opacity: .4; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid #879d27; outline-offset: 3px; }
+#run { margin-top: 1rem; }
+#status { min-height: 1.5rem; margin-bottom: 0; overflow-wrap: anywhere; }
+pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+footer { margin: 1.5rem 0; }
+a { color: inherit; }
+@media (max-width: 480px) { main { margin: 1.5rem auto; } section { padding: 1rem; } }
+@media (prefers-color-scheme: dark) { body { background: #151b17; color: #e2e8df; } section { background: #1b241e; border-color: #394c3e; } input, textarea, select { color: #e2e8df; background: #141c17; border-color: #536b58; } .hint, footer { color: #afc0ae; } }

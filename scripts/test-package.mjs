@@ -10,7 +10,17 @@ import { pathToFileURL } from 'node:url';
 
 export const artifacts = path.join(root, '.artifacts');
 export const digest = (bytes, algorithm = 'sha256') => createHash(algorithm).update(bytes).digest(algorithm === 'sha512' ? 'base64' : 'hex');
-const run = (command, args, cwd = root) => execFileSync(command, args, { cwd, encoding: 'utf8', stdio: 'pipe' });
+const run = (command, args, cwd = root) => {
+  // Windows cannot execFile npm.cmd directly. Invoke npm's JS entry without a
+  // shell so package paths and arguments retain their original boundaries.
+  if (command === 'npm' && process.platform === 'win32') {
+    const npmCli = process.env.npm_execpath?.endsWith('npm-cli.js')
+      ? process.env.npm_execpath
+      : path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js');
+    return execFileSync(process.execPath, [npmCli, ...args], { cwd, encoding: 'utf8', stdio: 'pipe' });
+  }
+  return execFileSync(command, args, { cwd, encoding: 'utf8', stdio: 'pipe' });
+};
 export async function sourceIdentity() {
   return {
     commit: run('git', ['rev-parse', 'HEAD']).trim(),

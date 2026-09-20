@@ -1,0 +1,54 @@
+{
+  "name": "@system-one-ai/runtime-onnx-node",
+  "version": "0.6.0",
+  "description": "In-process ONNX Runtime Node driver for local System One models.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md", "LICENSE", "CHANGELOG.md"],
+  "engines": {"node": ">=20"},
+  "dependencies": {
+    "@system-one-ai/adapter-local": "^0.6.0",
+    "@system-one-ai/core": "^0.6.0",
+    "@system-one-ai/model-laya": "^0.6.0"
+  },
+  "peerDependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "onnxruntime-node": "^1.30.0"
+  },
+  "peerDependenciesMeta": {
+    "@huggingface/transformers": {"optional": true},
+    "onnxruntime-node": {"optional": true}
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ziyu/sytem-one-sdk.git",
+    "directory": "packages/runtime-onnx-node"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs runtime-onnx-node",
+    "typecheck": "node ../../scripts/build-packages.mjs runtime-onnx-node --check",
+    "test": "node ../../scripts/test-workspace.mjs runtime-onnx-node",
+    "prepack": "npm run build"
+  }
+}

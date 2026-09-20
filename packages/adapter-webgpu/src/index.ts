@@ -1,6 +1,7 @@
 import { ConfigurationError, ResponseValidationError } from '@system-one-ai/core';
-import type { Answer, Description, ProviderResponse, Question, SystemOne } from '@system-one-ai/core';
-import { createLocalClient, type LocalModelRunner, type LocalRunnerOptions } from '@system-one-ai/adapter-local';
+import type { Answer, Description, ProviderResponse, Question } from '@system-one-ai/core';
+import type { LocalModelRunner, LocalRunnerOptions } from '@system-one-ai/adapter-local';
+import { createBrowserClient, type BrowserClient, type BrowserInferenceDevice, type BrowserModelDriver, type BrowserModelRunner } from './browser.js';
 
 export type OpenJevModelId = 'qwen3-0.6b' | 'minicpm5-2b' | 'qwen3.5-4b';
 
@@ -36,27 +37,27 @@ interface ChatResponse {
   readonly usage?: { readonly prompt_tokens?: number; readonly completion_tokens?: number };
 }
 
-export interface WebGPUEngine {
+export interface GGUFEngine {
   isSupportWebGPU?(): boolean;
   loadModelFromUrl(url: string, options: Record<string, unknown>): Promise<void>;
   createChatCompletion(options: Record<string, unknown>): Promise<ChatResponse>;
   exit?(): Promise<void>;
 }
 
-export interface WebGPUEngineFactoryOptions {
+export interface GGUFEngineFactoryOptions {
   readonly wasmUrl: string;
 }
 
-export type WebGPUEngineFactory = (options: WebGPUEngineFactoryOptions) => Promise<WebGPUEngine> | WebGPUEngine;
+export type GGUFEngineFactory = (options: GGUFEngineFactoryOptions) => Promise<GGUFEngine> | GGUFEngine;
 
-export interface WebGPUModelProgress {
+export interface GGUFModelProgress {
   readonly file?: string;
   readonly loaded?: number;
   readonly total?: number;
   readonly status?: string;
 }
 
-export interface OpenJevWebGPUOptions {
+export interface GGUFDriverOptions {
   /** One of the pinned OpenJev models. Defaults to MiniCPM5 2B. */
   readonly model?: OpenJevModelId | string;
   /** Any GGUF URL. Use this with a custom model name for other llama.cpp-compatible weights. */
@@ -67,13 +68,31 @@ export interface OpenJevWebGPUOptions {
   readonly nGpuLayers?: number;
   readonly maxTokens?: number;
   /** Receives the real Wllama model download/cache events. */
-  readonly onProgress?: (progress: WebGPUModelProgress) => void;
+  readonly onProgress?: (progress: GGUFModelProgress) => void;
   /** Inject a bundled Wllama implementation for CSP/offline builds or tests. */
-  readonly engineFactory?: WebGPUEngineFactory;
+  readonly engineFactory?: GGUFEngineFactory;
   /** Inject the Wllama module returned by importing @wllama/wllama. */
-  readonly wllama?: { readonly Wllama: new (paths: { readonly default: string }, options?: Record<string, unknown>) => WebGPUEngine; readonly LoggerWithoutDebug?: unknown };
+  readonly wllama?: { readonly Wllama: new (paths: { readonly default: string }, options?: Record<string, unknown>) => GGUFEngine; readonly LoggerWithoutDebug?: unknown };
   readonly timeoutMs?: number;
 }
+
+/** @deprecated Use GGUFDriverOptions with createGGUFDriver() and createBrowserClient(). */
+export interface OpenJevWebGPUOptions extends GGUFDriverOptions {}
+
+/** @deprecated Use createBrowserClient({ driver: createGGUFDriver(...), device }). */
+export interface OpenJevBrowserOptions extends GGUFDriverOptions {
+  /** Prefer WebGPU when available, or force a specific browser inference device. Defaults to auto. */
+  readonly device?: BrowserInferenceDevice;
+}
+
+/** @deprecated Use GGUFEngine. */
+export type WebGPUEngine = GGUFEngine;
+/** @deprecated Use GGUFEngineFactoryOptions. */
+export type WebGPUEngineFactoryOptions = GGUFEngineFactoryOptions;
+/** @deprecated Use GGUFEngineFactory. */
+export type WebGPUEngineFactory = GGUFEngineFactory;
+/** @deprecated Use GGUFModelProgress. */
+export type WebGPUModelProgress = GGUFModelProgress;
 
 function isWebGPU(): boolean {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;
@@ -85,7 +104,15 @@ async function assertWebGPU(): Promise<void> {
   if (gpu?.requestAdapter !== undefined && !await gpu.requestAdapter()) throw new ConfigurationError('WebGPU exists, but no GPU adapter is available in this browser.');
 }
 
-function modelOf(options: OpenJevWebGPUOptions): { id: string; name: string; url: string } {
+async function hasWebGPU(): Promise<boolean> {
+  if (!isWebGPU()) return false;
+  const gpu = (navigator as Navigator & { readonly gpu?: { readonly requestAdapter?: () => Promise<unknown> } }).gpu;
+  if (gpu?.requestAdapter === undefined) return true;
+  try { return Boolean(await gpu.requestAdapter()); }
+  catch { return false; }
+}
+
+function modelOf(options: GGUFDriverOptions): { id: string; name: string; url: string } {
   const id = options.model ?? defaultModel;
   if (options.modelUrl !== undefined) {
     if (typeof options.modelUrl !== 'string' || options.modelUrl.trim() === '') throw new ConfigurationError('modelUrl must be a nonempty URL.');
@@ -102,13 +129,13 @@ function finiteOption(value: number | undefined, name: string, min: number): num
   return value;
 }
 
-async function importWllama(url: string): Promise<OpenJevWebGPUOptions['wllama']> {
+async function importWllama(url: string): Promise<GGUFDriverOptions['wllama']> {
   // Keep the package dependency-free for Node/sidecar users; browser bundlers can inject the module instead.
-  const load = Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<OpenJevWebGPUOptions['wllama']>;
+  const load = Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<GGUFDriverOptions['wllama']>;
   return load(url);
 }
 
-async function defaultEngine(options: OpenJevWebGPUOptions, wasmUrl: string): Promise<WebGPUEngine> {
+async function defaultEngine(options: GGUFDriverOptions, wasmUrl: string): Promise<GGUFEngine> {
   const module = options.wllama ?? await importWllama(defaultWllamaUrl);
   if (!module?.Wllama) throw new ConfigurationError('The Wllama module does not export Wllama.');
   const logger = module.LoggerWithoutDebug;
@@ -203,12 +230,14 @@ function answerFor(question: Question, value: Record<string, unknown>, path: str
   return { type: 'score', score, probabilities, confidence: scoreConfidence(values), legend: Object.fromEntries(question.criteria.map((criterion, index) => [String(index), criterion])) };
 }
 
-function runnerOf(engine: WebGPUEngine, model: { id: string; name: string }, maxTokens: number): LocalModelRunner {
+function runnerOf(engine: GGUFEngine, model: { id: string; name: string }, maxTokens: number, device: Exclude<BrowserInferenceDevice, 'auto'>): BrowserModelRunner {
+  let disposed = false;
   return {
-    id: `webgpu-${model.id}`,
+    id: `${device}-${model.id}`,
     defaultModel: model.id,
     supportedQuestionTypes: ['choice', 'score', 'boolean'],
     async evaluate(request, options: LocalRunnerOptions): Promise<ProviderResponse> {
+      if (disposed) throw new ConfigurationError('This browser model runner has been disposed.');
       const answers: Record<string, Answer> = {};
       let inputTokens = 0;
       let outputTokens = 0;
@@ -226,7 +255,7 @@ function runnerOf(engine: WebGPUEngine, model: { id: string; name: string }, max
           ...(options.signal === undefined ? {} : { abortSignal: options.signal }),
         });
         const content = response.choices?.[0]?.message?.content;
-        if (typeof content !== 'string') throw new ResponseValidationError(`answers.${id}`, 'WebGPU model returned no text.');
+        if (typeof content !== 'string') throw new ResponseValidationError(`answers.${id}`, 'Local browser model returned no text.');
         answers[id] = answerFor(question, jsonFrom(content), `answers.${id}`);
         inputTokens += response.usage?.prompt_tokens ?? 0;
         outputTokens += response.usage?.completion_tokens ?? 0;
@@ -235,43 +264,89 @@ function runnerOf(engine: WebGPUEngine, model: { id: string; name: string }, max
         model: model.id,
         answers,
         usage: { inputTokens, outputTokens },
-        providerMetadata: { runtime: 'wllama', device: 'webgpu', modelName: model.name },
+        providerMetadata: { runtime: 'wllama', device, modelName: model.name },
       };
+    },
+    async dispose(): Promise<void> {
+      if (disposed) return;
+      disposed = true;
+      await engine.exit?.();
     },
   };
 }
 
-/** Load a real GGUF checkpoint and return the normal System One client. */
-export async function createOpenJevWebGPUClient(options: OpenJevWebGPUOptions = {}): Promise<SystemOne> {
-  await assertWebGPU();
+async function createGGUFRunner(options: GGUFDriverOptions, requestedDevice: BrowserInferenceDevice): Promise<BrowserModelRunner> {
+  let device: Exclude<BrowserInferenceDevice, 'auto'>;
+  if (requestedDevice === 'webgpu') {
+    await assertWebGPU();
+    device = 'webgpu';
+  } else if (requestedDevice === 'wasm') {
+    device = 'wasm';
+  } else {
+    device = await hasWebGPU() ? 'webgpu' : 'wasm';
+  }
   const model = modelOf(options);
   const wasmUrl = options.wasmUrl ?? defaultWasmUrl;
   if (typeof wasmUrl !== 'string' || wasmUrl.trim() === '') throw new ConfigurationError('wasmUrl must be a nonempty URL.');
   const nCtx = finiteOption(options.nCtx, 'nCtx', 1) ?? 2048;
   const nBatch = finiteOption(options.nBatch, 'nBatch', 1) ?? 512;
-  const nGpuLayers = finiteOption(options.nGpuLayers, 'nGpuLayers', 0) ?? 999;
+  const configuredGpuLayers = finiteOption(options.nGpuLayers, 'nGpuLayers', 0);
+  if (requestedDevice === 'wasm' && configuredGpuLayers !== undefined && configuredGpuLayers !== 0) {
+    throw new ConfigurationError('nGpuLayers must be 0 when device is wasm.');
+  }
   const maxTokens = finiteOption(options.maxTokens, 'maxTokens', 1) ?? 256;
   const engine = await (options.engineFactory === undefined ? defaultEngine(options, wasmUrl) : options.engineFactory({ wasmUrl }));
   if (!engine || typeof engine.loadModelFromUrl !== 'function' || typeof engine.createChatCompletion !== 'function') throw new ConfigurationError('engineFactory must return a Wllama-compatible engine.');
-  if (engine.isSupportWebGPU !== undefined && !engine.isSupportWebGPU()) {
-    await engine.exit?.();
-    throw new ConfigurationError('Wllama could not enable WebGPU for this browser.');
+  if (device === 'webgpu' && engine.isSupportWebGPU !== undefined && !engine.isSupportWebGPU()) {
+    if (requestedDevice === 'auto') device = 'wasm';
+    else {
+      await engine.exit?.();
+      throw new ConfigurationError('Wllama could not enable WebGPU for this browser.');
+    }
   }
+  const nGpuLayers = device === 'wasm' ? 0 : configuredGpuLayers ?? 999;
   try {
     await engine.loadModelFromUrl(model.url, {
       n_ctx: nCtx, n_batch: nBatch, n_gpu_layers: nGpuLayers,
       cache_prompt: false, warmup: true,
       ...(options.onProgress === undefined ? {} : {
-        progressCallback: (progress: unknown) => options.onProgress!(progress as WebGPUModelProgress),
+        progressCallback: (progress: unknown) => options.onProgress!(progress as GGUFModelProgress),
       }),
     });
-    const runner = runnerOf(engine, model, maxTokens);
-    return createLocalClient(runner, { apiKey: null, timeoutMs: options.timeoutMs ?? 120_000 });
+    return runnerOf(engine, model, maxTokens, device);
   } catch (error) {
     await engine.exit?.();
     throw error;
   }
 }
 
+/** Built-in GGUF/Wllama driver. The generic browser client is independent of this model family. */
+export function createGGUFDriver(options: GGUFDriverOptions = {}): BrowserModelDriver {
+  return Object.freeze({
+    id: 'gguf-wllama',
+    defaultTimeoutMs: options.timeoutMs ?? 120_000,
+    createRunner: ({ device }: { readonly device: BrowserInferenceDevice }) => createGGUFRunner(options, device),
+  });
+}
+
+/** @deprecated Prefer createBrowserClient({ driver: createGGUFDriver(...) }). */
+export async function createOpenJevBrowserClient(options: OpenJevBrowserOptions = {}): Promise<BrowserClient> {
+  const device = options.device ?? 'auto';
+  return createBrowserClient({ driver: createGGUFDriver(options), device, ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }) });
+}
+
+/** @deprecated Prefer createBrowserClient({ driver: createGGUFDriver(...), device: 'webgpu' }). */
+export async function createOpenJevWebGPUClient(options: OpenJevWebGPUOptions = {}): Promise<BrowserClient> {
+  return createBrowserClient({ driver: createGGUFDriver(options), device: 'webgpu', ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }) });
+}
+
+export { createBrowserClient, createBrowserRunner } from './browser.js';
+export type { BrowserClient, BrowserClientOptions, BrowserDriverContext, BrowserInferenceDevice, BrowserModelDriver, BrowserModelRunner, BrowserRunnerOptions } from './browser.js';
 export { createLocalClient } from '@system-one-ai/adapter-local';
 export type { LocalEvaluationRequest, LocalModelRunner, LocalRunnerOptions } from '@system-one-ai/adapter-local';
+
+export { createLayaDriver, createLayaBrowserClient, createLayaBrowserRunner, createLayaWebGPUClient, createLayaWebGPURunner } from './laya.js';
+export type {
+  LayaBrowserClient, LayaBrowserOptions, LayaBrowserRunner, LayaInferenceDevice,
+  LayaManifest, LayaTokenizer, LayaProgress, LayaWebGPUOptions, LayaWebGPUClient, LayaWebGPURunner,
+} from './laya.js';

@@ -18,6 +18,27 @@ export interface LocalModelRunner {
   evaluate(request: LocalEvaluationRequest, options: LocalRunnerOptions): Promise<ProviderResponse>;
 }
 
+export interface NativeModelRunner extends LocalModelRunner {
+  dispose?(): Promise<void>;
+}
+
+/** Runtime-specific factory for a native in-process model runner. */
+export interface NativeModelDriver {
+  readonly id: string;
+  readonly defaultTimeoutMs?: number;
+  createRunner(): Promise<NativeModelRunner> | NativeModelRunner;
+}
+
+export interface NativeRunnerOptions {
+  readonly driver: NativeModelDriver;
+}
+
+export interface NativeClientOptions extends NativeRunnerOptions {
+  readonly timeoutMs?: number;
+}
+
+export type NativeClient = SystemOne & { dispose(): Promise<void> };
+
 /** The normalized request every local backend receives, regardless of its weight format. */
 export interface LocalEvaluationRequest extends EvaluateRequest {
   readonly model: string;
@@ -46,6 +67,15 @@ function assertRunner(runner: LocalModelRunner): void {
   }
   if (runner.supportedQuestionTypes !== undefined && (!Array.isArray(runner.supportedQuestionTypes) || runner.supportedQuestionTypes.some(type => !allQuestionTypes.includes(type)))) {
     throw new ConfigurationError('runner.supportedQuestionTypes contains an unsupported question type.');
+  }
+}
+
+function assertDriver(driver: NativeModelDriver): void {
+  if (!driver || typeof driver !== 'object' || typeof driver.id !== 'string' || driver.id.trim() === '' || typeof driver.createRunner !== 'function') {
+    throw new ConfigurationError('driver must provide a nonempty id and createRunner().');
+  }
+  if (driver.defaultTimeoutMs !== undefined && (!Number.isSafeInteger(driver.defaultTimeoutMs) || driver.defaultTimeoutMs <= 0)) {
+    throw new ConfigurationError('driver.defaultTimeoutMs must be a positive integer.');
   }
 }
 
@@ -135,6 +165,32 @@ export function createLocalClient(runner: LocalModelRunner, options: LocalClient
     ...(options.baseURL === undefined ? {} : { baseURL: options.baseURL }),
     ...(options.model === undefined ? {} : { model: options.model }),
   });
+}
+
+/** Create a native in-process runner from a runtime driver. */
+export async function createNativeRunner(options: NativeRunnerOptions): Promise<NativeModelRunner> {
+  assertDriver(options?.driver);
+  const runner = await options.driver.createRunner();
+  assertRunner(runner);
+  return runner;
+}
+
+/** Create a disposable System One client backed by a native in-process runtime. */
+export async function createNativeClient(options: NativeClientOptions): Promise<NativeClient> {
+  const runner = await createNativeRunner(options);
+  const timeoutMs = options.timeoutMs ?? options.driver.defaultTimeoutMs ?? 120_000;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    await runner.dispose?.();
+    throw new ConfigurationError('timeoutMs must be a positive integer.');
+  }
+  try {
+    const client = createLocalClient(runner, { timeoutMs });
+    let disposal: Promise<void> | undefined;
+    return Object.assign(client, { dispose: () => disposal ??= Promise.resolve(runner.dispose?.()).then(() => {}) });
+  } catch (error) {
+    await runner.dispose?.();
+    throw error;
+  }
 }
 
 export type { EvaluationClient, JsonObject, Questions };

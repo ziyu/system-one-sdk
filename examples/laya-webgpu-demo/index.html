@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Laya / System One Local Inference</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./styles.css">
+    <script type="importmap">
+      {"imports": {
+        "@system-one-ai/core": "/packages/core/dist/esm/index.js",
+        "@system-one-ai/adapter-local": "/packages/adapter-local/dist/esm/index.js",
+        "@system-one-ai/adapter-webgpu": "/packages/adapter-webgpu/dist/esm/index.js"
+      }}
+    </script>
+  </head>
+  <body>
+    <main>
+      <header><p class="eyebrow">SYSTEM ONE · LOCAL INFERENCE</p><h1>Laya in your browser</h1>
+        <p>Load the exported decision model, then evaluate choices, scores and boolean probabilities in this browser.</p>
+      </header>
+      <section aria-labelledby="model-title">
+        <h2 id="model-title">1. Load the model</h2>
+        <label for="manifest">Exported model manifest</label>
+        <input id="manifest" value="/.artifacts/laya/laya.json" spellcheck="false">
+        <p class="hint">Run <code>scripts/laya/export.py</code> first. The Hugging Face safetensors checkpoint needs conversion before browser use.</p>
+        <label for="device">Execution device</label>
+        <select id="device"><option value="auto">Automatic: prefer WebGPU</option><option value="webgpu">Require WebGPU</option><option value="wasm">WASM / CPU</option></select>
+        <div class="actions"><button id="load">Load Laya</button><button id="unload" disabled>Release model</button><button id="cancel" disabled>Cancel</button></div>
+        <p id="status" role="status" aria-live="polite">Checking browser capabilities…</p>
+      </section>
+      <section aria-labelledby="input-title">
+        <h2 id="input-title">2. Evaluate shared state</h2>
+        <label for="state">State</label>
+        <textarea id="state" rows="5">The customer cannot sign in after a password reset. They are frustrated but polite.</textarea>
+        <label for="questions">Questions (System One JSON)</label>
+        <textarea id="questions" rows="17" spellcheck="false">{
+  "route": {
+    "type": "choice",
+    "instructions": "Which queue should handle this?",
+    "criteria": {"access": "Account access", "billing": "Payments", "sales": null, "other": "Something else"}
+  },
+  "urgency": {
+    "type": "score",
+    "instructions": "How urgent is the request?",
+    "criteria": ["low", "normal", "urgent"]
+  },
+  "login": {
+    "type": "boolean",
+    "instructions": "Does the customer need help signing in?"
+  }
+}</textarea>
+        <button id="run" disabled>Evaluate</button>
+      </section>
+      <section aria-labelledby="result-title"><h2 id="result-title">3. Results</h2><p id="timing" class="hint">No inference has run.</p><pre id="result">Load a model to begin.</pre></section>
+      <footer>The first load fetches model and runtime assets. Evaluation uses the local ONNX model; no decision API is called. <a href="../webgpu-demo/">OpenJev demo</a></footer>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

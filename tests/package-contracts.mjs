@@ -19,6 +19,8 @@ export async function checkPackage(name, format = 'esm') {
     return { payload, status: 200, attempts: 1 };
   } };
   if (name === 'adapter-local') {
+    assert.equal(typeof pkg.createNativeClient, 'function');
+    assert.equal(typeof pkg.createNativeRunner, 'function');
     const localClient = pkg.createLocalClient({
       id: 'fixture-local',
       defaultModel: 'fixture-local',
@@ -29,8 +31,33 @@ export async function checkPackage(name, format = 'esm') {
     assert.equal((await localClient.evaluate(request)).answers.on.probability, 0.9);
     return;
   }
+  if (name === 'model-laya') {
+    assert.equal(typeof pkg.parseLayaManifest, 'function');
+    assert.equal(typeof pkg.prepareLayaRow, 'function');
+    assert.equal(typeof pkg.layaAnswer, 'function');
+    return;
+  }
+  if (name === 'runtime-onnx-node') {
+    assert.equal(typeof pkg.createOnnxDriver, 'function');
+    assert.equal(typeof pkg.createLayaOnnxModel, 'function');
+    return;
+  }
+  if (name === 'evaluation') {
+    assert.equal(typeof pkg.runEvaluation, 'function');
+    assert.equal(typeof pkg.summarizeEvaluation, 'function');
+    assert.equal(typeof pkg.pairedContextEffect, 'function');
+    assert.equal(typeof pkg.backgroundVariant, 'function');
+    return;
+  }
   if (name === 'adapter-webgpu') {
+    assert.equal(typeof pkg.createBrowserClient, 'function');
+    assert.equal(typeof pkg.createBrowserRunner, 'function');
+    assert.equal(typeof pkg.createGGUFDriver, 'function');
+    assert.equal(typeof pkg.createLayaDriver, 'function');
+    assert.equal(typeof pkg.createOpenJevBrowserClient, 'function');
     assert.equal(typeof pkg.createOpenJevWebGPUClient, 'function');
+    assert.equal(typeof pkg.createLayaBrowserClient, 'function');
+    assert.equal(typeof pkg.createLayaWebGPUClient, 'function');
     assert.equal(pkg.OPENJEV_MODELS['minicpm5-2b'].url.includes('huggingface.co'), true);
     return;
   }
@@ -40,7 +67,7 @@ export async function checkPackage(name, format = 'esm') {
       'adapter-openrouter': ['openRouterAdapter', 'https://openrouter.ai/api/alpha/decisions', native],
       'adapter-vercel': ['vercelAdapter', 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model', payload],
       'adapter-cloudflare': ['cloudflareAdapter', 'https://api.cloudflare.com/client/v4/accounts/account/ai/run', { success: true, result: native }],
-      'adapter-llm': ['llmAdapter', 'https://api.openai.com/v1/responses', { output_text: JSON.stringify({ answers: { on: 0.9 } }), status: 'completed' }],
+      'adapter-llm': ['llmAdapter', 'https://api.openai.com/v1/responses', { output_text: JSON.stringify({ answers: { q1: 0.9 } }), status: 'completed' }],
     };
     const [key, endpoint, response] = cases[name];
     adapter = name === 'adapter-cloudflare' ? pkg[key]({ accountId: 'account' }) : name === 'adapter-llm' ? pkg[key]() : pkg[key];
