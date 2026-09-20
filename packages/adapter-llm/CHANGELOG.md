@@ -1,5 +1,11 @@
 # @system-one-ai/adapter-llm
 
+## Unreleased
+
+- Added internal model-facing question IDs, preserving caller IDs only in typed results.
+- Added `createLlmEvaluationClient()` for bounded question/outcome groups and corrective retries of malformed decision output without moving network I/O into the adapter.
+- Kept the system safety prompt on OpenAI-compatible Chat Completions when structured outputs are enabled.
+
 ## 0.6.0
 
 ### Minor Changes

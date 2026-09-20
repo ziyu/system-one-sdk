@@ -42,7 +42,8 @@ export function validatePackage(manifest, lock) {
   assert.equal(manifest.repository?.directory, `packages/${directory}`);
   assert.equal(manifest.repository?.url, `git+https://github.com/${repository}.git`);
   assert.notEqual(manifest.private, true, 'Cannot publish a private package.');
-  assert.equal(manifest.license, 'MIT');
+  const dualLicensed = directory === 'adapter-webgpu' || directory === 'model-laya';
+  assert.equal(manifest.license, dualLicensed ? '(MIT AND Apache-2.0)' : 'MIT');
   assert.equal(manifest.publishConfig?.access, 'public');
   assert.equal(manifest.publishConfig?.registry, registry);
   return { name: manifest.name, version: manifest.version, dependencies: manifest.dependencies ?? {},

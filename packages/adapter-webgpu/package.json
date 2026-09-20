@@ -1,8 +1,8 @@
 {
   "name": "@system-one-ai/adapter-webgpu",
   "version": "0.6.0",
-  "description": "Browser WebGPU adapter for local GGUF decision models.",
-  "license": "MIT",
+  "description": "Extensible browser-local System One inference with WebGPU and WASM/CPU backends.",
+  "license": "(MIT AND Apache-2.0)",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/cjs/index.js",
@@ -25,7 +25,8 @@
   "engines": {"node": ">=20"},
   "dependencies": {
     "@system-one-ai/adapter-local": "^0.6.0",
-    "@system-one-ai/core": "^0.6.0"
+    "@system-one-ai/core": "^0.6.0",
+    "@system-one-ai/model-laya": "^0.6.0"
   },
   "publishConfig": {
     "access": "public",

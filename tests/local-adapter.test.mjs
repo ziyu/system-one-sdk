@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { booleanQuestion, ConnectionError, ResponseValidationError } from '@system-one-ai/core';
-import { createLocalClient } from '@system-one-ai/adapter-local';
+import { createLocalClient, createNativeClient } from '@system-one-ai/adapter-local';
 
 test('local runner uses the shared client validation contract', async () => {
   const seen = [];
@@ -33,4 +33,25 @@ test('local runner output still passes core response validation', async () => {
 test('local runner failures are sanitized', async () => {
   const client = createLocalClient({ id: 'broken', async evaluate() { throw new Error('private model path'); } });
   await assert.rejects(client.evaluate({ state: 'on', questions: { on: booleanQuestion('Is it on?') } }), error => error instanceof ConnectionError && !String(error).includes('private model path'));
+});
+
+test('native driver creates a disposable in-process client', async () => {
+  let disposed = 0;
+  const client = await createNativeClient({
+    driver: {
+      id: 'fixture-native',
+      defaultTimeoutMs: 500,
+      async createRunner() {
+        return {
+          id: 'fixture-native', defaultModel: 'fixture-native', supportedQuestionTypes: ['boolean'],
+          async evaluate(request) { return { model: request.model, answers: { on: { type: 'boolean', probability: 0.75 } }, usage: {} }; },
+          async dispose() { disposed++; },
+        };
+      },
+    },
+  });
+  assert.equal((await client.evaluate({ state: 'on', questions: { on: booleanQuestion('Is it on?') } })).answers.on.probability, 0.75);
+  await client.dispose();
+  await client.dispose();
+  assert.equal(disposed, 1);
 });

@@ -41,6 +41,8 @@
     "test:live:browser": "npm run examples:build && node .examples/examples/browser.js --task github-agents --task mdn-abort --headless",
     "test:browser": "npm run examples:build && node --test tests/browser/*.test.mjs",
     "demo:webgpu": "npm run build:packages && node scripts/serve-webgpu-demo.mjs",
+    "test:live:laya": "npm run build:packages && node scripts/test-laya-webgpu.mjs",
+    "test:live:laya:node": "npm run build:packages && node scripts/test-laya-node.mjs",
     "example:uncertainty": "npm run examples:build && node --env-file=.env .examples/examples/uncertainty.js",
     "example:batch": "npm run examples:build && node --env-file=.env .examples/examples/batch.js",
     "test:live:llm": "node scripts/build-packages.mjs adapter-llm && node scripts/build-packages.mjs transport-fetch && node scripts/test-llm-live.mjs",

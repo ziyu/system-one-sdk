@@ -19,16 +19,36 @@ The repository is a private npm workspace. Runtime code lives in independently p
 | `adapter-vercel` | Call decision models through Vercel AI Gateway’s Evaluation API, converting requests and answers to this library’s format. | core |
 | `adapter-llm` | Adapt general-purpose LLM APIs to the System One decision interface: turn questions into prompts and output constraints, then convert LLM responses into choices, scores and boolean results. | core |
 | `adapter-local` | Run self-hosted Python, MLX, CUDA, WASM or sidecar model runtimes through one validated local contract. | core |
-| `adapter-webgpu` | Load GGUF/OpenJev weights in the browser and run real decisions with Wllama and llama.cpp WebGPU. | adapter-local, core |
+| `adapter-webgpu` | Run browser-local GGUF/OpenJev and exported Laya ONNX models, using WebGPU when available and WASM/CPU otherwise. | adapter-local, core |
+| `runtime-onnx-node` | Run ONNX models in-process in Node.js through the local driver contract; CPU is portable by default and CoreML is opt-in on macOS. | adapter-local, core, model-laya; peer: onnxruntime-node (Transformers.js for Laya) |
+| `model-laya` | Share Laya manifest validation, request rendering, truncation and answer calibration across browser and native runtimes. | core |
+| `evaluation` | Run provider-agnostic quality, calibration, latency and context-stress evaluations for any `EvaluationClient`. | core |
 | `decisions` | Select business objects, actions and action parameters with a model, then map answers back to the original objects for the application to act on. | core |
 | `policies` | Decide whether to accept model answers using probability, option margin or confidence thresholds; return accepted, uncertain or abstained outcomes. | core |
 | `batch` | Run multiple `evaluate` calls at a chosen concurrency, returning results in input order with per-item failure and cancellation information. | core |
 
-Core imports no concrete adapter or transport. Each package provides ESM, CommonJS and TypeScript declarations. Runtime packages use Web APIs and have no third-party dependencies. Node.js 20+ is the supported target; the native Cloudflare binding is verified separately in workerd. Keep model credentials on the server.
+Core imports no concrete adapter or transport. Each package provides ESM, CommonJS and TypeScript declarations. Most runtime packages stay dependency-light; `runtime-onnx-node` deliberately keeps its native ONNX runtime and optional tokenizer as peer dependencies so applications that do not use native inference do not download platform binaries. Node.js 20+ is the supported target; the native Cloudflare binding is verified separately in workerd. Keep model credentials on the server.
 
 `adapter-local` is the common boundary for self-hosted weights. A runner owns the model runtime (Python, MLX, CUDA, WASM, or a local sidecar) and returns the core `ProviderResponse`; the SDK owns request snapshots, deadlines, cancellation and result validation.
 
-For actual browser-side inference, `adapter-webgpu` loads the pinned OpenJev/SemIf GGUF checkpoints with Wllama and llama.cpp's WebGPU backend. It can also load any custom GGUF URL; no model API is called.
+For in-process Node.js inference, `createNativeClient()` loads a `NativeModelDriver` without starting another process. `runtime-onnx-node` provides a generic ONNX driver; model families plug into it as `OnnxModelPlugin` implementations. The built-in Laya plugin consumes the same exported ONNX artifact used by the browser runtime.
+
+```sh
+npm install @system-one-ai/core @system-one-ai/adapter-local @system-one-ai/runtime-onnx-node onnxruntime-node @huggingface/transformers
+```
+
+```ts
+import { createNativeClient } from '@system-one-ai/adapter-local';
+import { createOnnxDriver, createLayaOnnxModel } from '@system-one-ai/runtime-onnx-node';
+
+const client = await createNativeClient({
+  driver: createOnnxDriver({
+    model: createLayaOnnxModel({ manifestPath: './models/laya/laya.json' }),
+  }),
+});
+```
+
+For actual browser-side inference, `adapter-webgpu` loads the pinned OpenJev/SemIf GGUF checkpoints with Wllama and exported Laya ONNX checkpoints with ONNX Runtime Web. The generic browser clients prefer WebGPU and fall back to WASM/CPU; they run the model in the browser and do not call a model API.
 
 ```sh
 npm install @system-one-ai/core @system-one-ai/adapter-webgpu
@@ -36,16 +56,26 @@ npm install @system-one-ai/core @system-one-ai/adapter-webgpu
 
 ```ts
 import { choice } from '@system-one-ai/core';
-import { createOpenJevWebGPUClient } from '@system-one-ai/adapter-webgpu';
+import { createBrowserClient, createGGUFDriver } from '@system-one-ai/adapter-webgpu';
 
-const client = await createOpenJevWebGPUClient({ model: 'qwen3-0.6b' });
+const client = await createBrowserClient({
+  driver: createGGUFDriver({ model: 'qwen3-0.6b' }),
+});
 const result = await client.evaluate({
   state: 'The customer cannot sign in after a password reset.',
   questions: { queue: choice('Which queue?', { access: 'Account access', billing: 'Billing' }) },
 });
 ```
 
-The runnable browser demo is in [`examples/webgpu-demo`](examples/webgpu-demo). Start it with `npm run demo:webgpu`, then open `http://localhost:4173/examples/webgpu-demo/` in Chrome or Edge.
+`createBrowserClient()` is the stable browser-local API. Model-specific support is supplied through `BrowserModelDriver`; built-in drivers currently cover GGUF/Wllama and Laya ONNX. Adding another model family only requires another driver. Set `device: 'wasm'` to force CPU-only inference or `device: 'webgpu'` to require WebGPU. The older model-named constructors remain compatibility aliases.
+
+For an exported Laya graph, use `createBrowserClient({ driver: createLayaDriver({ manifestUrl }) })`; it follows the same `auto | webgpu | wasm` device policy.
+
+The [Laya export tool](scripts/laya/README.md) converts the complete trained encoder and decision/action heads to ONNX and verifies numerical parity with the original Python model. Export to `.artifacts/laya`, start `npm run demo:webgpu`, and open `http://localhost:4173/examples/laya-webgpu-demo/` for all three question types. The initial exporter targets the pinned English root checkpoint in FP32. See [Laya's runtime API and limits](packages/adapter-webgpu/README.md#laya-model-preparation-and-evaluation); run `npm run test:live:laya` for trained-model browser parity.
+
+For Node.js, `npm run test:live:laya:node` loads the same export through `onnxruntime-node` and compares a complete typed-decision fixture against the recorded upstream response. See the [Node ONNX validation record](docs/laya-node-validation.md).
+
+The [desktop WebGPU validation record](docs/laya-webgpu-validation.md) includes six complete-checkpoint cases, actual GPU dispatch counts and measured latency. On the tested Intel GPU, a 32-token single-question warm call took 780–944 ms; the record also documents initialization cost and runtime limitations.
 
 ## Install and use
 
@@ -120,6 +150,23 @@ console.log(department);
 Supported APIs are OpenAI Responses, OpenAI-compatible Chat Completions and Anthropic Messages. OpenAI defaults to Responses on `api.openai.com` and Chat Completions on custom base URLs; `api` can select either explicitly. Set `structuredOutputs: false` for compatible services without native JSON-schema support.
 
 `llmAnswerMode: 'probabilities'` asks the LLM to report probabilities. These are estimates generated by the LLM, with no guarantee of calibration. `discrete` asks the LLM to select answers directly, then encodes them as 0/1 values in the shared result format; the resulting distributions and confidence encode the selection, not measured model certainty. Probability normalization is opt-in through `normalizeProbabilities`.
+
+The adapter exposes internal `q1`, `q2`, ... IDs to the model instead of application-controlled question keys. For local or compatible LLMs that need bounded calls, wrap the client with `createLlmEvaluationClient(client, { questionsPerCall, outcomesPerCall, malformedRetries })`; it groups questions and performs corrective retries only for malformed decision output while preserving the caller's total timeout/cancellation budget.
+
+## Evaluate System One models consistently
+
+`@system-one-ai/evaluation` runs the same quality, calibration, latency and context-stress harness against any `EvaluationClient`: hosted System One models, Laya ONNX, browser GGUF, or prompted LLMs.
+
+```ts
+import { runEvaluation, summarizeEvaluation, backgroundVariant } from '@system-one-ai/evaluation';
+
+const rows = await runEvaluation(client, cases, {
+  variants: [{ id: 'base' }, backgroundVariant('long-context', backgroundText)],
+});
+const summary = summarizeEvaluation(rows.filter(row => row.variant === 'base'));
+```
+
+Metrics include effective/valid accuracy, Wilson 95% intervals, macro F1, Brier score, NLL, ECE, score MAE, p50/p95 latency, failures, attempts and reported-token means. ECE uses the predicted class probability; model/provider `confidence` is kept separate. Use task-specific subsets for calibration/F1 comparisons, and `pairedContextEffect()` to measure prediction changes under added context.
 
 ## Composition
 

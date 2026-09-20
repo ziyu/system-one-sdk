@@ -10,12 +10,16 @@ test('workspace imports follow declared dependencies, with no adapter or transpo
     const dependencies = Object.keys(manifest.dependencies ?? {});
     if (directory === 'core') assert.deepEqual(dependencies, []);
     for (const dependency of dependencies) {
-      assert.ok(directory === 'adapter-webgpu' && dependency === '@system-one-ai/adapter-local' || !dependency.startsWith('@system-one-ai/adapter-'), 'Only the WebGPU adapter may compose the local runtime adapter');
+      assert.ok(
+        (directory === 'adapter-webgpu' || directory === 'runtime-onnx-node') && dependency === '@system-one-ai/adapter-local' || !dependency.startsWith('@system-one-ai/adapter-'),
+        'Only local runtime packages may compose the local adapter',
+      );
       assert.notEqual(dependency, '@system-one-ai/sdk');
     }
     for (const filename of readdirSync(path.join(cwd, 'src')).filter(name => name.endsWith('.ts'))) {
       const source = readFileSync(path.join(cwd, 'src', filename), 'utf8');
       for (const [, specifier] of source.matchAll(/(?:from|import)\s+['"]([^'"]+)['"]/g)) {
+        if (specifier.startsWith('node:')) continue;
         if (specifier.startsWith('.')) assert.ok(!specifier.startsWith('../'), 'Source cannot reach another package by relative path');
         else assert.ok(dependencies.some(name => specifier === name || specifier.startsWith(`${name}/`)), `${manifest.name} has an undeclared import: ${specifier}`);
       }

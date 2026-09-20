@@ -1,5 +1,5 @@
 import { choice } from '@system-one-ai/core';
-import { createOpenJevWebGPUClient, OPENJEV_MODELS } from '@system-one-ai/adapter-webgpu';
+import { createBrowserClient, createGGUFDriver, OPENJEV_MODELS } from '@system-one-ai/adapter-webgpu';
 
 const $ = (selector) => document.querySelector(selector);
 const modelSelect = $('#model-select');
@@ -66,11 +66,11 @@ async function loadModel() {
   loadButton.disabled = true;
   modelSelect.disabled = true;
   document.body.classList.add('is-loading');
-  setStatus('checking WebGPU');
+  setStatus('checking local runtime');
   try {
-    client = await createOpenJevWebGPUClient({ model: modelSelect.value, onProgress: modelProgress });
+    client = await createBrowserClient({ driver: createGGUFDriver({ model: modelSelect.value, onProgress: modelProgress }) });
     const model = OPENJEV_MODELS[modelSelect.value];
-    setStatus(`${model.name} ready on WebGPU`, 100, 'ok');
+    setStatus(`${model.name} ready locally`, 100, 'ok');
     $('#result-model').textContent = `${model.name.toUpperCase()} / READY`;
     loadButton.innerHTML = '<span class="button-icon">✓</span> CHECKPOINT READY';
     runButton.disabled = false;
@@ -110,6 +110,7 @@ function renderResult(result, startedAt) {
     return row;
   }));
   $('#meta-model').textContent = model.name;
+  $('#model-family').textContent = `llama.cpp / ${result.providerMetadata?.device === 'wasm' ? 'WASM CPU' : 'WebGPU'}`;
   $('#meta-input').textContent = result.usage.inputTokens ? `${result.usage.inputTokens} tok` : '—';
   $('#meta-output').textContent = result.usage.outputTokens ? `${result.usage.outputTokens} tok` : '—';
   $('#meta-time').textContent = `${Date.now() - startedAt} ms`;
@@ -154,5 +155,5 @@ loadButton.addEventListener('click', loadModel);
 runButton.addEventListener('click', runDecision);
 setOptions(['Account access support', 'Billing support', 'Close as resolved']);
 renderModel();
-if (!('gpu' in navigator)) setStatus('WebGPU unavailable · use Chrome/Edge over HTTPS or localhost');
-else setStatus('WebGPU detected · choose LOAD CHECKPOINT');
+if (!('gpu' in navigator)) setStatus('WebGPU unavailable · auto mode will use WASM / CPU');
+else setStatus('WebGPU detected · auto mode will prefer GPU');

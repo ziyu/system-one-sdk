@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { booleanQuestion, choice, score } from '@system-one-ai/core';
-import { createOpenJevWebGPUClient } from '@system-one-ai/adapter-webgpu';
+import { createBrowserClient, createGGUFDriver, createOpenJevWebGPUClient } from '@system-one-ai/adapter-webgpu';
 
 test('WebGPU adapter loads a GGUF runner and normalizes model JSON', async () => {
   const previousNavigator = globalThis.navigator;
@@ -43,4 +43,78 @@ test('WebGPU adapter loads a GGUF runner and normalizes model JSON', async () =>
   } finally {
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: previousNavigator });
   }
+});
+
+test('browser adapter falls back to WASM CPU when WebGPU is unavailable', async () => {
+  const previousNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
+  const calls = [];
+  const engine = {
+    isSupportWebGPU: () => false,
+    async loadModelFromUrl(url, options) { calls.push({ type: 'load', url, options }); },
+    async createChatCompletion() {
+      return { choices: [{ message: { content: '{"probability":0.7}' } }] };
+    },
+  };
+  try {
+    const client = await createBrowserClient({
+      driver: createGGUFDriver({ model: 'fixture-model', modelUrl: 'https://models.example/fixture.gguf', engineFactory: () => engine }),
+    });
+    const result = await client.evaluate({
+      state: 'offline browser',
+      questions: { ready: booleanQuestion('Can the local model answer?') },
+    });
+    assert.equal(calls[0].options.n_gpu_layers, 0);
+    assert.equal(result.answers.ready.probability, 0.7);
+    assert.equal(result.providerMetadata.device, 'wasm');
+    assert.equal(result.response.adapter, 'local-wasm-fixture-model');
+  } finally {
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: previousNavigator });
+  }
+});
+
+test('browser adapter can force WASM even when WebGPU exists', async () => {
+  const previousNavigator = globalThis.navigator;
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { gpu: { requestAdapter: async () => ({}) } } });
+  let loadOptions;
+  const engine = {
+    isSupportWebGPU: () => true,
+    async loadModelFromUrl(_url, options) { loadOptions = options; },
+    async createChatCompletion() {
+      return { choices: [{ message: { content: '{"probability":0.4}' } }] };
+    },
+  };
+  try {
+    const client = await createBrowserClient({
+      device: 'wasm',
+      driver: createGGUFDriver({ model: 'fixture-model', modelUrl: 'https://models.example/fixture.gguf', engineFactory: () => engine }),
+    });
+    const result = await client.evaluate({ state: 'local cpu', questions: { ready: booleanQuestion('Ready?') } });
+    assert.equal(loadOptions.n_gpu_layers, 0);
+    assert.equal(result.providerMetadata.device, 'wasm');
+  } finally {
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: previousNavigator });
+  }
+});
+
+test('generic browser client accepts a custom model driver', async () => {
+  let disposed = false;
+  const client = await createBrowserClient({
+    driver: {
+      id: 'future-model',
+      async createRunner({ device }) {
+        assert.equal(device, 'auto');
+        return {
+          id: 'future-model', defaultModel: 'future-v1', supportedQuestionTypes: ['boolean'],
+          async evaluate(request) {
+            return { model: request.model, answers: { ready: { type: 'boolean', probability: 1 } }, usage: {}, providerMetadata: { runtime: 'fixture' } };
+          },
+          async dispose() { disposed = true; },
+        };
+      },
+    },
+  });
+  assert.equal((await client.evaluate({ state: 'local', questions: { ready: booleanQuestion('Ready?') } })).answers.ready.probability, 1);
+  await client.dispose();
+  assert.equal(disposed, true);
 });
