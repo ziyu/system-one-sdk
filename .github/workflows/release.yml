@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   prepare:
-    if: github.repository == 'ziyu/sytem-one-sdk' && !inputs.artifact-run-id
+    if: github.repository == 'ziyu/system-one-sdk' && !inputs.artifact-run-id
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -49,7 +49,7 @@ jobs:
           retention-days: 90
   consumers:
     needs: prepare
-    if: ${{ always() && github.repository == 'ziyu/sytem-one-sdk' && (needs.prepare.result == 'success' || (needs.prepare.result == 'skipped' && inputs.artifact-run-id)) }}
+    if: ${{ always() && github.repository == 'ziyu/system-one-sdk' && (needs.prepare.result == 'success' || (needs.prepare.result == 'skipped' && inputs.artifact-run-id)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:

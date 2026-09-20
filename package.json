@@ -4,11 +4,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ziyu/sytem-one-sdk.git"
+    "url": "git+https://github.com/ziyu/system-one-sdk.git"
   },
-  "homepage": "https://github.com/ziyu/sytem-one-sdk#readme",
+  "homepage": "https://github.com/ziyu/system-one-sdk#readme",
   "bugs": {
-    "url": "https://github.com/ziyu/sytem-one-sdk/issues"
+    "url": "https://github.com/ziyu/system-one-sdk/issues"
   },
   "type": "module",
   "workspaces": [

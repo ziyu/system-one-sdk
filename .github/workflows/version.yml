@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   version:
-    if: github.repository == 'ziyu/sytem-one-sdk' && github.ref == 'refs/heads/main'
+    if: github.repository == 'ziyu/system-one-sdk' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803

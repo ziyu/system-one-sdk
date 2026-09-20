@@ -29,7 +29,7 @@ Run `npm run test:release` with a pending changeset for a disposable, non-publis
 
 ## npm and GitHub setup
 
-Enable GitHub Actions to create pull requests. The `npm` environment permits only the `main` branch, requires maintainer `ziyu` to review deployments, and disables administrator bypass. Self-review remains possible for this single-maintainer repository. The upload and finalization jobs have separate deployments: approve uploads after the candidate checks, then finalization after registry/live acceptance. Configure npm Trusted Publishing for **each** package with owner `ziyu`, repository `sytem-one-sdk`, workflow `release.yml`, environment `npm`. Publication uses Node 24 and npm 11.17.0.
+Enable GitHub Actions to create pull requests. The `npm` environment permits only the `main` branch, requires maintainer `ziyu` to review deployments, and disables administrator bypass. Self-review remains possible for this single-maintainer repository. The upload and finalization jobs have separate deployments: approve uploads after the candidate checks, then finalization after registry/live acceptance. Configure npm Trusted Publishing for **each** package with owner `ziyu`, repository `system-one-sdk`, workflow `release.yml`, environment `npm`. Publication uses Node 24 and npm 11.17.0.
 
 npm OIDC currently authorizes publishing, but not standalone dist-tag changes ([npm/cli#8547](https://github.com/npm/cli/issues/8547)). Store `NPM_TAG_TOKEN` only as a secret of the protected `npm` environment: a granular token with read/write access to the 11 selected independent packages, no organization-management permission, automation/2FA bypass enabled and a maximum 90-day lifetime. npm offers no tag-only write permission; restrict the selected packages and rotate the secret before expiry. Do not include the old SDK. Token identity is checked before stable uploads; a missing/expired token fails the job. The token is exposed only to the identity check and finalization step; uploads continue using OIDC with provenance. Never put it in source, artifacts or repository-wide workflow variables.
 
@@ -46,7 +46,7 @@ For `0.6.0-rc.0`, two authenticated removal attempts returned registry HTTP 400 
 Prefer **Re-run failed jobs**: successful prepare jobs retain the original artifact. If manually resuming, supply both the original full commit and original run ID:
 
 ```sh
-gh workflow run release.yml --repo ziyu/sytem-one-sdk --ref main \
+gh workflow run release.yml --repo ziyu/system-one-sdk --ref main \
   -f commit=FULL_SOURCE_SHA -f artifact-run-id=ORIGINAL_RUN_ID
 ```
 
