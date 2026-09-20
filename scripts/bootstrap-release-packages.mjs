@@ -36,6 +36,7 @@ async function tags(name) {
   const response = await fetch(`${registry}-/package/${encodeURIComponent(name)}/dist-tags`, {
     redirect: 'error', signal: AbortSignal.timeout(15_000),
   });
+  if (response.status === 404) { await response.body?.cancel(); return null; }
   assert.ok(response.ok, `Registry dist-tags failed for ${name}: HTTP ${response.status}`);
   return response.json();
 }
@@ -49,10 +50,14 @@ function verifyPublished(pkg, value) {
 async function waitForPublished(pkg) {
   for (let attempt = 0; attempt < 61; attempt++) {
     const value = await metadata(pkg.name, pkg.version);
-    if (value) { verifyPublished(pkg, value); return; }
+    if (value) {
+      verifyPublished(pkg, value);
+      const distTags = await tags(pkg.name);
+      if (distTags) return distTags;
+    }
     await delay(5_000);
   }
-  throw new Error(`Published metadata did not become visible for ${pkg.name}@${pkg.version}.`);
+  throw new Error(`Published metadata and dist-tags did not become visible for ${pkg.name}@${pkg.version}.`);
 }
 
 async function main() {
@@ -83,8 +88,7 @@ async function main() {
     execFileSync('npm', ['publish', path.join(artifacts, pkg.filename), '--access', 'public', '--tag', 'next', '--provenance=false'], {
       stdio: 'inherit', env: process.env,
     });
-    await waitForPublished(pkg);
-    const distTags = await tags(pkg.name);
+    const distTags = await waitForPublished(pkg);
     assert.equal(distTags.next, pkg.version, `${pkg.name} next tag was not initialized to ${pkg.version}.`);
     if (distTags.latest === pkg.version) {
       console.warn(`npm also initialized unavoidable latest for new package ${pkg.name}@${pkg.version}; finalization will verify it again.`);
