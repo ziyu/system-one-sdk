@@ -18,11 +18,34 @@ The repository is a private npm workspace. Runtime code lives in independently p
 | `adapter-cloudflare` | Run System One models on Cloudflare through its REST API or the native `env.AI` binding inside Workers. | core, protocol-system-one, transport-fetch |
 | `adapter-vercel` | Call decision models through Vercel AI Gateway’s Evaluation API, converting requests and answers to this library’s format. | core |
 | `adapter-llm` | Adapt general-purpose LLM APIs to the System One decision interface: turn questions into prompts and output constraints, then convert LLM responses into choices, scores and boolean results. | core |
+| `adapter-local` | Run self-hosted Python, MLX, CUDA, WASM or sidecar model runtimes through one validated local contract. | core |
+| `adapter-webgpu` | Load GGUF/OpenJev weights in the browser and run real decisions with Wllama and llama.cpp WebGPU. | adapter-local, core |
 | `decisions` | Select business objects, actions and action parameters with a model, then map answers back to the original objects for the application to act on. | core |
 | `policies` | Decide whether to accept model answers using probability, option margin or confidence thresholds; return accepted, uncertain or abstained outcomes. | core |
 | `batch` | Run multiple `evaluate` calls at a chosen concurrency, returning results in input order with per-item failure and cancellation information. | core |
 
 Core imports no concrete adapter or transport. Each package provides ESM, CommonJS and TypeScript declarations. Runtime packages use Web APIs and have no third-party dependencies. Node.js 20+ is the supported target; the native Cloudflare binding is verified separately in workerd. Keep model credentials on the server.
+
+`adapter-local` is the common boundary for self-hosted weights. A runner owns the model runtime (Python, MLX, CUDA, WASM, or a local sidecar) and returns the core `ProviderResponse`; the SDK owns request snapshots, deadlines, cancellation and result validation.
+
+For actual browser-side inference, `adapter-webgpu` loads the pinned OpenJev/SemIf GGUF checkpoints with Wllama and llama.cpp's WebGPU backend. It can also load any custom GGUF URL; no model API is called.
+
+```sh
+npm install @system-one-ai/core @system-one-ai/adapter-webgpu
+```
+
+```ts
+import { choice } from '@system-one-ai/core';
+import { createOpenJevWebGPUClient } from '@system-one-ai/adapter-webgpu';
+
+const client = await createOpenJevWebGPUClient({ model: 'qwen3-0.6b' });
+const result = await client.evaluate({
+  state: 'The customer cannot sign in after a password reset.',
+  questions: { queue: choice('Which queue?', { access: 'Account access', billing: 'Billing' }) },
+});
+```
+
+The runnable browser demo is in [`examples/webgpu-demo`](examples/webgpu-demo). Start it with `npm run demo:webgpu`, then open `http://localhost:4173/examples/webgpu-demo/` in Chrome or Edge.
 
 ## Install and use
 

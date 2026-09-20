@@ -1,6 +1,6 @@
 # SDK 包边界与迁移
 
-仓库使用 npm workspaces，运行时代码全部位于 `packages/`。根目录仅负责编排开发、测试和发布，标记为 private；旧 SDK 入口、转导出和默认客户端已删除。11 个独立包已发布稳定版 `0.6.0`，通过 npm 默认 `latest` 安装，详见[迁移说明](migration-0.6.md)与[验证记录](validation.md)。
+仓库使用 npm workspaces，运行时代码全部位于 `packages/`。根目录仅负责编排开发、测试和发布，标记为 private；旧 SDK 入口、转导出和默认客户端已删除。当前 workspace 有 13 个独立包，已有发布包的稳定线为 `0.6.0`，详见[迁移说明](migration-0.6.md)与[验证记录](validation.md)。
 
 参考 [AI SDK 的 Providers and Models](https://ai-sdk.dev/docs/foundations/providers-and-models) 和 [Testing](https://ai-sdk.dev/docs/ai-sdk-core/testing)：共享稳定契约、显式传入实现、按供应商独立发布，用确定性测试验证业务行为。沿用已有 `SystemOneAdapter.prepare/decode/authenticate` 契约，不引入另一套 LLM model 层。
 
@@ -16,6 +16,8 @@
 | `@system-one-ai/adapter-cloudflare` | 在 Cloudflare 上调用 System One 模型，支持 REST API 和 Workers 内的 `env.AI` binding。 | core、protocol-system-one、transport-fetch |
 | `@system-one-ai/adapter-vercel` | 通过 Vercel AI Gateway 的 Evaluation 接口调用决策模型，将请求和答案转换为本库格式。 | core |
 | `@system-one-ai/adapter-llm` | 把通用 LLM 接口适配为 System One 决策接口：将问题转为 prompt 和输出约束，再把 LLM 回答转换为选择、评分和真假结果。 | core |
+| `@system-one-ai/adapter-local` | 将 Python、MLX、CUDA、WASM 或 sidecar 本地模型统一接入，并执行结果校验。 | core |
+| `@system-one-ai/adapter-webgpu` | 在浏览器中加载 GGUF/OpenJev 权重，通过 Wllama 和 llama.cpp WebGPU 执行真实决策。 | adapter-local、core |
 | `@system-one-ai/decisions` | 让模型从业务对象中选出目标、选择动作及其参数，并将答案映射回原始对象，供应用执行。 | core |
 | `@system-one-ai/policies` | 按概率、选项差值或 confidence 阈值判断是否接受模型答案，明确返回接受、不确定或弃权。 | core |
 | `@system-one-ai/batch` | 以指定并发数执行多次 `evaluate`，按输入顺序返回每项结果，保留失败和取消信息。 | core |
@@ -32,14 +34,16 @@ graph TD
   Protocol --> Core
   Vercel["adapter-vercel"] --> Core
   LLM["adapter-llm：保持单包"] --> Core
+  Local["adapter-local：本地 runner"] --> Core
+  WebGPU["adapter-webgpu：Wllama/WebGPU"] --> Local
   Decisions["decisions"] --> Core
   Policies["policies"] --> Core
   Batch["batch"] --> Core
 ```
 
-core 不导入任何具体 adapter、transport 或供应商 SDK。adapter 之间不互相导入。REST adapter 只做编解码；Cloudflare 的独立 workers 入口实现 EvaluationClient，复用 transport-fetch 的响应和期限工具，调用原生 binding。`protocol-system-one` 只共享已经被三个服务使用的 wire codec，没有 endpoint、默认模型、认证或请求生命周期。
+core 不导入任何具体 adapter、transport 或供应商 SDK。`adapter-webgpu` 是唯一的组合例外，它复用 `adapter-local` 的生命周期和统一校验；其他 adapter 之间不互相导入。REST adapter 只做编解码；Cloudflare 的独立 workers 入口实现 EvaluationClient，复用 transport-fetch 的响应和期限工具，调用原生 binding。`protocol-system-one` 只共享已经被三个服务使用的 wire codec，没有 endpoint、默认模型、认证或请求生命周期。
 
-core 仍保留当前 HTTP codec 契约中的 URL、headers 和配置类型，以及独立的 `core/http` 校验工具。它不调用 Fetch，不解析供应商特有字段。此次先明确代码所有权与执行边界，保持现有请求语义；如将来需要非 HTTP 执行，再根据具体调用场景调整契约。
+core 仍保留当前 HTTP codec 契约中的 URL、headers 和配置类型，以及独立的 `core/http` 校验工具。它不调用 Fetch，不解析供应商特有字段。非 HTTP 权重通过 `adapter-local` 的 runner 边界接入，core 仍只处理统一的 `EvaluationClient` 语义。
 
 ## 调用方式
 
@@ -99,7 +103,7 @@ npm run test:live:llm -- /path/to/llm.env
 
 每个包都有独立 build、typecheck、test 和 prepack；构建顺序从 package.json 的依赖推导。包测试在仓库之外创建临时项目，只安装目标包及其声明的依赖，验证 ESM/CJS 运行与 NodeNext 声明解析。所有类型推导和负面断言还会对已安装的 ESM/CJS 声明再次执行。
 
-协议、验证、超时、取消、重试、本地 HTTP、业务场景测试直接导入独立包。依赖检查拒绝 core 依赖实现包、adapter 互相依赖、未声明依赖和跨包源文件导入。真实 LLM 测试单独执行，读取指定文件，不进入普通 CI，不保存密钥。
+协议、验证、超时、取消、重试、本地 HTTP、业务场景测试直接导入独立包。依赖检查拒绝 core 依赖实现包、除 WebGPU 复用 local runtime 外的 adapter 互相依赖、未声明依赖和跨包源文件导入。真实 LLM 测试单独执行，读取指定文件，不进入普通 CI，不保存密钥。
 
 ## 后续开发规则
 

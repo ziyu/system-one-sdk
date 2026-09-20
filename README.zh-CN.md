@@ -18,11 +18,34 @@
 | `adapter-cloudflare` | 在 Cloudflare 上调用 System One 模型，支持 REST API 和 Workers 内的 `env.AI` binding。 | core、protocol-system-one、transport-fetch |
 | `adapter-vercel` | 通过 Vercel AI Gateway 的 Evaluation 接口调用决策模型，将请求和答案转换为本库格式。 | core |
 | `adapter-llm` | 把通用 LLM 接口适配为 System One 决策接口：将问题转为 prompt 和输出约束，再把 LLM 回答转换为选择、评分和真假结果。 | core |
+| `adapter-local` | 将 Python、MLX、CUDA、WASM 或 sidecar 本地模型统一接入，并执行结果校验。 | core |
+| `adapter-webgpu` | 在浏览器中加载 GGUF/OpenJev 权重，通过 Wllama 和 llama.cpp WebGPU 执行真实决策。 | adapter-local、core |
 | `decisions` | 让模型从业务对象中选出目标、选择动作及其参数，并将答案映射回原始对象，供应用执行。 | core |
 | `policies` | 按概率、选项差值或 confidence 阈值判断是否接受模型答案，明确返回接受、不确定或弃权。 | core |
 | `batch` | 以指定并发数执行多次 `evaluate`，按输入顺序返回每项结果，保留失败和取消信息。 | core |
 
 core 不导入具体 adapter 或 transport。各包提供 ESM、CommonJS 和 TypeScript 声明。运行时使用 Web API，无第三方依赖；支持目标为 Node.js 20+，Cloudflare 原生 binding 另有 workerd 运行时验证。模型密钥应保留在服务端。
+
+`adapter-local` 是自部署权重的统一边界。runner 负责 Python、MLX、CUDA、WASM 或本地 sidecar 的模型运行时，并返回 core 的 `ProviderResponse`；SDK 负责请求快照、期限、取消和结果校验。
+
+需要真实浏览器推理时使用 `adapter-webgpu`：它通过 Wllama 和 llama.cpp 的 WebGPU 后端加载 OpenJev/SemIf 固定版本 GGUF，也可以传入任意 GGUF URL，不调用模型 API。
+
+```sh
+npm install @system-one-ai/core @system-one-ai/adapter-webgpu
+```
+
+```ts
+import { choice } from '@system-one-ai/core';
+import { createOpenJevWebGPUClient } from '@system-one-ai/adapter-webgpu';
+
+const client = await createOpenJevWebGPUClient({ model: 'qwen3-0.6b' });
+const result = await client.evaluate({
+  state: '客户重置密码后仍然无法登录。',
+  questions: { queue: choice('应该进入哪个队列？', { access: '账户访问', billing: '账单' }) },
+});
+```
+
+可直接运行的网页 demo 在 [`examples/webgpu-demo`](examples/webgpu-demo)：执行 `npm run demo:webgpu`，然后用 Chrome 或 Edge 打开 `http://localhost:4173/examples/webgpu-demo/`。
 
 ## 安装与调用
 
