@@ -42,7 +42,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ziyu/sytem-one-sdk.git",
+    "url": "git+https://github.com/ziyu/system-one-sdk.git",
     "directory": "packages/runtime-onnx-node"
   },
   "scripts": {

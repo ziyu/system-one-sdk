@@ -139,7 +139,7 @@ test('RC dependencies select the matching prerelease and reject cycles', async (
 });
 
 test('release package metadata rejects version/lock/repository/registry mismatches', () => {
-  const manifest = { ...pkg('core'), license: 'MIT', repository: { url: 'git+https://github.com/ziyu/sytem-one-sdk.git', directory: 'packages/core' }, publishConfig: { access: 'public', registry: 'https://registry.npmjs.org/' } };
+  const manifest = { ...pkg('core'), license: 'MIT', repository: { url: 'git+https://github.com/ziyu/system-one-sdk.git', directory: 'packages/core' }, publishConfig: { access: 'public', registry: 'https://registry.npmjs.org/' } };
   const lock = { packages: { 'packages/core': { version: '0.6.0' } } };
   assert.equal(validatePackage(manifest, lock).tag, 'core-v0.6.0');
   for (const changed of [{ version: '0.6.1' }, { version: '0.6.0+build' }, { private: true }, { name: '@other/core' }, { publishConfig: {} }, { repository: {} }]) {

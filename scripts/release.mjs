@@ -8,7 +8,7 @@ import semver from 'semver';
 import { buildOrder, root, workspaces } from './workspaces.mjs';
 import { artifacts, digest, sourceIdentity, testPackages } from './test-package.mjs';
 
-const repository = 'ziyu/sytem-one-sdk';
+const repository = 'ziyu/system-one-sdk';
 const registry = 'https://registry.npmjs.org/';
 const run = (program, args) => execFileSync(program, args, { cwd: root, encoding: 'utf8' });
 const readJSON = async file => JSON.parse(await readFile(path.join(root, file), 'utf8'));

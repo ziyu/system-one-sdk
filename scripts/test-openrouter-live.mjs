@@ -74,7 +74,7 @@ try {
   report.requestedModel = model;
   const client = new SystemOne({
     adapter: openRouterAdapter, baseURL, apiKey, model, timeoutMs: 15000, maxRetries: 0,
-    headers: { 'HTTP-Referer': 'https://github.com/ziyu/sytem-one-sdk', 'X-OpenRouter-Title': 'System One SDK integration test' },
+    headers: { 'HTTP-Referer': 'https://github.com/ziyu/system-one-sdk', 'X-OpenRouter-Title': 'System One SDK integration test' },
     transport: createFetchTransport(async (input, init) => {
       const url = String(input);
       assert.equal(url, 'https://openrouter.ai/api/alpha/decisions');
