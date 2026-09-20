@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/adapter-local",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Local model runner adapter for System One decisions.",
   "license": "MIT",
   "type": "module",

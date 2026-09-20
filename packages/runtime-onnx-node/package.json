@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/runtime-onnx-node",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "In-process ONNX Runtime Node driver for local System One models.",
   "license": "MIT",
   "type": "module",
@@ -21,20 +21,31 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md", "LICENSE", "CHANGELOG.md"],
-  "engines": {"node": ">=20"},
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "@system-one-ai/adapter-local": "^0.6.0",
+    "@system-one-ai/adapter-local": "^0.7.0",
     "@system-one-ai/core": "^0.6.0",
-    "@system-one-ai/model-laya": "^0.6.0"
+    "@system-one-ai/model-laya": "^0.7.0"
   },
   "peerDependencies": {
     "@huggingface/transformers": "^3.8.1",
     "onnxruntime-node": "^1.30.0"
   },
   "peerDependenciesMeta": {
-    "@huggingface/transformers": {"optional": true},
-    "onnxruntime-node": {"optional": true}
+    "@huggingface/transformers": {
+      "optional": true
+    },
+    "onnxruntime-node": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public",

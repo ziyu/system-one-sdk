@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/adapter-llm",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "LLM-backed decision adapter.",
   "license": "MIT",
   "type": "module",

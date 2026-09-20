@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/model-laya",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Shared Laya model rendering, manifest validation, and answer calibration for System One runtimes.",
   "license": "(MIT AND Apache-2.0)",
   "type": "module",
@@ -21,8 +21,15 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md", "LICENSE", "CHANGELOG.md"],
-  "engines": {"node": ">=20"},
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@system-one-ai/core": "^0.6.0"
   },
