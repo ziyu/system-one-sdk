@@ -1,48 +1,28 @@
 {
   "packages": [
     {
-      "name": "@system-one-ai/adapter-cloudflare",
-      "version": "0.6.0"
-    },
-    {
       "name": "@system-one-ai/adapter-llm",
-      "version": "0.6.0"
+      "version": "0.7.0"
     },
     {
-      "name": "@system-one-ai/adapter-openrouter",
-      "version": "0.6.0"
+      "name": "@system-one-ai/adapter-local",
+      "version": "0.7.0"
     },
     {
-      "name": "@system-one-ai/adapter-system-one",
-      "version": "0.6.0"
+      "name": "@system-one-ai/adapter-webgpu",
+      "version": "0.7.0"
     },
     {
-      "name": "@system-one-ai/adapter-vercel",
-      "version": "0.6.0"
+      "name": "@system-one-ai/evaluation",
+      "version": "0.7.0"
     },
     {
-      "name": "@system-one-ai/batch",
-      "version": "0.6.0"
+      "name": "@system-one-ai/model-laya",
+      "version": "0.7.0"
     },
     {
-      "name": "@system-one-ai/core",
-      "version": "0.6.0"
-    },
-    {
-      "name": "@system-one-ai/decisions",
-      "version": "0.6.0"
-    },
-    {
-      "name": "@system-one-ai/policies",
-      "version": "0.6.0"
-    },
-    {
-      "name": "@system-one-ai/protocol-system-one",
-      "version": "0.6.0"
-    },
-    {
-      "name": "@system-one-ai/transport-fetch",
-      "version": "0.6.0"
+      "name": "@system-one-ai/runtime-onnx-node",
+      "version": "0.7.0"
     }
   ]
 }

@@ -1,5 +1,11 @@
 # @system-one-ai/adapter-llm
 
+## 0.7.0
+
+### Minor Changes
+
+- 013fdc0: Harden LLM-backed System One decisions with internal question IDs, bounded question/outcome grouping, and corrective malformed-output retries. Add a provider-agnostic evaluation package for accuracy, calibration, latency, token, retry, and paired context-stress metrics across any EvaluationClient.
+
 ## Unreleased
 
 - Added internal model-facing question IDs, preserving caller IDs only in typed results.
