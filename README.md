@@ -19,27 +19,28 @@ The repository is a private npm workspace. Runtime code lives in independently p
 | `adapter-vercel` | Call decision models through Vercel AI Gateway’s Evaluation API, converting requests and answers to this library’s format. | core |
 | `adapter-llm` | Adapt general-purpose LLM APIs to the System One decision interface: turn questions into prompts and output constraints, then convert LLM responses into choices, scores and boolean results. | core |
 | `adapter-local` | Run self-hosted Python, MLX, CUDA, WASM or sidecar model runtimes through one validated local contract. | core |
-| `adapter-webgpu` | Run browser-local GGUF/OpenJev and exported Laya ONNX models, using WebGPU when available and WASM/CPU otherwise. | adapter-local, core |
-| `runtime-onnx-node` | Run ONNX models in-process in Node.js through the local driver contract; CPU is portable by default and CoreML is opt-in on macOS. | adapter-local, core, model-laya; peer: onnxruntime-node (Transformers.js for Laya) |
-| `model-laya` | Share Laya manifest validation, request rendering, truncation and answer calibration across browser and native runtimes. | core |
+| `adapter-webgpu` | Provide the model-agnostic browser client/driver contract and a GGUF/Wllama driver, using WebGPU or WASM/CPU. | adapter-local, core |
+| `runtime-onnx-node` | Run model plugins in-process through ONNX Runtime; CPU is portable by default and CoreML is opt-in on macOS. | adapter-local, core; peer: onnxruntime-node |
+| `model-laya` | Provide optional Laya browser and Node plugins plus shared manifest, rendering, truncation and calibration semantics. | adapter-webgpu, runtime-onnx-node, core; peer: Transformers.js |
 | `evaluation` | Run provider-agnostic quality, calibration, latency and context-stress evaluations for any `EvaluationClient`. | core |
 | `decisions` | Select business objects, actions and action parameters with a model, then map answers back to the original objects for the application to act on. | core |
 | `policies` | Decide whether to accept model answers using probability, option margin or confidence thresholds; return accepted, uncertain or abstained outcomes. | core |
 | `batch` | Run multiple `evaluate` calls at a chosen concurrency, returning results in input order with per-item failure and cancellation information. | core |
 
-Core imports no concrete adapter or transport. Each package provides ESM, CommonJS and TypeScript declarations. Most runtime packages stay dependency-light; `runtime-onnx-node` deliberately keeps its native ONNX runtime and optional tokenizer as peer dependencies so applications that do not use native inference do not download platform binaries. Node.js 20+ is the supported target; the native Cloudflare binding is verified separately in workerd. Keep model credentials on the server.
+Core imports no concrete adapter or transport. Each package provides ESM, CommonJS and TypeScript declarations. `runtime-onnx-node` keeps its native ONNX runtime as a peer dependency so applications that do not use native inference do not download platform binaries. Node.js 20+ is the supported target; the native Cloudflare binding is verified separately in workerd. Keep model credentials on the server.
 
 `adapter-local` is the common boundary for self-hosted weights. A runner owns the model runtime (Python, MLX, CUDA, WASM, or a local sidecar) and returns the core `ProviderResponse`; the SDK owns request snapshots, deadlines, cancellation and result validation.
 
-For in-process Node.js inference, `createNativeClient()` loads a `NativeModelDriver` without starting another process. `runtime-onnx-node` provides a generic ONNX driver; model families plug into it as `OnnxModelPlugin` implementations. The built-in Laya plugin consumes the same exported ONNX artifact used by the browser runtime.
+For in-process Node.js inference, `createNativeClient()` loads a `NativeModelDriver` without starting another process. `runtime-onnx-node` provides a generic ONNX driver; model families plug into it as `OnnxModelPlugin` implementations. Laya is an optional plugin, not a runtime dependency.
 
 ```sh
-npm install @system-one-ai/core @system-one-ai/adapter-local @system-one-ai/runtime-onnx-node onnxruntime-node @huggingface/transformers
+npm install @system-one-ai/core @system-one-ai/adapter-local @system-one-ai/runtime-onnx-node @system-one-ai/model-laya onnxruntime-node @huggingface/transformers
 ```
 
 ```ts
 import { createNativeClient } from '@system-one-ai/adapter-local';
-import { createOnnxDriver, createLayaOnnxModel } from '@system-one-ai/runtime-onnx-node';
+import { createOnnxDriver } from '@system-one-ai/runtime-onnx-node';
+import { createLayaOnnxModel } from '@system-one-ai/model-laya/node';
 
 const client = await createNativeClient({
   driver: createOnnxDriver({
@@ -48,7 +49,7 @@ const client = await createNativeClient({
 });
 ```
 
-For actual browser-side inference, `adapter-webgpu` loads the pinned OpenJev/SemIf GGUF checkpoints with Wllama and exported Laya ONNX checkpoints with ONNX Runtime Web. The generic browser clients prefer WebGPU and fall back to WASM/CPU; they run the model in the browser and do not call a model API.
+For actual browser-side inference, `adapter-webgpu` provides the generic browser client and a GGUF/Wllama driver. Optional model packages can provide additional drivers. Browser inference stays local and does not call a model API.
 
 ```sh
 npm install @system-one-ai/core @system-one-ai/adapter-webgpu
@@ -67,11 +68,11 @@ const result = await client.evaluate({
 });
 ```
 
-`createBrowserClient()` is the stable browser-local API. Model-specific support is supplied through `BrowserModelDriver`; built-in drivers currently cover GGUF/Wllama and Laya ONNX. Adding another model family only requires another driver. Set `device: 'wasm'` to force CPU-only inference or `device: 'webgpu'` to require WebGPU. The older model-named constructors remain compatibility aliases.
+`createBrowserClient()` is the stable browser-local API. Model-specific support is supplied through `BrowserModelDriver`. Set `device: 'wasm'` to force CPU-only inference or `device: 'webgpu'` to require WebGPU.
 
-For an exported Laya graph, use `createBrowserClient({ driver: createLayaDriver({ manifestUrl }) })`; it follows the same `auto | webgpu | wasm` device policy.
+For an exported Laya graph, import `createLayaDriver` from `@system-one-ai/model-laya/browser` and pass it to `createBrowserClient()`; it follows the same `auto | webgpu | wasm` device policy.
 
-The [Laya export tool](scripts/laya/README.md) converts the complete trained encoder and decision/action heads to ONNX and verifies numerical parity with the original Python model. Export to `.artifacts/laya`, start `npm run demo:webgpu`, and open `http://localhost:4173/examples/laya-webgpu-demo/` for all three question types. The initial exporter targets the pinned English root checkpoint in FP32. See [Laya's runtime API and limits](packages/adapter-webgpu/README.md#laya-model-preparation-and-evaluation); run `npm run test:live:laya` for trained-model browser parity.
+The [Laya export tool](scripts/laya/README.md) converts the complete trained encoder and decision/action heads to ONNX and verifies numerical parity with the original Python model. Export to `.artifacts/laya`, start `npm run demo:webgpu`, and open `http://localhost:4173/examples/laya-webgpu-demo/` for all three question types. See [the Laya plugin](packages/model-laya/README.md); run `npm run test:live:laya` for trained-model browser parity.
 
 For Node.js, `npm run test:live:laya:node` loads the same export through `onnxruntime-node` and compares a complete typed-decision fixture against the recorded upstream response. See the [Node ONNX validation record](docs/laya-node-validation.md).
 

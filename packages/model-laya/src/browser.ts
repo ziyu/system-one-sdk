@@ -1,10 +1,9 @@
 import { ConfigurationError, RequestAbortedError, ResponseValidationError, TimeoutError, UnsupportedFeatureError } from '@system-one-ai/core';
 import type { Answer, Fetch, JsonValue, ProviderResponse } from '@system-one-ai/core';
-import type { LocalRunnerOptions } from '@system-one-ai/adapter-local';
-import { createBrowserClient, createBrowserRunner, type BrowserClient, type BrowserInferenceDevice, type BrowserModelDriver, type BrowserModelRunner } from './browser.js';
-import { layaAnswer, layaSoftmax, parseLayaManifest, prepareLayaRow, type LayaManifest, type LayaRow, type LayaTokenizer } from './laya-format.js';
+import { createBrowserClient, createBrowserRunner, type BrowserClient, type BrowserInferenceDevice, type BrowserModelDriver, type BrowserModelRunner } from '@system-one-ai/adapter-webgpu';
+import { layaAnswer, layaSoftmax, parseLayaManifest, prepareLayaRow, type LayaManifest, type LayaRow, type LayaTokenizer } from './index.js';
 
-export type { LayaManifest, LayaTokenizer } from './laya-format.js';
+export type { LayaManifest, LayaTokenizer } from './index.js';
 
 export interface LayaProgress {
   readonly status: 'manifest' | 'tokenizer' | 'model' | 'ready';
@@ -175,7 +174,7 @@ function createRunner(session: Session, ort: Ort, tokenizer: LayaTokenizer, mani
   let disposal: Promise<void> | undefined;
   return {
     id: `laya-${device}`, defaultModel: manifest.model, supportedQuestionTypes: ['choice', 'score', 'boolean'],
-    evaluate(request, options: LocalRunnerOptions): Promise<ProviderResponse> {
+    evaluate(request, options): Promise<ProviderResponse> {
       const controller = new AbortController();
       let timedOut = false;
       const onAbort = (): void => controller.abort();
@@ -287,7 +286,7 @@ async function createLayaBrowserRunnerForDevice(options: LayaBrowserOptions, req
   } catch (error) { await session.release(); throw error; }
 }
 
-/** Built-in Laya driver. The stable browser client API does not depend on this model family. */
+/** Optional Laya driver for the model-agnostic browser runtime. */
 export function createLayaDriver(options: LayaWebGPUOptions): BrowserModelDriver {
   return Object.freeze({
     id: 'laya-onnx',

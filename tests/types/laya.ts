@@ -1,6 +1,7 @@
 import { booleanQuestion, choice, score, type EvaluationClient } from '@system-one-ai/core';
 import { createLocalClient, type LocalModelRunner } from '@system-one-ai/adapter-local';
-import { createBrowserClient, createLayaDriver, createLayaWebGPURunner, type LayaTokenizer, type LayaWebGPUOptions } from '@system-one-ai/adapter-webgpu';
+import { createBrowserClient } from '@system-one-ai/adapter-webgpu';
+import { createLayaDriver, createLayaWebGPURunner, type LayaTokenizer, type LayaWebGPUOptions } from '@system-one-ai/model-laya/browser';
 
 async function verifyLayaTypes() {
   const options: LayaWebGPUOptions = { manifestUrl: '/models/laya/laya.json', batchSize: 4 };

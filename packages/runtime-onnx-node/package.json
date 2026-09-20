@@ -32,17 +32,12 @@
   },
   "dependencies": {
     "@system-one-ai/adapter-local": "^0.1.0",
-    "@system-one-ai/core": "^0.6.0",
-    "@system-one-ai/model-laya": "^0.1.0"
+    "@system-one-ai/core": "^0.6.0"
   },
   "peerDependencies": {
-    "@huggingface/transformers": "^3.8.1",
     "onnxruntime-node": "^1.30.0"
   },
   "peerDependenciesMeta": {
-    "@huggingface/transformers": {
-      "optional": true
-    },
     "onnxruntime-node": {
       "optional": true
     }

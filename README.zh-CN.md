@@ -19,27 +19,28 @@
 | `adapter-vercel` | 通过 Vercel AI Gateway 的 Evaluation 接口调用决策模型，将请求和答案转换为本库格式。 | core |
 | `adapter-llm` | 把通用 LLM 接口适配为 System One 决策接口：将问题转为 prompt 和输出约束，再把 LLM 回答转换为选择、评分和真假结果。 | core |
 | `adapter-local` | 将 Python、MLX、CUDA、WASM 或 sidecar 本地模型统一接入，并执行结果校验。 | core |
-| `adapter-webgpu` | 在浏览器本地运行 GGUF/OpenJev 与导出的 Laya ONNX 模型，有 WebGPU 时使用 GPU，否则回退到 WASM/CPU。 | adapter-local、core |
-| `runtime-onnx-node` | 在 Node.js 进程内运行 ONNX 模型，通过统一本地 driver 接入；CPU 是可靠默认，macOS 可显式使用 CoreML。 | adapter-local、core、model-laya；peer：onnxruntime-node（Laya 另需 Transformers.js） |
-| `model-laya` | 在浏览器与原生 runtime 之间共享 Laya manifest 校验、问题渲染、截断和答案校准逻辑。 | core |
+| `adapter-webgpu` | 提供模型无关的浏览器 client/driver 契约和 GGUF/Wllama driver，支持 WebGPU 与 WASM/CPU。 | adapter-local、core |
+| `runtime-onnx-node` | 通过 ONNX Runtime 在 Node.js 进程内运行模型插件；CPU 是可靠默认，macOS 可显式使用 CoreML。 | adapter-local、core；peer：onnxruntime-node |
+| `model-laya` | 提供可选的 Laya 浏览器、Node 插件，以及共享的 manifest、渲染、截断与校准语义。 | adapter-webgpu、runtime-onnx-node、core；peer：Transformers.js |
 | `evaluation` | 对任意 `EvaluationClient` 运行统一的质量、校准、延迟和长上下文压力评测。 | core |
 | `decisions` | 让模型从业务对象中选出目标、选择动作及其参数，并将答案映射回原始对象，供应用执行。 | core |
 | `policies` | 按概率、选项差值或 confidence 阈值判断是否接受模型答案，明确返回接受、不确定或弃权。 | core |
 | `batch` | 以指定并发数执行多次 `evaluate`，按输入顺序返回每项结果，保留失败和取消信息。 | core |
 
-core 不导入具体 adapter 或 transport。各包提供 ESM、CommonJS 和 TypeScript 声明。大多数 runtime 保持轻依赖；`runtime-onnx-node` 将原生 ONNX runtime 和可选 tokenizer 作为 peer dependency，因此不使用原生推理的应用不会下载平台二进制。支持目标为 Node.js 20+，Cloudflare 原生 binding 另有 workerd 运行时验证。模型密钥应保留在服务端。
+core 不导入具体 adapter 或 transport。各包提供 ESM、CommonJS 和 TypeScript 声明。`runtime-onnx-node` 将原生 ONNX runtime 作为 peer dependency，因此不使用原生推理的应用不会下载平台二进制。支持目标为 Node.js 20+，Cloudflare 原生 binding 另有 workerd 运行时验证。模型密钥应保留在服务端。
 
 `adapter-local` 是自部署权重的统一边界。runner 负责 Python、MLX、CUDA、WASM 或本地 sidecar 的模型运行时，并返回 core 的 `ProviderResponse`；SDK 负责请求快照、期限、取消和结果校验。
 
-Node.js 进程内推理使用 `createNativeClient()` 加载 `NativeModelDriver`，SDK 不启动额外进程。`runtime-onnx-node` 提供模型无关的 ONNX driver，具体模型族以 `OnnxModelPlugin` 接入；内置的 Laya plugin 直接读取浏览器 runtime 使用的同一份 ONNX 导出。
+Node.js 进程内推理使用 `createNativeClient()` 加载 `NativeModelDriver`，SDK 不启动额外进程。`runtime-onnx-node` 提供模型无关的 ONNX driver，具体模型族以 `OnnxModelPlugin` 接入；Laya 是可选插件，不再是 runtime 依赖。
 
 ```sh
-npm install @system-one-ai/core @system-one-ai/adapter-local @system-one-ai/runtime-onnx-node onnxruntime-node @huggingface/transformers
+npm install @system-one-ai/core @system-one-ai/adapter-local @system-one-ai/runtime-onnx-node @system-one-ai/model-laya onnxruntime-node @huggingface/transformers
 ```
 
 ```ts
 import { createNativeClient } from '@system-one-ai/adapter-local';
-import { createOnnxDriver, createLayaOnnxModel } from '@system-one-ai/runtime-onnx-node';
+import { createOnnxDriver } from '@system-one-ai/runtime-onnx-node';
+import { createLayaOnnxModel } from '@system-one-ai/model-laya/node';
 
 const client = await createNativeClient({
   driver: createOnnxDriver({
@@ -48,7 +49,7 @@ const client = await createNativeClient({
 });
 ```
 
-需要真实浏览器推理时使用 `adapter-webgpu`：它通过 Wllama 加载 OpenJev/SemIf GGUF，也可以通过 ONNX Runtime Web 加载导出的 Laya ONNX。通用浏览器入口优先使用 WebGPU，不可用时自动回退到 WASM/CPU；模型推理留在浏览器内，不调用模型 API。
+需要真实浏览器推理时使用 `adapter-webgpu`：它提供通用浏览器入口与 GGUF/Wllama driver，可选模型包可以提供其他 driver。模型推理留在浏览器内，不调用模型 API。
 
 ```sh
 npm install @system-one-ai/core @system-one-ai/adapter-webgpu
@@ -67,11 +68,11 @@ const result = await client.evaluate({
 });
 ```
 
-`createBrowserClient()` 是稳定的浏览器本地推理入口，具体模型支持由 `BrowserModelDriver` 提供；当前内置 GGUF/Wllama 和 Laya ONNX 两个 driver。以后增加新的模型族只需要增加 driver，不需要再增加一套 `createXxxClient()`。设置 `device: 'wasm'` 可强制 CPU，`device: 'webgpu'` 可强制 WebGPU；旧的模型命名构造器仅作为兼容别名保留。
+`createBrowserClient()` 是稳定的浏览器本地推理入口，具体模型支持由 `BrowserModelDriver` 提供。设置 `device: 'wasm'` 可强制 CPU，`device: 'webgpu'` 可强制 WebGPU。
 
-导出的 Laya 图使用 `createBrowserClient({ driver: createLayaDriver({ manifestUrl }) })`，同样支持 `auto | webgpu | wasm`。
+导出的 Laya 图从 `@system-one-ai/model-laya/browser` 导入 `createLayaDriver` 后传给 `createBrowserClient()`，同样支持 `auto | webgpu | wasm`。
 
-[Laya 导出工具](scripts/laya/README.md)会将训练后的完整编码器、决策头和动作头转换为 ONNX，并与原版 Python 模型做数值对照。将产物导出到 `.artifacts/laya`，运行 `npm run demo:webgpu` 后打开 `http://localhost:4173/examples/laya-webgpu-demo/`，即可验证三类问题。当前导出目标是固定版本的英文根 checkpoint，使用 FP32；详见 [Laya 运行接口和限制](packages/adapter-webgpu/README.md#laya-model-preparation-and-evaluation)。`npm run test:live:laya` 使用真实权重进行浏览器数值对照。
+[Laya 导出工具](scripts/laya/README.md)会将训练后的完整编码器、决策头和动作头转换为 ONNX，并与原版 Python 模型做数值对照。将产物导出到 `.artifacts/laya`，运行 `npm run demo:webgpu` 后打开 `http://localhost:4173/examples/laya-webgpu-demo/`，即可验证三类问题。详见 [Laya 插件](packages/model-laya/README.md)；`npm run test:live:laya` 使用真实权重进行浏览器数值对照。
 
 Node.js 使用 `npm run test:live:laya:node` 通过 `onnxruntime-node` 加载同一份导出，并将完整 typed-decision fixture 与已记录的上游响应比较。详见 [Node ONNX 验证记录](docs/laya-node-validation.md)。
 

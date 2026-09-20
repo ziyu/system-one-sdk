@@ -1,7 +1,7 @@
 {
   "name": "@system-one-ai/model-laya",
   "version": "0.1.0",
-  "description": "Shared Laya model rendering, manifest validation, and answer calibration for System One runtimes.",
+  "description": "Optional Laya model plugins for System One browser and Node runtimes.",
   "license": "(MIT AND Apache-2.0)",
   "type": "module",
   "sideEffects": false,
@@ -19,6 +19,26 @@
         "default": "./dist/cjs/index.js"
       }
     },
+    "./browser": {
+      "import": {
+        "types": "./dist/esm/browser.d.ts",
+        "default": "./dist/esm/browser.js"
+      },
+      "require": {
+        "types": "./dist/cjs/browser.d.ts",
+        "default": "./dist/cjs/browser.js"
+      }
+    },
+    "./node": {
+      "import": {
+        "types": "./dist/esm/node.d.ts",
+        "default": "./dist/esm/node.js"
+      },
+      "require": {
+        "types": "./dist/cjs/node.d.ts",
+        "default": "./dist/cjs/node.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -31,7 +51,17 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@system-one-ai/adapter-webgpu": "^0.1.0",
+    "@system-one-ai/runtime-onnx-node": "^0.1.0",
     "@system-one-ai/core": "^0.6.0"
+  },
+  "peerDependencies": {
+    "@huggingface/transformers": "^3.8.1"
+  },
+  "peerDependenciesMeta": {
+    "@huggingface/transformers": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public",

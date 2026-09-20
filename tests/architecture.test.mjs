@@ -11,9 +11,12 @@ test('workspace imports follow declared dependencies, with no adapter or transpo
     if (directory === 'core') assert.deepEqual(dependencies, []);
     for (const dependency of dependencies) {
       assert.ok(
-        (directory === 'adapter-webgpu' || directory === 'runtime-onnx-node') && dependency === '@system-one-ai/adapter-local' || !dependency.startsWith('@system-one-ai/adapter-'),
-        'Only local runtime packages may compose the local adapter',
+        (directory === 'adapter-webgpu' || directory === 'runtime-onnx-node') && dependency === '@system-one-ai/adapter-local' ||
+        directory.startsWith('model-') && dependency === '@system-one-ai/adapter-webgpu' ||
+        !dependency.startsWith('@system-one-ai/adapter-'),
+        'Only runtime and model plugin packages may depend on local adapters',
       );
+      if (directory === 'adapter-webgpu' || directory === 'runtime-onnx-node') assert.ok(!dependency.startsWith('@system-one-ai/model-'), 'Generic runtimes cannot depend on model plugins');
       assert.notEqual(dependency, '@system-one-ai/sdk');
     }
     for (const filename of readdirSync(path.join(cwd, 'src')).filter(name => name.endsWith('.ts'))) {

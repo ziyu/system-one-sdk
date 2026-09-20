@@ -17,9 +17,9 @@
 | `@system-one-ai/adapter-vercel` | 通过 Vercel AI Gateway 的 Evaluation 接口调用决策模型，将请求和答案转换为本库格式。 | core |
 | `@system-one-ai/adapter-llm` | 把通用 LLM 接口适配为 System One 决策接口：将问题转为 prompt 和输出约束，再把 LLM 回答转换为选择、评分和真假结果。 | core |
 | `@system-one-ai/adapter-local` | 将 Python、MLX、CUDA、WASM 或 sidecar 本地模型统一接入，并执行结果校验。 | core |
-| `@system-one-ai/adapter-webgpu` | 提供模型无关的浏览器本地推理入口和可扩展 driver；当前 driver 覆盖 GGUF/Wllama 与 Laya ONNX，支持 WebGPU 和 WASM/CPU。 | adapter-local、core |
-| `@system-one-ai/runtime-onnx-node` | 通过 `onnxruntime-node` 在 Node 进程内执行 ONNX，具体模型通过 `OnnxModelPlugin` 接入。 | adapter-local、core、model-laya |
-| `@system-one-ai/model-laya` | 只保存 Laya 的 manifest、渲染、截断与校准语义，供浏览器和 Node runtime 共用。 | core |
+| `@system-one-ai/adapter-webgpu` | 提供模型无关的浏览器本地推理入口和可扩展 driver，以及 GGUF/Wllama driver。 | adapter-local、core |
+| `@system-one-ai/runtime-onnx-node` | 通过 `onnxruntime-node` 在 Node 进程内执行 ONNX，具体模型通过 `OnnxModelPlugin` 接入。 | adapter-local、core |
+| `@system-one-ai/model-laya` | 提供可选的 Laya 浏览器与 Node 插件，并共享 manifest、渲染、截断与校准语义。 | adapter-webgpu、runtime-onnx-node、core |
 | `@system-one-ai/evaluation` | 面向 `EvaluationClient` 的统一质量、校准、延迟和上下文压力评测，不绑定 provider/model/runtime。 | core |
 | `@system-one-ai/decisions` | 让模型从业务对象中选出目标、选择动作及其参数，并将答案映射回原始对象，供应用执行。 | core |
 | `@system-one-ai/policies` | 按概率、选项差值或 confidence 阈值判断是否接受模型答案，明确返回接受、不确定或弃权。 | core |
@@ -41,15 +41,15 @@ graph TD
   WebGPU["adapter-webgpu：BrowserModelDriver"] --> Local
   OnnxNode["runtime-onnx-node：OnnxModelPlugin"] --> Local
   LayaModel["model-laya：模型语义"] --> Core
-  WebGPU --> LayaModel
-  OnnxNode --> LayaModel
+  LayaModel --> WebGPU
+  LayaModel --> OnnxNode
   Evaluation["evaluation：统一评测"] --> Core
   Decisions["decisions"] --> Core
   Policies["policies"] --> Core
   Batch["batch"] --> Core
 ```
 
-core 不导入任何具体 adapter、transport 或供应商 SDK。浏览器和 Node 原生 runtime 都复用 `adapter-local` 的生命周期和统一校验：浏览器通过 `BrowserModelDriver` 接入，Node ONNX 通过 `OnnxModelPlugin` 接入。模型语义可以放在独立的轻量包（当前为 `model-laya`），供多个 runtime 复用。其他 provider adapter 之间不互相导入。REST adapter 只做编解码；Cloudflare 的独立 workers 入口实现 EvaluationClient，复用 transport-fetch 的响应和期限工具，调用原生 binding。`protocol-system-one` 只共享已经被三个服务使用的 wire codec，没有 endpoint、默认模型、认证或请求生命周期。
+core 不导入任何具体 adapter、transport 或供应商 SDK。浏览器和 Node 原生 runtime 都复用 `adapter-local` 的生命周期和统一校验：浏览器通过 `BrowserModelDriver` 接入，Node ONNX 通过 `OnnxModelPlugin` 接入。模型插件依赖通用 runtime 的接口，通用 runtime 不反向依赖任何 `model-*` 包。其他 provider adapter 之间不互相导入。REST adapter 只做编解码；Cloudflare 的独立 workers 入口实现 EvaluationClient，复用 transport-fetch 的响应和期限工具，调用原生 binding。`protocol-system-one` 只共享已经被三个服务使用的 wire codec，没有 endpoint、默认模型、认证或请求生命周期。
 
 core 仍保留当前 HTTP codec 契约中的 URL、headers 和配置类型，以及独立的 `core/http` 校验工具。它不调用 Fetch，不解析供应商特有字段。非 HTTP 权重通过 `adapter-local` 的 runner 边界接入，core 仍只处理统一的 `EvaluationClient` 语义。
 

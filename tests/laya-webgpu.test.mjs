@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { booleanQuestion, choice, score, ConfigurationError, RequestAbortedError, ResponseValidationError, TimeoutError, UnsupportedFeatureError, ValidationError } from '@system-one-ai/core';
-import { createBrowserClient, createLayaDriver, createLayaWebGPUClient, createLayaWebGPURunner } from '@system-one-ai/adapter-webgpu';
-import { layaAnswer, parseLayaManifest, prepareLayaRow } from '../packages/adapter-webgpu/dist/esm/laya-format.js';
+import { createBrowserClient } from '@system-one-ai/adapter-webgpu';
+import { createLayaDriver, createLayaWebGPUClient, createLayaWebGPURunner } from '@system-one-ai/model-laya/browser';
+import { layaAnswer, parseLayaManifest, prepareLayaRow } from '@system-one-ai/model-laya';
 
 const manifest = {
   format: 'system-one-laya-onnx-v1', model: 'convaiinnovations/laya', revision: 'fixture-revision',

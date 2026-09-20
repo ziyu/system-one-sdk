@@ -5,7 +5,8 @@ import path from 'node:path';
 import test from 'node:test';
 import { booleanQuestion, choice } from '@system-one-ai/core';
 import { createNativeClient } from '@system-one-ai/adapter-local';
-import { createLayaOnnxModel, createOnnxDriver } from '@system-one-ai/runtime-onnx-node';
+import { createOnnxDriver } from '@system-one-ai/runtime-onnx-node';
+import { createLayaOnnxModel } from '@system-one-ai/model-laya/node';
 
 function runtimeFixture() {
   const state = { creates: [], runs: 0, released: 0 };
