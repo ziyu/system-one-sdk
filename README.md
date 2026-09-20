@@ -8,21 +8,21 @@ The repository is a private npm workspace. Runtime code lives in independently p
 
 ## Packages
 
-| Package (`@system-one-ai/…`) | Responsibility | Runtime dependencies |
+| Package (`@system-one-ai/…`) | What it does | Runtime dependencies |
 | --- | --- | --- |
-| `core` | Questions, types, client, snapshots, result validation and errors | None |
-| `transport-fetch` | Fetch, authentication, deadlines, cancellation, retries, body limits | core |
-| `protocol-system-one` | Shared native boolean/noul and response codecs | core |
-| `adapter-system-one` | TypeSafe native protocol | core, protocol-system-one |
-| `adapter-openrouter` | OpenRouter Decisions | core, protocol-system-one |
-| `adapter-cloudflare` | Cloudflare REST and native Workers binding | core, protocol-system-one, transport-fetch |
-| `adapter-vercel` | Vercel Evaluation v4 | core |
-| `adapter-llm` | OpenAI Responses/Chat Completions and Anthropic Messages | core |
-| `adapter-local` | Pluggable local weight runners with shared validation | core |
-| `adapter-webgpu` | Real browser WebGPU GGUF/OpenJev inference | adapter-local, core |
-| `decisions` | Dynamic candidates and typed action parameters | core |
-| `policies` | Probability, margin and confidence gates | core |
-| `batch` | Bounded concurrency, ordered results and partial failures | core |
+| `core` | Create a shared `evaluate` client, define choice, score and boolean questions, and validate model answers. | None |
+| `transport-fetch` | Send model requests using Fetch, with authentication, timeouts, cancellation, retries and response size limits. | core |
+| `protocol-system-one` | Convert between this library’s questions/answers and the native System One wire format, shared by the TypeSafe, OpenRouter and Cloudflare adapters. | core |
+| `adapter-system-one` | Connect to TypeSafe’s official System One service to answer choice, score and boolean questions with native decision models. | core, protocol-system-one |
+| `adapter-openrouter` | Call System One models through OpenRouter Decisions and convert answers, usage and cost metadata into this library’s results. | core, protocol-system-one |
+| `adapter-cloudflare` | Run System One models on Cloudflare through its REST API or the native `env.AI` binding inside Workers. | core, protocol-system-one, transport-fetch |
+| `adapter-vercel` | Call decision models through Vercel AI Gateway’s Evaluation API, converting requests and answers to this library’s format. | core |
+| `adapter-llm` | Adapt general-purpose LLM APIs to the System One decision interface: turn questions into prompts and output constraints, then convert LLM responses into choices, scores and boolean results. | core |
+| `adapter-local` | Run self-hosted Python, MLX, CUDA, WASM or sidecar model runtimes through one validated local contract. | core |
+| `adapter-webgpu` | Load GGUF/OpenJev weights in the browser and run real decisions with Wllama and llama.cpp WebGPU. | adapter-local, core |
+| `decisions` | Select business objects, actions and action parameters with a model, then map answers back to the original objects for the application to act on. | core |
+| `policies` | Decide whether to accept model answers using probability, option margin or confidence thresholds; return accepted, uncertain or abstained outcomes. | core |
+| `batch` | Run multiple `evaluate` calls at a chosen concurrency, returning results in input order with per-item failure and cancellation information. | core |
 
 Core imports no concrete adapter or transport. Each package provides ESM, CommonJS and TypeScript declarations. Runtime packages use Web APIs and have no third-party dependencies. Node.js 20+ is the supported target; the native Cloudflare binding is verified separately in workerd. Keep model credentials on the server.
 
@@ -81,16 +81,20 @@ console.log(action, result.answers.urgency.score, result.answers.interrupt.proba
 
 Adapters supply native endpoint/model defaults. `baseURL` and `model` override them; per-request `model` has highest priority. Cloudflare requires `cloudflareAdapter({ accountId })`. Custom Fetch implementations are passed to `createFetchTransport(fetch)`. The client does not infer protocols from hostnames or read environment variables.
 
-## LLM adapter
+## Use a general-purpose LLM for System One decisions
 
-Install `adapter-llm` with core and transport-fetch. LLM protocols, prompts, schemas, authentication mapping and answer conversion stay together in this package.
+`adapter-llm` adapts general-purpose OpenAI, Anthropic and compatible LLM APIs to System One's `evaluate({ state, questions })` interface. It turns state and questions into prompts and JSON output constraints, then converts LLM responses into this library's choice, score and boolean results. Applications can use an LLM for System One decisions and reuse `decisions`, `policies` and `batch`.
+
+The flow is: System One state and questions → LLM prompt/output constraints → LLM response → System One results.
+
+Install `adapter-llm` with core and transport-fetch:
 
 ```sh
 npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-llm
 ```
 
 ```ts
-import { createSystemOne } from '@system-one-ai/core';
+import { createSystemOne, choice } from '@system-one-ai/core';
 import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import { llmAdapter } from '@system-one-ai/adapter-llm';
 
@@ -100,9 +104,22 @@ const client = createSystemOne({
   apiKey: process.env.OPENAI_API_KEY!,
   model: 'gpt-4o-mini',
 });
+
+const result = await client.evaluate({
+  state: 'I was charged twice for the same order. Please refund the duplicate charge.',
+  questions: {
+    department: choice('Which team should handle this message?', {
+      billing: 'Payments and refunds', technical: 'Software failures',
+    }),
+  },
+});
+const department: 'billing' | 'technical' = result.answers.department.choice;
+console.log(department);
 ```
 
-OpenAI uses Responses on `api.openai.com` and Chat Completions on custom base URLs; `api` can select either explicitly. Anthropic uses Messages. `llmAnswerMode` accepts `probabilities` or `discrete`. Set `structuredOutputs: false` for compatible services without native JSON-schema support. `normalizeProbabilities` is opt-in. Existing evaluation, validation and composition APIs work with the LLM adapter.
+Supported APIs are OpenAI Responses, OpenAI-compatible Chat Completions and Anthropic Messages. OpenAI defaults to Responses on `api.openai.com` and Chat Completions on custom base URLs; `api` can select either explicitly. Set `structuredOutputs: false` for compatible services without native JSON-schema support.
+
+`llmAnswerMode: 'probabilities'` asks the LLM to report probabilities. These are estimates generated by the LLM, with no guarantee of calibration. `discrete` asks the LLM to select answers directly, then encodes them as 0/1 values in the shared result format; the resulting distributions and confidence encode the selection, not measured model certainty. Probability normalization is opt-in through `normalizeProbabilities`.
 
 ## Composition
 

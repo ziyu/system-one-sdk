@@ -1,6 +1,6 @@
 # @system-one-ai/transport-fetch
 
-Fetch transport with authentication, total deadlines, cancellation, bounded response reading and HTTP retries.
+Send model requests using Fetch, with authentication, timeouts, cancellation, retries and response size limits.
 
 ```ts
 import { createFetchTransport } from '@system-one-ai/transport-fetch';

@@ -1,6 +1,6 @@
 # @system-one-ai/adapter-vercel
 
-vercel decision protocol adapter. Install this package alongside core and transport-fetch; other adapters are not required.
+Call decision models through Vercel AI Gateway’s Evaluation API, converting requests and answers to this library’s format. Install this package with `@system-one-ai/core` and `@system-one-ai/transport-fetch`.
 
 ```ts
 import { createSystemOne } from '@system-one-ai/core';

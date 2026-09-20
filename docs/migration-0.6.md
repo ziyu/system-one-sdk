@@ -55,6 +55,8 @@ Previously `new SystemOne({ apiKey, fetch: customFetch })` supplied native defau
 
 Keep the same client setup and replace its adapter with `openRouterAdapter`, `vercelAdapter`, or `cloudflareAdapter({ accountId })` from the corresponding package. Cloudflare REST still uses an API token as `apiKey`. See the runnable [Cloudflare example](../examples/cloudflare.ts).
 
+To use a general-purpose LLM as a System One decision model, choose `adapter-llm`. It converts System One state and questions into LLM prompts and output constraints, then converts the response back into choice, score and boolean answers for the same `evaluate` interface. It supports OpenAI Responses, OpenAI-compatible Chat Completions and Anthropic Messages.
+
 ```sh
 npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-llm
 ```
@@ -76,7 +78,7 @@ console.log((await client.evaluate({
 })).answers.on);
 ```
 
-LLM probabilities are model-reported assessments, not calibrated native model probabilities. Discrete mode supplies deterministic answer values and does not fabricate distributions or confidence. Both modes use the same core validation and composition APIs.
+LLM probabilities are model-reported estimates, with no guarantee of calibration. Discrete mode encodes the selected answer as 0/1 values, including a one-hot distribution for choice/score answers and derived confidence; these encode a selection, not measured model certainty. Both modes use the same core validation and composition APIs.
 
 ## Cloudflare Workers
 

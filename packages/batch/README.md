@@ -1,6 +1,6 @@
 # @system-one-ai/batch
 
-Bounded concurrent evaluations with ordered results, cancellation and partial failures.
+Run multiple `evaluate` calls at a chosen concurrency, returning results in input order with per-item failure and cancellation information.
 
 ```ts
 import { evaluateMany } from '@system-one-ai/batch';

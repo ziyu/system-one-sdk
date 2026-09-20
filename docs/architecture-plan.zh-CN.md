@@ -6,21 +6,21 @@
 
 ## 已落地的包边界
 
-| 包 | 职责 | 运行时依赖 |
+| 包 | 功能 | 运行时依赖 |
 | --- | --- | --- |
-| `@system-one-ai/core` | 类型、问题构造、请求快照、结果校验、评估生命周期；导出 adapter/transport 契约 | 无 |
-| `@system-one-ai/transport-fetch` | Fetch、鉴权、超时、取消、Retry-After、重试、响应读取上限 | core |
-| `@system-one-ai/protocol-system-one` | 三个服务共用的 `boolean/noul`、token 和 rounding 编解码 | core |
-| `@system-one-ai/adapter-system-one` | TypeSafe 地址、默认模型和原生请求 | core、protocol-system-one |
-| `@system-one-ai/adapter-openrouter` | Decisions 地址、options、generation/cost 元数据 | core、protocol-system-one |
-| `@system-one-ai/adapter-cloudflare` | 账户路径、REST/runner envelope 校验及独立 Workers 入口 | core、protocol-system-one、transport-fetch |
-| `@system-one-ai/adapter-vercel` | Evaluation v4 请求和响应 | core |
-| `@system-one-ai/adapter-llm` | 现有 LLM 协议、prompt、schema、答案转换 | core |
-| `@system-one-ai/adapter-local` | 本地权重 runner、统一请求与结果校验 | core |
-| `@system-one-ai/adapter-webgpu` | 基于 Wllama/llama.cpp 的浏览器 WebGPU GGUF 推理 | adapter-local、core |
-| `@system-one-ai/decisions` | 动作、候选项及参数组合 | core |
-| `@system-one-ai/policies` | 概率、差值、confidence gate | core |
-| `@system-one-ai/batch` | 并发、取消和部分失败 | core |
+| `@system-one-ai/core` | 创建统一的 `evaluate` 客户端，定义选择、评分和真假问题，并校验模型返回的答案。 | 无 |
+| `@system-one-ai/transport-fetch` | 通过 Fetch 发送模型请求，处理鉴权、超时、取消、重试和响应大小限制。 | core |
+| `@system-one-ai/protocol-system-one` | 在本库的问题／答案格式与原生 System One 协议之间转换，供 TypeSafe、OpenRouter 和 Cloudflare adapter 复用。 | core |
+| `@system-one-ai/adapter-system-one` | 连接 TypeSafe 官方 System One 服务，用原生决策模型回答选择、评分和真假问题。 | core、protocol-system-one |
+| `@system-one-ai/adapter-openrouter` | 通过 OpenRouter Decisions 接口调用 System One 模型，将答案、用量和费用信息转换为本库结果。 | core、protocol-system-one |
+| `@system-one-ai/adapter-cloudflare` | 在 Cloudflare 上调用 System One 模型，支持 REST API 和 Workers 内的 `env.AI` binding。 | core、protocol-system-one、transport-fetch |
+| `@system-one-ai/adapter-vercel` | 通过 Vercel AI Gateway 的 Evaluation 接口调用决策模型，将请求和答案转换为本库格式。 | core |
+| `@system-one-ai/adapter-llm` | 把通用 LLM 接口适配为 System One 决策接口：将问题转为 prompt 和输出约束，再把 LLM 回答转换为选择、评分和真假结果。 | core |
+| `@system-one-ai/adapter-local` | 将 Python、MLX、CUDA、WASM 或 sidecar 本地模型统一接入，并执行结果校验。 | core |
+| `@system-one-ai/adapter-webgpu` | 在浏览器中加载 GGUF/OpenJev 权重，通过 Wllama 和 llama.cpp WebGPU 执行真实决策。 | adapter-local、core |
+| `@system-one-ai/decisions` | 让模型从业务对象中选出目标、选择动作及其参数，并将答案映射回原始对象，供应用执行。 | core |
+| `@system-one-ai/policies` | 按概率、选项差值或 confidence 阈值判断是否接受模型答案，明确返回接受、不确定或弃权。 | core |
+| `@system-one-ai/batch` | 以指定并发数执行多次 `evaluate`，按输入顺序返回每项结果，保留失败和取消信息。 | core |
 
 ```mermaid
 graph TD
@@ -67,9 +67,11 @@ const result = await client.evaluate({
 
 `core/validation`、`core/http`、`core/composition` 是包间共用的显式工具入口。禁止通过跨目录相对路径读取其他包的私有源文件。错误类型来自同一 core，保持 `instanceof` 行为。
 
-## LLM 保持单包
+## LLM 到 System One 的适配
 
-LLM 是可选、低优先级的兼容能力。OpenAI Responses、OpenAI-compatible Chat Completions、Anthropic Messages、prompt、schema、鉴权映射和概率处理全部保留在 `adapter-llm`。不拆 provider 包，不扩展为通用 LLM 框架。
+`adapter-llm` 让通用 LLM 提供 System One 决策能力：接收统一的状态和选择／评分／真假问题，生成 LLM prompt 与 JSON 输出约束，再将 LLM 回答转换成 core 可以校验的答案。应用使用同一个 `evaluate` 接口，也可以继续使用 decisions、policies 和 batch。
+
+OpenAI Responses、OpenAI-compatible Chat Completions 和 Anthropic Messages 的协议转换都由这个可选包完成，LLM 支持保持单包。概率模式中的数值来自 LLM 自报；离散模式将选定答案编码为 0/1，不能将这种编码当成模型实测置信度。
 
 ```ts
 import { llmAdapter } from '@system-one-ai/adapter-llm';
@@ -85,7 +87,7 @@ const client = createSystemOne({
 
 应用显式安装 core、transport-fetch 和所选 adapter，组合功能按需安装。旧 `@system-one-ai/sdk` 包及其子路径不再由本仓库构建或发布。迁移时将 import 改为上表的独立包名，构造客户端必须传入 `adapter` 和 `transport`；自定义 fetch 改为 `createFetchTransport(fetch)`。没有默认供应商或隐式网络实现。
 
-独立包发布前，运行构建和打包检查后，从 `.artifacts/` 安装所选包及其依赖的 tarball。此次重构不发布包、不创建 tag。
+验证候选包时，运行构建和打包检查后，从 `.artifacts/` 安装所选包及其依赖的 tarball；正式发布按 [Release PR 流程](releasing.md)执行。
 
 ## 构建与验证
 
@@ -108,5 +110,5 @@ npm run test:live:llm -- /path/to/llm.env
 1. 协议改动只在所属 adapter 包修改；新增 adapter 不修改 core。
 2. 每次变更先明确契约、涉及的包和可复现验收，再修改代码。包移动、行为变化与发布分开提交。
 3. 各包独立版本；破坏共享契约时同时调整相关包的依赖范围，不能只升 core major。
-4. 发布按依赖顺序执行，先 core、共享协议/transport，再 adapter/组合包。按 `<包目录>-v<版本>` tag 发布单包，脚本检查依赖的已发布版本与测试产物，详见[发布说明](releasing.md)。
+4. Changesets Release PR 确定发布批次，工作流按依赖顺序发布固定产物并验收，再晋级标签、生成 `<包目录>-v<版本>` tag；包 tag 不触发发布。详见[发布说明](releasing.md)。
 5. registry、middleware、Clock、IdGenerator 等暂不增加。确有多个调用场景需要时再设计，不为 AI SDK 的每一个模块建立对应包。

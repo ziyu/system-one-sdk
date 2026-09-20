@@ -6,23 +6,23 @@
 
 仓库根目录是私有 npm workspace，运行时代码均位于独立包中。旧 `@system-one-ai/sdk` 入口及转导出子路径已删除。LLM 保持一个可选 adapter 包。
 
-## 包职责
+## 各包的功能
 
-| 包（`@system-one-ai/…`） | 职责 | 运行时依赖 |
+| 包（`@system-one-ai/…`） | 功能 | 运行时依赖 |
 | --- | --- | --- |
-| `core` | 问题、类型、客户端、快照、结果校验和错误 | 无 |
-| `transport-fetch` | Fetch、鉴权、期限、取消、重试和响应大小限制 | core |
-| `protocol-system-one` | 共用原生 boolean/noul 与响应编解码 | core |
-| `adapter-system-one` | TypeSafe 原生协议 | core、protocol-system-one |
-| `adapter-openrouter` | OpenRouter Decisions | core、protocol-system-one |
-| `adapter-cloudflare` | Cloudflare REST 与 Workers 原生 binding | core、protocol-system-one、transport-fetch |
-| `adapter-vercel` | Vercel Evaluation v4 | core |
-| `adapter-llm` | OpenAI Responses/Chat Completions、Anthropic Messages | core |
-| `adapter-local` | 可插拔本地权重 runner 与统一结果校验 | core |
-| `adapter-webgpu` | 浏览器 WebGPU 直接加载 GGUF/OpenJev 权重推理 | adapter-local、core |
-| `decisions` | 动态候选和类型化动作参数 | core |
-| `policies` | 概率、差值和 confidence 策略 | core |
-| `batch` | 有界并发、顺序结果和部分失败 | core |
+| `core` | 创建统一的 `evaluate` 客户端，定义选择、评分和真假问题，并校验模型返回的答案。 | 无 |
+| `transport-fetch` | 通过 Fetch 发送模型请求，处理鉴权、超时、取消、重试和响应大小限制。 | core |
+| `protocol-system-one` | 在本库的问题／答案格式与原生 System One 协议之间转换，供 TypeSafe、OpenRouter 和 Cloudflare adapter 复用。 | core |
+| `adapter-system-one` | 连接 TypeSafe 官方 System One 服务，用原生决策模型回答选择、评分和真假问题。 | core、protocol-system-one |
+| `adapter-openrouter` | 通过 OpenRouter Decisions 接口调用 System One 模型，将答案、用量和费用信息转换为本库结果。 | core、protocol-system-one |
+| `adapter-cloudflare` | 在 Cloudflare 上调用 System One 模型，支持 REST API 和 Workers 内的 `env.AI` binding。 | core、protocol-system-one、transport-fetch |
+| `adapter-vercel` | 通过 Vercel AI Gateway 的 Evaluation 接口调用决策模型，将请求和答案转换为本库格式。 | core |
+| `adapter-llm` | 把通用 LLM 接口适配为 System One 决策接口：将问题转为 prompt 和输出约束，再把 LLM 回答转换为选择、评分和真假结果。 | core |
+| `adapter-local` | 将 Python、MLX、CUDA、WASM 或 sidecar 本地模型统一接入，并执行结果校验。 | core |
+| `adapter-webgpu` | 在浏览器中加载 GGUF/OpenJev 权重，通过 Wllama 和 llama.cpp WebGPU 执行真实决策。 | adapter-local、core |
+| `decisions` | 让模型从业务对象中选出目标、选择动作及其参数，并将答案映射回原始对象，供应用执行。 | core |
+| `policies` | 按概率、选项差值或 confidence 阈值判断是否接受模型答案，明确返回接受、不确定或弃权。 | core |
+| `batch` | 以指定并发数执行多次 `evaluate`，按输入顺序返回每项结果，保留失败和取消信息。 | core |
 
 core 不导入具体 adapter 或 transport。各包提供 ESM、CommonJS 和 TypeScript 声明。运行时使用 Web API，无第三方依赖；支持目标为 Node.js 20+，Cloudflare 原生 binding 另有 workerd 运行时验证。模型密钥应保留在服务端。
 
@@ -81,16 +81,20 @@ console.log(action, result.answers.urgency.score, result.answers.interrupt.proba
 
 原生 adapter 提供默认地址和模型，`baseURL`、`model` 可覆盖；单次请求的 `model` 优先级最高。Cloudflare 通过 `cloudflareAdapter({ accountId })` 配置账户。自定义 fetch 传给 `createFetchTransport(fetch)`。客户端不会根据 hostname 猜测协议，也不读取环境变量。
 
-## LLM adapter
+## 用通用 LLM 提供 System One 决策能力
 
-安装 `adapter-llm`、core 和 transport-fetch。LLM 协议、prompt、schema、鉴权映射和答案转换都保留在同一个包。
+`adapter-llm` 把 OpenAI、Anthropic 及兼容服务的通用 LLM 接口适配为 System One 的 `evaluate({ state, questions })` 接口。它将状态和问题转换为 prompt 与 JSON 输出约束，再把 LLM 的回答转换为本库的选择、评分和真假结果。应用因此可以用通用 LLM 完成 System One 决策，并继续复用 `decisions`、`policies` 和 `batch`。
+
+调用过程：System One 状态与问题 → LLM prompt／输出约束 → LLM 回答 → System One 结果。
+
+安装 `adapter-llm`、core 和 transport-fetch：
 
 ```sh
 npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-llm
 ```
 
 ```ts
-import { createSystemOne } from '@system-one-ai/core';
+import { createSystemOne, choice } from '@system-one-ai/core';
 import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import { llmAdapter } from '@system-one-ai/adapter-llm';
 
@@ -100,9 +104,22 @@ const client = createSystemOne({
   apiKey: process.env.OPENAI_API_KEY!,
   model: 'gpt-4o-mini',
 });
+
+const result = await client.evaluate({
+  state: '同一笔订单被扣款两次，请退回重复扣除的钱。',
+  questions: {
+    department: choice('哪个团队应处理这条消息？', {
+      billing: '付款与退款', technical: '软件故障',
+    }),
+  },
+});
+const department: 'billing' | 'technical' = result.answers.department.choice;
+console.log(department);
 ```
 
-OpenAI 在 `api.openai.com` 使用 Responses，自定义地址使用 Chat Completions；也可通过 `api` 显式选择。Anthropic 使用 Messages。`llmAnswerMode` 支持 `probabilities` 和 `discrete`。服务不支持原生 JSON schema 时设置 `structuredOutputs: false`；概率归一化需显式启用 `normalizeProbabilities`。评估、校验和组合接口保持一致。
+支持 OpenAI Responses、OpenAI-compatible Chat Completions 和 Anthropic Messages。OpenAI 在 `api.openai.com` 默认使用 Responses，自定义地址默认使用 Chat Completions；也可通过 `api` 显式选择。服务不支持原生 JSON schema 时设置 `structuredOutputs: false`。
+
+`llmAnswerMode: 'probabilities'` 让 LLM 给出概率数值；这些是 LLM 生成的估计值，不保证经过概率校准。`discrete` 让 LLM 直接选出答案，再用 0/1 编码成统一结果；由此得到的分布和 confidence 表示确定的选项编码，不代表模型实测置信度。概率归一化需显式启用 `normalizeProbabilities`。
 
 ## 组合能力
 

@@ -19,6 +19,14 @@ const internal = name => name.startsWith('@system-one-ai/');
 const releases = manifest => ordered(manifest.packages).filter(pkg => pkg.filename);
 const stable = pkg => !semver.prerelease(pkg.version);
 
+/** Pick one stable package release as the repository-level GitHub Latest marker. */
+export function canonicalRelease(packages) {
+  return [...packages].filter(pkg => pkg.filename && stable(pkg)).sort((a, b) =>
+    semver.rcompare(a.version, b.version) ||
+    (a.name === '@system-one-ai/core' ? -1 : b.name === '@system-one-ai/core' ? 1 : a.name.localeCompare(b.name))
+  )[0];
+}
+
 export function validateVerification(manifest, receipt, manifestSha256) {
   assert.equal(receipt.status, 'passed', 'Registry verification has not passed.');
   assert.equal(receipt.commit, manifest.source.commit, 'Registry verification belongs to another commit.');
@@ -296,7 +304,8 @@ async function finalize() {
   const manifest = await loadManifest(true);
   assert.ok(process.env.GH_TOKEN, 'GH_TOKEN is required to finalize release tags.');
   const manifestSha256 = digest(await readFile(path.join(artifacts, 'release-manifest.json')));
-  for (const pkg of releases(manifest)) await githubTag(pkg, manifest.source.commit);
+  const packageReleases = releases(manifest);
+  for (const pkg of packageReleases) await githubTag(pkg, manifest.source.commit);
   await finalizeBatch(manifest, {
     accept: async () => {
       validateVerification(manifest, await readJSON('.artifacts/registry-verification.json'), manifestSha256);
@@ -314,7 +323,7 @@ async function finalize() {
       throw new Error(`Stable tag not visible for ${pkg.name}; resume finalization.`);
     },
     record: tags => save('release-result.json', { status: 'passed', commit: manifest.source.commit, manifestSha256, finalizedAt: new Date().toISOString(), tags }),
-    github: async pkg => {
+      github: async pkg => {
       await githubTag(pkg, manifest.source.commit, true);
       const existing = await getJSON(`https://api.github.com/repos/${repository}/releases/tags/${pkg.tag}`, { authorization: `Bearer ${process.env.GH_TOKEN}` });
       const assets = [path.join(artifacts, pkg.filename), path.join(artifacts, 'release-manifest.json'), path.join(artifacts, 'SHA256SUMS'), path.join(artifacts, 'registry-verification.json'), path.join(artifacts, 'release-result.json')];
@@ -328,6 +337,8 @@ async function finalize() {
       }
     },
   });
+  const canonical = canonicalRelease(packageReleases);
+  if (canonical) run('gh', ['release', 'edit', canonical.tag, '--latest', '--repo', repository]);
   console.log('Batch published, installed from npm, and finalized on GitHub.');
 }
 
