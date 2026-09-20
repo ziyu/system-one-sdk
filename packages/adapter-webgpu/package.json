@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/adapter-webgpu",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Extensible browser-local System One inference with WebGPU and WASM/CPU backends.",
   "license": "MIT",
   "type": "module",

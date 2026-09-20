@@ -1,28 +1,16 @@
 {
   "packages": [
     {
-      "name": "@system-one-ai/adapter-llm",
-      "version": "0.7.0"
-    },
-    {
-      "name": "@system-one-ai/adapter-local",
-      "version": "0.1.0"
-    },
-    {
       "name": "@system-one-ai/adapter-webgpu",
-      "version": "0.1.0"
-    },
-    {
-      "name": "@system-one-ai/evaluation",
-      "version": "0.1.0"
+      "version": "0.2.0"
     },
     {
       "name": "@system-one-ai/model-laya",
-      "version": "0.1.0"
+      "version": "0.2.0"
     },
     {
       "name": "@system-one-ai/runtime-onnx-node",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }
