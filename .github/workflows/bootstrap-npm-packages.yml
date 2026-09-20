@@ -1,0 +1,56 @@
+name: Bootstrap new npm packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Full release source commit whose frozen artifact will be used'
+        required: true
+        type: string
+      artifact-run-id:
+        description: 'Release workflow run that produced release-COMMIT'
+        required: true
+        type: string
+      packages:
+        description: 'Comma-separated new package names to bootstrap'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: npm
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+      - run: npm install --global npm@11.17.0 --ignore-scripts
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-${{ inputs.commit }}
+          path: .artifacts/
+          run-id: ${{ inputs.artifact-run-id }}
+          github-token: ${{ github.token }}
+      - name: Bootstrap exact frozen tarballs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TAG_TOKEN }}
+          RELEASE_COMMIT: ${{ inputs.commit }}
+          RELEASE_ARTIFACT_RUN_ID: ${{ inputs.artifact-run-id }}
+          RELEASE_BOOTSTRAP_PACKAGES: ${{ inputs.packages }}
+        run: node scripts/bootstrap-release-packages.mjs
+      - name: Next step
+        run: |
+          echo 'Bootstrap complete. Before resuming the release workflow, configure GitHub Actions Trusted Publishing for each newly created package:' >> "$GITHUB_STEP_SUMMARY"
+          echo '- repository: ziyu/system-one-sdk' >> "$GITHUB_STEP_SUMMARY"
+          echo '- workflow: release.yml' >> "$GITHUB_STEP_SUMMARY"
+          echo '- environment: npm' >> "$GITHUB_STEP_SUMMARY"
+          echo '- allowed action: npm publish' >> "$GITHUB_STEP_SUMMARY"
+
