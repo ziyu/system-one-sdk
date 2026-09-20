@@ -87,10 +87,9 @@ async function main() {
     const distTags = await tags(pkg.name);
     assert.equal(distTags.next, pkg.version, `${pkg.name} next tag was not initialized to ${pkg.version}.`);
     if (distTags.latest === pkg.version) {
-      execFileSync('npm', ['dist-tag', 'rm', pkg.name, 'latest'], { stdio: 'inherit', env: process.env });
-      const after = await tags(pkg.name);
-      assert.equal(after.next, pkg.version, `${pkg.name} next changed while removing automatic latest.`);
-      assert.notEqual(after.latest, pkg.version, `${pkg.name} automatic latest could not be removed.`);
+      console.warn(`npm also initialized unavoidable latest for new package ${pkg.name}@${pkg.version}; finalization will verify it again.`);
+    } else {
+      assert.equal(distTags.latest, undefined, `${pkg.name} received an unexpected latest tag.`);
     }
     console.log(`Bootstrapped exact frozen bytes: ${pkg.name}@${pkg.version}`);
   }
