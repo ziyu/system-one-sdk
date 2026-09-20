@@ -32,6 +32,15 @@ async function metadata(name, version) {
   return response.json();
 }
 
+async function packument(name) {
+  const response = await fetch(`${registry}${encodeURIComponent(name)}`, {
+    redirect: 'error', signal: AbortSignal.timeout(15_000),
+  });
+  if (response.status === 404) { await response.body?.cancel(); return null; }
+  assert.ok(response.ok, `Registry package metadata failed for ${name}: HTTP ${response.status}`);
+  return response.json();
+}
+
 async function tags(name) {
   const response = await fetch(`${registry}-/package/${encodeURIComponent(name)}/dist-tags`, {
     redirect: 'error', signal: AbortSignal.timeout(15_000),
@@ -47,17 +56,22 @@ function verifyPublished(pkg, value) {
   assert.equal(value?.dist?.integrity, pkg.integrity, `Registry integrity differs for ${pkg.name}@${pkg.version}.`);
 }
 
-async function waitForPublished(pkg) {
+export async function waitForPublished(pkg) {
   for (let attempt = 0; attempt < 61; attempt++) {
     const value = await metadata(pkg.name, pkg.version);
     if (value) {
       verifyPublished(pkg, value);
-      const distTags = await tags(pkg.name);
-      if (distTags) return distTags;
+      const packageMetadata = await packument(pkg.name);
+      const listedVersion = packageMetadata?.versions?.[pkg.version];
+      if (listedVersion) {
+        verifyPublished(pkg, listedVersion);
+        const distTags = await tags(pkg.name);
+        if (distTags) return distTags;
+      }
     }
     await delay(5_000);
   }
-  throw new Error(`Published metadata and dist-tags did not become visible for ${pkg.name}@${pkg.version}.`);
+  throw new Error(`Published metadata, packument, and dist-tags did not become visible for ${pkg.name}@${pkg.version}.`);
 }
 
 async function main() {
@@ -79,6 +93,7 @@ async function main() {
     const existing = await metadata(pkg.name, pkg.version);
     if (existing) {
       verifyPublished(pkg, existing);
+      await waitForPublished(pkg);
       console.log(`Already bootstrapped with identical bytes: ${pkg.name}@${pkg.version}`);
       continue;
     }
