@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/model-laya",
-  "version": "0.7.0",
+  "version": "0.1.0",
   "description": "Shared Laya model rendering, manifest validation, and answer calibration for System One runtimes.",
   "license": "(MIT AND Apache-2.0)",
   "type": "module",

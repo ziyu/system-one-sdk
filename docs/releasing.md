@@ -1,6 +1,6 @@
 # Release operations
 
-Packages under `packages/` are independently versioned. The root is private. Changesets owns versions, dependency changes and package changelogs. No fixed/linked groups exist. The first batch is `0.6.0-rc.N`, then `0.6.0`; LLM remains one package.
+Packages under `packages/` are independently versioned. The root is private. Changesets owns versions, dependency changes and package changelogs. No fixed/linked groups exist. The original split batch used `0.6.0`; later packages start at `0.0.0` and use a `minor` changeset for their first `0.1.0` release.
 
 ## Development and Release PR
 
