@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/model-laya",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Optional Laya model plugins for System One browser and Node runtimes.",
   "license": "(MIT AND Apache-2.0)",
   "type": "module",
@@ -51,9 +51,9 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@system-one-ai/adapter-webgpu": "^0.2.0",
-    "@system-one-ai/runtime-onnx-node": "^0.2.0",
-    "@system-one-ai/core": "^0.6.0"
+    "@system-one-ai/adapter-webgpu": "^0.2.1",
+    "@system-one-ai/runtime-onnx-node": "^0.2.1",
+    "@system-one-ai/core": "^0.7.0"
   },
   "peerDependencies": {
     "@huggingface/transformers": "^3.8.1"
