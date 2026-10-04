@@ -1,8 +1,8 @@
-# Cloudflare Jev 接入
+# Cloudflare Jev 与 Clef 接入
 
 [English](cloudflare.md) | **简体中文**
 
-独立包 `@system-one-ai/adapter-cloudflare` 支持 REST 和 AI runner 响应包装。默认地址和模型由 adapter 提供，应用只需传入账户 ID 和 API token。
+独立包 `@system-one-ai/adapter-cloudflare` 支持 Jev 和多模态 Clef / Clef Flash，兼容 REST 与 AI runner 响应包装。adapter 提供默认地址，应用传入账户 ID、API token 及可选模型配置；默认模型仍为 Jev。
 
 ```ts
 import { createFetchTransport } from '@system-one-ai/transport-fetch';
@@ -29,7 +29,7 @@ Cloudflare 的接口属于具体账户，因此使用 `cloudflareAdapter({ accou
 
 默认地址为 `https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/run`，默认模型为 `typesafe/jev`。SDK 不自行读取环境变量；示例在应用代码中显式传入账户和凭据。
 
-需要代理时，在 `SystemOne` 的配置中额外传入 `baseURL`。以下路径形式会保留所选 origin 和代理前缀：
+需要代理时，在 `SystemOne` 的配置中额外传入 `baseURL`。以下路径形式保留所选 origin 和代理前缀；Clef 会在最终 `/ai/run` 路径后追加模型 ID：
 
 | 输入路径 | 最终路径 |
 | --- | --- |
@@ -41,9 +41,36 @@ Cloudflare 的接口属于具体账户，因此使用 `cloudflareAdapter({ accou
 | `/client/v4/accounts/{accountId}/ai/run` | 原样使用 |
 | `/team/ai` 或 `/team/ai/run` | 使用代理的 `/team/ai/run` 端点 |
 
-末尾斜线会被移除。`baseURL` 中存在账户段时，它必须与 adapter 的账户 ID 一致。旧式把模型放在路径中的地址会被拒绝；不包含账户段的代理端点需要自行路由到目标账户。账户 ID 必须是仅包含字母、数字、下划线或连字符的非空路径段，账户是否存在由 Cloudflare 确认。
+末尾斜线会被移除。`baseURL` 中存在账户段时，它必须与 adapter 的账户 ID 一致。请传不带模型后缀的基础地址；adapter 为 Clef 添加文档规定的后缀，Jev 保持 runner 路径。不包含账户段的代理端点需要自行路由到目标账户。账户 ID 必须是仅包含字母、数字、下划线或连字符的非空路径段，账户是否存在由 Cloudflare 确认。
 
-客户端 `model` 覆盖 adapter 默认模型，单次请求的 `model` 再覆盖客户端值。显式 ID 原样发送，其他模型需要支持同一决策原语及协议。当前只实现 Jev 文档中的 `state`、`questions` 输入；非空 `providerOptions` 会被拒绝。
+客户端 `model` 覆盖 adapter 默认模型，单次请求的 `model` 再覆盖客户端值。`@cf/cloudflare/clef` 与 `@cf/cloudflare/clef-flash` 选择下方 Clef 协议；其他显式 ID 保留原有 runner 契约，必须支持相同决策原语。非空 `providerOptions` 均被拒绝；图片使用 core 的原生请求字段。
+
+## Clef 图片输入
+
+选择完整 Workers AI 模型 ID，而不是请求体里的短名称。图片通过 core 的 `EvaluateRequest.images` 传入，与 `state`、`questions` 并列。REST 与 [Workers 原生客户端](cloudflare-workers.zh-CN.md) 接受相同的 `ImageInput` 类型：
+
+```ts
+import { readFile } from 'node:fs/promises';
+import type { ImageInput } from '@system-one-ai/core';
+
+const images: readonly ImageInput[] = [
+  { mediaType: 'image/png', base64: (await readFile('receipt.png')).toString('base64') },
+];
+const result = await client.evaluate({
+  model: '@cf/cloudflare/clef', // 或 @cf/cloudflare/clef-flash
+  state: '检查附带的收据。',
+  questions: { team: choice('应该交给谁处理？', {
+    billing: '付款与退款', support: '技术问题',
+  }) },
+  images,
+});
+```
+
+每张图片可以是 base64 data URL（`data:image/png;base64,...`，或 JPEG、WebP），也可以是 `{ mediaType, base64 }`。core 导出 `ImageInput`，校验图片表示、base64 并与请求一起生成快照；Cloudflare adapter 将 `mediaType` 转为原生 `content_type`，调用方不接触供应商字段。纯文本调用省略 `images`；Jev 拒绝非空图片输入。远程图片 URL 在鉴权或调用 binding 前拒绝，SDK 不自动下载图片。
+
+core 要求 adapter 显式声明 `supportsImages: true`，否则非空图片请求直接报错，不会静默变成纯文本。Cloudflare adapter 负责自身的 PNG/JPEG/WebP 格式、最多 4 张、单张解码后不超过 4 MiB、总计不超过 8 MiB 限制；这些限制不污染其他 core adapter。服务端另外检查图片内容有效性、单张不超过 1600 万像素及整个请求不超过 13 MiB；SDK 不解码像素，也不在本地强制后两项限制。模型将图片置于 state 之前。虽然模型介绍提及视频，当前公开 API schema 只暴露 `images`，SDK 没有视频上传字段或自动抽帧功能.
+
+2026-10-04 核对：[Clef 模型页](https://developers.cloudflare.com/workers-ai/models/clef/)、[输入 schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-input.json)、[输出 schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-output.json)、[Clef Flash](https://developers.cloudflare.com/workers-ai/models/clef-flash/)。REST 使用 `POST /client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/clef`，请求体为 `{ model: "clef", state, questions, images? }`；Flash 使用自己的路径和 `model: "clef-flash"`。Workers 调用 `env.AI.run(完整模型ID, 同一输入, options)`。两者复用 choice/score/noul 解码与 token 归一化，不套用 Jev 的两位小数约定。
 
 ## 协议与来源
 
@@ -55,7 +82,7 @@ Cloudflare 的接口属于具体账户，因此使用 `cloudflareAdapter({ accou
 
 `0.5.2` 补上本次反馈的 AI runner 兼容结构：`{ success: true, result: { state: "Completed", result: modelResult } }`，也接受没有外层 REST envelope 的 runner。最多解开两层包装，每层在解包之前校验；存在 `state` 时必须严格为 `"Completed"` 且包含 `result`，不轮询失败或未完成任务。任何一层同时出现 `answers` 和 `result` 都会拒绝。最内层模型结果继续经过统一答案、概率和用量校验。runner fixture 用于兼容性回归；模型页本身展示的是内部模型结果，没有展示额外的 runner 包装。
 
-此 adapter 使用 Fetch 调用 REST。Workers 原生 `env.AI.run()` binding 属于独立接口，本入口尚未封装。账户和 token 配置参见 [REST 入门](https://developers.cloudflare.com/workers-ai/get-started/rest-api/)。SDK 不探测备用端点，也不自动切换供应商。
+本入口使用 Fetch 调用 REST；独立 `@system-one-ai/adapter-cloudflare/workers` 入口封装 [Workers 原生 `env.AI.run()`](cloudflare-workers.zh-CN.md)。账户和 token 配置参见 [REST 入门](https://developers.cloudflare.com/workers-ai/get-started/rest-api/)。SDK 不探测备用端点，也不自动切换供应商。
 
 ## 验证方式
 
@@ -70,6 +97,6 @@ npm run example:cloudflare
 npm run test:live:cloudflare
 ```
 
-示例支持可选地址/模型覆盖；联调脚本验证官方默认值，拒绝冲突覆盖。成功路径只发出三次推理请求且不重试，分别验证包含三个原语的对象状态、中文动作请求、数组状态的正反真假判断。答案、HTTP 状态、模型、已报告用量、耗时及选取的诊断响应头写入 `.artifacts/live-cloudflare.json` 和时间戳副本。报告不包含 API token 或 Authorization，端点中的账户 ID 被替换为占位符。
+示例支持可选地址/模型覆盖。图片输入设置 `SYSTEM_ONE_MODEL=@cf/cloudflare/clef`（或 `@cf/cloudflare/clef-flash`），并设置 `CLOUDFLARE_IMAGE_PATH=./receipt.png`。联调脚本允许在官方端点使用 Jev、Clef 或 Clef Flash，拒绝代理地址；不重试，发出三次文本推理请求，分别验证三个原语的对象状态、中文动作请求、数组状态的正反真假判断。提供图片时额外发出一次图片请求，只检查概率契约，不将无标签图片作为语义准确率证据。答案、HTTP 状态、模型、用量、耗时及选取的诊断响应头写入 `.artifacts/live-cloudflare.json` 和时间戳副本。报告不包含 API token、Authorization 或图片字节，端点中的账户 ID 被遮蔽。
 
-实现时项目没有 Cloudflare 凭据或 `.env.cloudflare`，联调命令在配置阶段退出，推理请求数为零。真实 Cloudflare 推理与 Workers 运行时执行尚未验证。实际执行结果见 [验证历史](validation.md)；普通测试及 CI 不运行付费联调命令。
+使用本仓库 `.env` 中的凭据完成了真实托管推理：Clef / Clef Flash 共 24 次请求均 HTTP 200、无重试。红蓝方块合成样本覆盖 PNG/JPEG/WebP、对象及 data URL、四图顺序、空字符串 state、并发/排队批量、异步鉴权快照、决策/概率策略及评测状态变体。这是小样本连通性和语义检查，不是模型质量基准。上方标准命令仍读取独立 `.env.cloudflare`；本次混合供应商验证使用临时 runner，没有改动凭据或 SDK 配置。真正 Workers `env.AI` 推理仍被开发/预览权限阻塞，REST 成功不代表 binding 已线上验证。证据与限制见 [验证历史](validation.md)；普通测试和 CI 不调用付费模型。

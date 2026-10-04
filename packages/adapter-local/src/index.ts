@@ -15,6 +15,8 @@ export interface LocalModelRunner {
   readonly id: string;
   readonly defaultModel?: string;
   readonly supportedQuestionTypes?: readonly QuestionType[];
+  /** Opt in only when evaluate consumes native request.images; otherwise core rejects image input. */
+  readonly supportsImages?: boolean;
   evaluate(request: LocalEvaluationRequest, options: LocalRunnerOptions): Promise<ProviderResponse>;
 }
 
@@ -68,6 +70,9 @@ function assertRunner(runner: LocalModelRunner): void {
   if (runner.supportedQuestionTypes !== undefined && (!Array.isArray(runner.supportedQuestionTypes) || runner.supportedQuestionTypes.some(type => !allQuestionTypes.includes(type)))) {
     throw new ConfigurationError('runner.supportedQuestionTypes contains an unsupported question type.');
   }
+  if (runner.supportsImages !== undefined && typeof runner.supportsImages !== 'boolean') {
+    throw new ConfigurationError('runner.supportsImages must be a boolean when provided.');
+  }
 }
 
 function assertDriver(driver: NativeModelDriver): void {
@@ -117,11 +122,12 @@ export function createLocalAdapter(options: LocalAdapterOptions): SystemOneAdapt
     defaultBaseURL: options.defaultBaseURL ?? localBaseURL,
     defaultModel: runner.defaultModel ?? runner.id,
     supportedQuestionTypes: runner.supportedQuestionTypes ?? allQuestionTypes,
+    supportsImages: runner.supportsImages === true,
     prepare({ baseURL, model, request }: AdapterContext): PreparedRequest {
       const url = new URL('/evaluate', baseURL);
       return {
         url: url.toString(),
-        body: { model, state: request.state, questions: request.questions, ...(request.providerOptions === undefined ? {} : { providerOptions: request.providerOptions }) },
+        body: { ...request, model },
       };
     },
     decode(payload: unknown): ProviderResponse {

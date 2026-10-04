@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { booleanQuestion, ConnectionError, ResponseValidationError } from '@system-one-ai/core';
+import { booleanQuestion, ConnectionError, ResponseValidationError, UnsupportedFeatureError } from '@system-one-ai/core';
 import { createLocalClient, createNativeClient } from '@system-one-ai/adapter-local';
 
 test('local runner uses the shared client validation contract', async () => {
@@ -54,4 +54,10 @@ test('native driver creates a disposable in-process client', async () => {
   await client.dispose();
   await client.dispose();
   assert.equal(disposed, 1);
+});
+
+test('text-only local runners reject images instead of silently evaluating the text alone', async () => {
+  const client = createLocalClient({ id: 'text-only', async evaluate() { assert.fail('runner must not receive unsupported image input'); } });
+  await assert.rejects(client.evaluate({ state: 'Inspect the image.', images: ['data:image/png;base64,AAAA'],
+    questions: { on: booleanQuestion('Is it on?') } }), UnsupportedFeatureError);
 });

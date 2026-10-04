@@ -6,6 +6,12 @@ export type Description = string | JsonObject | readonly JsonValue[] | null;
 export type State = Exclude<Description, null>;
 export type ChoiceCriteria = Readonly<Record<string, Description>>;
 
+/** Embedded image bytes. String inputs must be base64 data URLs, never remote URLs. */
+export type ImageInput = string | {
+  readonly mediaType: `image/${string}`;
+  readonly base64: string;
+};
+
 export interface ChoiceQuestion<C extends ChoiceCriteria = ChoiceCriteria> {
   readonly type: 'choice';
   readonly instructions: Description;
@@ -63,6 +69,8 @@ export interface Rounding {
 export interface EvaluateRequest<Q extends Questions = Questions> {
   readonly state: State;
   readonly questions: Q;
+  /** Images accompanying the shared state; format and size support depend on the selected model. */
+  readonly images?: readonly ImageInput[];
   readonly model?: string;
   readonly providerOptions?: JsonObject;
 }
@@ -123,6 +131,8 @@ export interface SystemOneAdapter {
   /** Used when neither the client nor the evaluation explicitly selects a model. */
   readonly defaultModel?: string;
   readonly supportedQuestionTypes: readonly QuestionType[];
+  /** Explicit opt-in. Omission means text/JSON only; prepare must enforce model-specific support. */
+  readonly supportsImages?: boolean;
   /** Synchronous codec. Network I/O, cancellation, and retries belong to the client. */
   prepare(context: AdapterContext): PreparedRequest;
   /** Return a ProviderResponse envelope. The unknown boundary is deliberately runtime-validated. */

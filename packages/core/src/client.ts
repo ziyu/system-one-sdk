@@ -23,6 +23,9 @@ export class SystemOne {
     if (!this.#adapter.id || !Array.isArray(this.#adapter.supportedQuestionTypes) || typeof this.#adapter.prepare !== 'function' || typeof this.#adapter.decode !== 'function') {
       throw new ConfigurationError('adapter must implement the SystemOneAdapter interface.');
     }
+    if (this.#adapter.supportsImages !== undefined && typeof this.#adapter.supportsImages !== 'boolean') {
+      throw new ConfigurationError('adapter.supportsImages must be a boolean when provided.');
+    }
     const baseURL = options.baseURL ?? this.#adapter.defaultBaseURL;
     if (baseURL === undefined) throw new ConfigurationError('This adapter requires baseURL.');
     this.baseURL = parseBaseURL(baseURL).toString().replace(/\/+$/, '');
@@ -44,6 +47,9 @@ export class SystemOne {
     const snapshot = snapshotRequest(request);
     for (const question of Object.values(snapshot.questions)) {
       if (!this.#adapter.supportedQuestionTypes.includes(question.type)) throw new UnsupportedFeatureError(`Adapter ${this.adapterId} does not support ${question.type} questions.`);
+    }
+    if (snapshot.images?.length && this.#adapter.supportsImages !== true) {
+      throw new UnsupportedFeatureError(`Adapter ${this.adapterId} does not support image input.`);
     }
     const timeoutMs = configInteger(options.timeoutMs ?? this.#timeoutMs, 'timeoutMs', 1);
     const maxRetries = configInteger(options.maxRetries ?? this.#maxRetries, 'maxRetries', 0, 100);

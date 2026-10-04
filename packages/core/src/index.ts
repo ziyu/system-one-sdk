@@ -8,7 +8,7 @@ export type { ErrorCode } from './errors.js';
 export type {
   AdapterContext, Answer, AnswerFor, Answers, ApiKey, BooleanAnswer, BooleanQuestion,
   ChoiceAnswer, ChoiceCriteria, ChoiceQuestion, Description, EvaluateRequest,
-  EvaluationClient, EvaluationResult, Fetch, JsonObject, JsonValue, PreparedRequest,
+  EvaluationClient, EvaluationResult, Fetch, ImageInput, JsonObject, JsonValue, PreparedRequest,
   ProviderResponse, Question, Questions, QuestionType, RequestOptions, Rounding,
   ScoreAnswer, ScoreQuestion, State, SystemOneAdapter, SystemOneOptions, Usage,
 } from './types.js';

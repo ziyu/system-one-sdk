@@ -46,4 +46,6 @@ const client = await createNativeClient({ driver });
 
 Kev、Laya、Nimble 等 Python、MLX、CUDA 或 sidecar 权重可以通过这个 runner 接入；它们不需要各自复制一套 TypeScript adapter。浏览器里的 OpenJev/SemIf GGUF 权重有现成的 `@system-one-ai/adapter-webgpu` 实现。runner 必须返回 core 的 `ProviderResponse` 形状，core 会继续校验选项、概率、score 和模型 ID。
 
+多模态 runner 显式声明 `supportsImages: true` 后，可从 `request.images` 读取 core 的 `ImageInput[]`（data URL 或 `{ mediaType, base64 }`）。adapter 保留原生图片字段，core 在执行前校验并生成快照。未声明能力的 runner 收到非空图片请求时会在执行前抛出 `UnsupportedFeatureError`，不会只处理文本而丢掉图片。具体支持哪些图片格式及模型限制由 runner 负责。
+
 Requires Node.js 20+. Build from the repository with `npm run build --workspace @system-one-ai/adapter-local`.

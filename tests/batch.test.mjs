@@ -78,6 +78,7 @@ test('all request snapshots are taken before dispatch, including queued states a
   const first = deferred();
   const second = structuredClone(booleanRequest);
   second.state = { label: 'original' };
+  second.images = [{ mediaType: 'image/png', base64: 'AAAA' }];
   const headers = { 'x-tenant': 'original' };
   let calls = 0;
   const reportPromise = evaluateMany({ evaluate: async (request, options) => {
@@ -88,10 +89,13 @@ test('all request snapshots are taken before dispatch, including queued states a
     if (calls++ === 0) return first.promise;
     assert.deepEqual(request.state, { label: 'original' });
     assert.equal(request.questions.on.instructions, 'Is the light on?');
+    assert.deepEqual(request.images, [{ mediaType: 'image/png', base64: 'AAAA' }]);
     return value();
   } }, [input('first'), input('second', second)], { concurrency: 1, requestOptions: { headers, timeoutMs: 2000, maxRetries: 0 } });
   second.state.label = 'changed';
   second.questions.on.instructions = 'Changed question';
+  second.images[0].base64 = 'changed';
+  second.images.push('invalid');
   headers['x-tenant'] = 'changed';
   first.resolve(value());
   assert.equal((await reportPromise).summary.succeeded, 2);

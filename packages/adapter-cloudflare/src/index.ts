@@ -1,8 +1,8 @@
 import { decodeCloudflareResponse } from './codec.js';
-import { ConfigurationError, UnsupportedFeatureError } from '@system-one-ai/core';
+import { clefModel, cloudflareInput } from './request.js';
+import { ConfigurationError } from '@system-one-ai/core';
 import type { AdapterContext, SystemOneAdapter } from '@system-one-ai/core';
 import { isRecord, parseBaseURL } from '@system-one-ai/core/validation';
-import { nativeQuestions } from '@system-one-ai/protocol-system-one';
 
 export interface CloudflareAdapterOptions {
   /** Cloudflare account identifier. The API token is passed as SystemOne's apiKey. */
@@ -46,7 +46,7 @@ function endpoint(baseURL: string, accountId: string): string {
   return url.toString();
 }
 
-/** Cloudflare AI REST codec. The factory supplies the account-specific URL and Jev model. */
+/** Cloudflare REST codec. Jev uses the runner; Clef uses its model-specific endpoint. */
 export function cloudflareAdapter(options: CloudflareAdapterOptions): SystemOneAdapter {
   const accountId = accountIdOf(options);
   return Object.freeze({
@@ -54,14 +54,13 @@ export function cloudflareAdapter(options: CloudflareAdapterOptions): SystemOneA
     defaultBaseURL: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run`,
     defaultModel: 'typesafe/jev',
     supportedQuestionTypes: Object.freeze(['choice', 'score', 'boolean'] as const),
+    supportsImages: true,
     prepare({ baseURL, model, request }: AdapterContext) {
-      if (request.providerOptions !== undefined && Object.keys(request.providerOptions).length > 0) {
-        throw new UnsupportedFeatureError('The Cloudflare Jev REST protocol does not define providerOptions.');
-      }
-      return {
-        url: endpoint(baseURL, accountId),
-        body: { model, input: { state: request.state, questions: nativeQuestions(request.questions) } },
-      };
+      const input = cloudflareInput(model, request);
+      const url = endpoint(baseURL, accountId);
+      return clefModel(model) === undefined
+        ? { url, body: { model, input } }
+        : { url: `${url}/${model}`, body: input };
     },
     decode: decodeCloudflareResponse,
   });

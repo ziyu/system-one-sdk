@@ -1,6 +1,6 @@
 import { decodeCloudflareResponse } from './codec.js';
-import { nativeQuestions } from '@system-one-ai/protocol-system-one';
-import { APIError, BindingError, ConfigurationError, ConnectionError, ResponseValidationError, TimeoutError, UnsupportedFeatureError } from '@system-one-ai/core';
+import { cloudflareInput } from './request.js';
+import { APIError, BindingError, ConfigurationError, ConnectionError, ResponseValidationError, TimeoutError } from '@system-one-ai/core';
 import { cancelBody, readJsonResponse, RequestScope, snapshotHeaders } from '@system-one-ai/transport-fetch';
 import type { AdapterContext, EvaluateRequest, EvaluationClient, EvaluationResult, Questions, RequestOptions } from '@system-one-ai/core';
 import { configInteger, isRecord, snapshotRequest, validateResponse } from '@system-one-ai/core/validation';
@@ -80,9 +80,6 @@ export class CloudflareWorkers implements EvaluationClient {
     const start = Date.now();
     const snapshot = snapshotRequest(request);
     checkOptions(options, ['signal', 'timeoutMs', 'maxRetries', 'headers'], 'request options');
-    if (snapshot.providerOptions !== undefined && Object.keys(snapshot.providerOptions).length > 0) {
-      throw new UnsupportedFeatureError('The Cloudflare Jev binding client does not define providerOptions.');
-    }
     const timeoutMs = configInteger(options.timeoutMs ?? this.#timeoutMs, 'timeoutMs', 1);
     const maxRetries = configInteger(options.maxRetries ?? this.#maxRetries, 'maxRetries', 0, 100);
     const headers = bindingHeaders(this.#headers, options.headers);
@@ -92,6 +89,7 @@ export class CloudflareWorkers implements EvaluationClient {
       throw new ConfigurationError('signal must be an AbortSignal.');
     }
     const model = snapshot.model ?? this.model;
+    const input = cloudflareInput(model, snapshot);
     // Codec context only; this client does not construct or dispatch an HTTP request URL.
     const context: AdapterContext = { baseURL: '', model, request: snapshot };
     const remaining = timeoutMs - (Date.now() - start);
@@ -102,12 +100,11 @@ export class CloudflareWorkers implements EvaluationClient {
         scope.throwIfAborted();
         try {
           // The binding cannot mutate the pristine validation snapshot or a later attempt.
-          const current = snapshotRequest(snapshot);
+          const current = structuredClone(input);
           let raw: unknown;
           try {
-            raw = await scope.run(() => Promise.resolve(this.#run(model, {
-              state: current.state, questions: nativeQuestions(current.questions),
-            }, { returnRawResponse: true, signal: scope.signal, extraHeaders: Object.fromEntries(headers) })).then(value => {
+            raw = await scope.run(() => Promise.resolve(this.#run(model, current,
+              { returnRawResponse: true, signal: scope.signal, extraHeaders: Object.fromEntries(headers) })).then(value => {
               if (scope.signal.aborted && value instanceof Response) cancelBody(value);
               return value;
             }));

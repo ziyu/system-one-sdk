@@ -119,12 +119,7 @@ function scoreValue(answer: Answer, question: Question): number | null {
 
 function transformedRequest(item: EvaluationCase, variant: EvaluationVariant): EvaluateRequest {
   const state = variant.transformState?.(item.request.state, item) ?? item.request.state;
-  return {
-    state,
-    questions: item.request.questions,
-    ...(item.request.model === undefined ? {} : { model: item.request.model }),
-    ...(item.request.providerOptions === undefined ? {} : { providerOptions: item.request.providerOptions }),
-  };
+  return { ...item.request, state };
 }
 
 /** Run cases sequentially so wall-clock latency remains interpretable. */
