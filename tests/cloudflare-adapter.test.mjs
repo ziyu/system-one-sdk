@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { APIError, ConfigurationError, RequestAbortedError, ResponseValidationError, SystemOne, TimeoutError, UnsupportedFeatureError, booleanQuestion } from '@system-one-ai/core';
+import { APIError, ConfigurationError, RequestAbortedError, ResponseValidationError, SystemOne, TimeoutError, UnsupportedFeatureError, ValidationError, booleanQuestion } from '@system-one-ai/core';
 import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 import { evaluateMany } from '@system-one-ai/batch';
 import { request, nativePayload, jsonResponse } from './fixtures.mjs';
@@ -261,4 +261,64 @@ test('Cloudflare uses native Fetch against a real local HTTP server with the com
   assert.equal(received.body.input.questions.interrupt.type, 'noul');
   assert.equal(result.answers.action.choice, 'drink');
   assert.equal(result.response.attempts, 1);
+});
+
+const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=';
+const png = `data:image/png;base64,${pngBase64}`;
+
+test('Clef uses the model-specific REST contract with images and unrounded native answers', async t => {
+  const received = [];
+  const raw = { ...nativePayload(), model: 'clef', answers: {
+    ...nativePayload().answers,
+    action: { type: 'choice', choice: 'drink', probabilities: { drink: 0.876543, rest: 0.123457 }, confidence: 0.456789 },
+  } };
+  const server = createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    received.push({ url: req.url, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) });
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(envelope(raw)));
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
+  const client = new SystemOne({ adapter, apiKey: null, transport: createFetchTransport(),
+    baseURL: `http://127.0.0.1:${server.address().port}/team/ai/run`, model: '@cf/cloudflare/clef', maxRetries: 0 });
+  const result = await client.evaluate({ ...request, images: [png, { mediaType: 'image/png', base64: pngBase64 }] });
+  assert.deepEqual(received[0], {
+    url: '/team/ai/run/@cf/cloudflare/clef',
+    body: { model: 'clef', state: request.state, questions: { ...request.questions, interrupt: { ...request.questions.interrupt, type: 'noul' } },
+      images: [png, { content_type: 'image/png', base64: pngBase64 }] },
+  });
+  assert.equal(result.answers.action.probabilities.drink, 0.876543);
+  assert.equal(result.answers.action.confidence, 0.456789);
+  assert.equal(result.answers.interrupt.probability, 0.94);
+  assert.equal(result.answers.urgency.score, 1.6);
+  assert.deepEqual(result.usage, { inputTokens: 215, outputTokens: 31, totalTokens: 246 });
+  assert.equal(result.rounding, undefined);
+  await client.evaluate({ ...request, model: '@cf/cloudflare/clef-flash' });
+  assert.equal(received[1].url, '/team/ai/run/@cf/cloudflare/clef-flash');
+  assert.equal(received[1].body.model, 'clef-flash');
+  assert.equal('images' in received[1].body, false);
+  assert.equal('input' in received[1].body, false);
+});
+
+test('Clef enforces its image limits before credentials or I/O', async () => {
+  const client = new SystemOne({ adapter, model: '@cf/cloudflare/clef',
+    apiKey: () => assert.fail('invalid images must not resolve credentials'),
+    transport: createFetchTransport(() => assert.fail('invalid images must not send requests')) });
+  const cases = [
+    Array(5).fill(png),
+    ['data:image/gif;base64,AAAA'],
+    [{ mediaType: 'image/svg+xml', base64: 'AAAA' }],
+    [{ mediaType: 'image/png', base64: Buffer.alloc(4 * 1024 * 1024 + 1).toString('base64') }],
+    Array(3).fill({ mediaType: 'image/png', base64: Buffer.alloc(3 * 1024 * 1024).toString('base64') }),
+  ];
+  for (const images of cases) {
+    await assert.rejects(client.evaluate({ ...request, images }), error => error instanceof ValidationError && error.path.startsWith('images'));
+  }
+  for (const providerOptions of [{ images: [png] }, { cloudflare: { images: [png] } }, { cloudflare: { model: 'clef-flash' } }]) {
+    await assert.rejects(client.evaluate({ ...request, providerOptions }), UnsupportedFeatureError);
+  }
+  await assert.rejects(client.evaluate({ ...request, model: 'typesafe/jev', images: [png] }), UnsupportedFeatureError);
 });

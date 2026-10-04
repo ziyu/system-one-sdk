@@ -180,7 +180,7 @@ export function defineDecision<const A extends DecisionActions>(options: {
     questions,
     resolve,
     async evaluate(client: EvaluationClient, request: Omit<EvaluateRequest, 'questions'>, callOptions?: RequestOptions): Promise<DecisionResult<A>> {
-      record(request, 'decision.request', ['state', 'model', 'providerOptions']);
+      record(request, 'decision.request', ['state', 'images', 'model', 'providerOptions']);
       const evaluation = await client.evaluate({ ...request, questions }, callOptions);
       return { decision: resolve(evaluation), evaluation };
     },

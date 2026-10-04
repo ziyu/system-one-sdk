@@ -20,7 +20,9 @@
 
 四个原生决策 adapter 提供 `defaultBaseURL` 和 `defaultModel`，正常使用不需要显式填写地址和模型。客户端 `baseURL`/`model` 是可选覆盖，单次请求模型优先级最高。自定义 adapter 可按相同约定提供默认值。Cloudflare 使用 `cloudflareAdapter({ accountId })` 工厂建立账户配置快照；账户专属信息保留在 adapter 内，不在通用客户端增加供应商字段。原生问题编码由 `protocol-system-one` 中的 `nativeQuestions` 共用。
 
-Cloudflare 按 Jev 模型页使用 `/ai/run` 与 `{ model, input }`，不猜测或轮询备用端点。当前覆盖 REST 调用，未封装 Workers 原生 binding。完整契约和来源见 [Cloudflare 接入文档](cloudflare.zh-CN.md)。
+core 的 `EvaluateRequest.images` 与 `state`、`questions` 并列，使用供应商无关的 `ImageInput`（data URL 或 `{ mediaType, base64 }`）。core 负责表示及 base64 校验、请求快照和 `supportsImages` 能力检查；adapter 未显式支持图片时，非空图片输入在 prepare/鉴权/transport 前失败，不能静默丢弃。具体模型支持的 MIME 类型、数量/字节限制和原生字段转换属于 adapter。`State` 继续表示文本/JSON，图片不塞入供应商参数或伪装成文本。
+
+Cloudflare 的 Jev 使用 `/ai/run` 与 `{ model, input }`，拒绝非空图片；Clef / Clef Flash 使用模型专属路径与 `{ model: 短名称, state, questions, images? }`，将 core 的 `mediaType` 转为原生 `content_type`。REST 与独立 `/workers` binding 共享 codec。`defineDecision`、`evaluateMany` 和 `runEvaluation` 保留原生图片字段；本地 runner 通过 `supportsImages: true` 显式接入。完整协议见 [Cloudflare 接入文档](cloudflare.zh-CN.md)。
 
 ## 调用生命周期
 

@@ -2,6 +2,81 @@
 
 本文件保留当前 workspace 验证及历史 SDK 发布记录；不同版本的真实请求分别记录。
 
+## 2026-10-05 多模态发布前审查与演练
+
+发布前审查复现了旧包 `repository.url` 仍为 `ziyu/sytem-one-sdk`、而发布 guard 要求 `ziyu/system-one-sdk` 的元数据不一致。修正 10 个旧包的规范仓库 URL，并将对应元数据更新纳入 changeset；没有放宽发布校验。
+
+明确固定 Node `24.19.0` / npm `11.17.0` 后，`scripts/test-release.mjs` 在临时仓库完成 Changesets 版本生成、类型/构建、278 项回归、13 项业务场景、16 包隔离 ESM/CJS/声明验证、候选产物冻结及篡改拒绝检查。core / Cloudflare / decisions 生成为 `0.7.0`，local / evaluation 为 `0.2.0`；其余依赖包同步 patch 更新，合计 16 包，图片依赖的 core 最低版本为 `^0.7.0`。工作区版本由后续 Release PR 正式生成，不在本机手改。
+
+同一已打包产物另通过 Wrangler 4.135.0 的生成类型及 9 项 workerd 场景。此前通过 mise 启动 npm 的子进程实际选到了 Node 26，Wrangler 类型生成后未及时退出；该次不能记作 Node 24 验证。后续用明确 PATH 和 Node 二进制执行，上述检查通过。真实 binding 的权限限制仍保持记录。
+
+从候选 tarball 隔离安装后，再完成 Clef/Clef Flash 7 次图片、批量、决策、评测调用及 TypeSafe 7 次原生/组合调用，全部通过且不重试。报告绑定临时演练源码 `9908a2da5bae8d47e61d6167ff2ef5369c339570`、manifest 摘要及每包 integrity，位于演练目录的 `release-cloudflare-live-candidate.json` 和 `release-live.json`。这些是本机候选验收；正式 CI 产物和 registry 安装仍须各自验证。
+
+## 2026-10-05 Clef / Clef Flash 真实多模态验证
+
+使用用户新增到本仓库 `.env` 的 Cloudflare 账户 token 和 TypeSafe API key，运行的是当前 SDK 构建，不是直接调用 API 绕过 SDK。真实请求时间为 UTC `2026-10-04T15:59:36Z` 至 `16:09:07Z`；Node.js `26.10.0`。没有修改 `.env`、发布包、部署 Worker 或关闭 TLS 校验。
+
+| 服务 | 实际推理请求 | 结果 |
+| --- | --- | --- |
+| Cloudflare Clef | 13 | 全部 HTTP 200，单次尝试、无重试；输入 token 合计 6701，输出 0 |
+| Cloudflare Clef Flash | 11 | 全部 HTTP 200，单次尝试、无重试；输入 token 合计 5774，输出 0 |
+| TypeSafe `jev-1.13.0` | 7 | 4 项原生文本场景及 3 项决策/策略/批量兼容场景全部通过，无重试 |
+| 真正 Workers `env.AI` | 0 | Wrangler remote binding 会话认证被权限阻塞，不能计为真实 binding 通过 |
+
+Cloudflare 的 24 次推理覆盖：文本 choice/score/boolean；512×512 白底红/蓝方块的 PNG、JPEG、WebP；对象 `{ mediaType, base64 }` 和三种格式 data URL；四图输入及首尾顺序；空字符串 state 的图片任务；异步 API key 等待期间修改原图片不影响实际请求；排队批量快照、并发批量；图片驱动的 `defineDecision`、候选对象身份及概率策略；`runEvaluation` 的文本/JSON 状态变体保持图片。4 个评测结果均符合已知颜色标签。另验证远程 URL、5 张图片、单图/总字节超限、Jev 图片输入、旧供应商图片参数、预取消共 7 种本地拒绝，网络请求数为零。
+
+首轮红方块混合问题中，Clef 返回 red 概率 `0.9924`、redness `1.9768`；Flash 为 `0.9674`、`1.9444`。JPEG 红图、WebP 蓝图及四图顺序均与已知样本标签一致。所有回答经过 SDK 原生解码、概率/评分及用量校验，没有修改答案或放宽验证。该小样本只证明接口与基本图像语义跑通，不代表业务图片准确率或延迟基准。
+
+真实命令包括 `node scripts/test-live.mjs .env`、`node scripts/test-composition-live.mjs .env` 及临时多模态 runner；本次均使用进程内 DNS 预加载脚本。默认 DNS 最初解析到异常地址，未携带凭据的连接出现自签名证书/重置；改用进程内 `1.1.1.1` / `8.8.8.8` 解析后保留原生 Fetch 与完整 TLS 校验。没有修改系统 DNS、证书或 SDK 网络实现。临时 runner 与 DNS 脚本在完成后删除。
+
+Workers 权限证据：账户级 `/accounts/{id}/tokens/verify` 返回 active，`/workers/scripts` 返回 200，但 `/workers/subdomain` 返回 403 / code 10000；Wrangler 4.135.0 明确报告 remote session 无法认证。用户级 `/user/tokens/verify` 对该账户 token 返回 401，不能据此认定账户 token 失效。需补充 Workers 开发/预览所需权限后完成原生 binding 真推理。未用 REST 包装伪装 `env.AI`，也未创建公开 Worker。
+
+本轮 `npm run typecheck`、278 项回归、示例编译及 13 项业务场景全部通过。`node scripts/test-cloudflare-workers-runtime.mjs` 在优先 npm 缓存的环境下完成安装包 ESM/CJS、Wrangler 生成类型和 9 项 workerd 场景；这些仍是可控推理 fixture，与上述真实 REST 分开记录。未发现需要修改 SDK 的缺陷。
+
+脱敏证据保存在 `.artifacts/live-multimodal-summary.json`、`.artifacts/live-clef-features.json`、`.artifacts/live-clef-representations-2026-10-04T16-09-00-932Z.json`、两份 `probe-clef*.json`、`.artifacts/live-typesafe.json`、`.artifacts/live-composition.json` 和 `.artifacts/live-cloudflare-workers-blocker.json`。包含真实请求 ID、时间、模型、原始响应/规范化答案、token 与结果；不包含 token、账户 ID、Authorization 或图片 base64。图像样本及 SHA-256 可用于复核，报告未上传公共服务。
+
+## 2026-10-04 core 原生多模态契约修正
+
+将图片提升为 core 的 `EvaluateRequest.images`，导出供应商无关 `ImageInput`（data URL 或 `{ mediaType, base64 }`）。core 校验表示、base64 并生成快照，`supportsImages` 未声明的 adapter 在 prepare/鉴权/transport 前拒绝非空图片。Cloudflare 只做 Clef 格式/数量/大小限制及原生 `content_type` 转换；上轮未发布的供应商图片入口和类型已移除，没有兼容别名。
+
+`defineDecision` 的请求白名单、`runEvaluation` 的状态变体请求构造已迁移；`evaluateMany` 通过 core 快照保留图片；本地 runner 可显式声明 `supportsImages: true`。没有更改 Jev 默认值，也没有伪造音频/视频接口。
+
+Node.js `26.10.0` 上实际验证：
+
+| 命令 / 场景 | 结果 |
+| --- | --- |
+| `npm run typecheck` | 16 包 ESM/CJS 构建、核心/供应商/组合类型与示例检查通过 |
+| `npm test` | 278 项通过，包括 core 非法图片拒绝、未声明能力拒绝、队列图片快照及本地纯文本 runner 拒绝 |
+| `node node_modules/typescript/bin/tsc -p tsconfig.examples.json` 与 `node --test tests/examples/*.test.mjs` | 示例编译、13 项业务场景通过 |
+| 临时原生图片 smoke，已删除 | 5 次原生 Fetch 本地 HTTP 请求通过；覆盖异步鉴权期间图片不变、Clef/Flash 批量、状态变体保留图片、纯文本 adapter 在 I/O 前拒绝、Workers 决策组合、本地视觉 runner 快照，以及 core 不施加 Clef 的格式/数量限制 |
+| `node scripts/test-package.mjs` | 16 个包隔离安装 ESM/CJS 契约和声明检查通过 |
+| `env npm_config_prefer_offline=true npm_config_fetch_retries=0 npm_config_fetch_timeout=20000 node scripts/test-cloudflare-workers-runtime.mjs` | 安装包、Wrangler 生成 `Env.AI` 类型及 9 项 workerd 场景通过，Clef 场景使用 core 原生 `images` |
+| 临时 Changesets 版本演练，已删除 | 在临时目录应用本次 changeset，确认 core 生成 `0.7.0`，Cloudflare/local/decisions/evaluation/batch 的 core 依赖均生成 `^0.7.0`；工作区版本、锁文件及发布状态未改变 |
+
+推理响应均来自本地协议 fixture，不是托管模型。上轮已确认缺少 `.env.cloudflare` 和凭据，本轮未重复发起 live 检查；真实推理、图片语义、延迟和计费仍未验证。
+
+## 2026-10-04 Cloudflare Clef 初版适配验证（已被上方 core 契约取代）
+
+初版按 Cloudflare [Clef](https://developers.cloudflare.com/workers-ai/models/clef/) 的公开 schema 接入 REST 与 Workers，当时图片仅通过供应商参数透传、未扩展 core。该未发布设计已被上方原生 `images` 契约取代；以下保留初轮执行证据，不是当前调用指南。
+
+本地环境 Node.js `26.10.0`，实际执行结果：
+
+| 命令 / 场景 | 结果 |
+| --- | --- |
+| `npm run typecheck` | 16 个 workspace 包的 ESM/CJS 构建、类型及示例检查通过 |
+| `npm test` | 275 项通过，包含 Clef REST 契约、图片拒绝边界及 binding 图片快照/重试隔离 |
+| `node node_modules/typescript/bin/tsc -p tsconfig.examples.json` 与 `node --test tests/examples/*.test.mjs` | 示例编译和 13 项业务场景通过 |
+| 临时 smoke 脚本，已删除 | 原生 Fetch 访问真实本地 HTTP server，分别完成 Clef / Clef Flash 图片请求；另完成原生 binding 客户端图片调用，三种问题答案、概率精度与 token 用量通过断言；上游响应均为本地 fixture |
+| `node scripts/test-package.mjs` | 16 个包隔离安装的 ESM/CJS 契约与声明检查通过 |
+| `env npm_config_prefer_offline=true npm_config_fetch_retries=0 npm_config_fetch_timeout=20000 node scripts/test-cloudflare-workers-runtime.mjs` | 安装包 ESM/CJS、Wrangler 生成的真实 `Env.AI` 类型与 9 项 workerd 场景通过，包括 Clef 图片及重试隔离；无 `nodejs_compat` |
+| `node scripts/test-cloudflare-live.mjs` | 配置阶段 `missing-config-file`，0 次推理请求；脱敏报告在 `.artifacts/live-cloudflare.json` |
+
+Workers 验证首次安装 Wrangler 4.135.0 时达到脚本 180 秒 npm 子进程期限；确认 registry 可访问并优先使用本地 npm 缓存后，通过相同版本工具和场景。没有更换工具版本或跳过场景。
+
+通用 documentation-governance 检查器扫描 62 个 Markdown 文件：未报告链接或围栏错误，但因仓库现有文档不采用其 `docs/README.md` 和 lifecycle frontmatter 约定而返回 21 个结构错误；本次不为通过外部检查器引入新的文档治理结构。
+
+本工作区和进程环境均没有 Cloudflare 凭据；没有验证托管模型推理、图片语义质量、延迟或计费。图片像素解码、1600 万像素限制及 13 MiB 整包限制仍由服务端执行；公开 schema 不提供视频字段。普通回归和 workerd 验证不调用付费模型。
+
 ## 2026-09-19 正式版 0.6.0 验收与自动晋级
 
 11 个独立包均已发布稳定版 `0.6.0`，内部依赖为稳定范围 `^0.6.0`，`latest` 与 `next` 均指向本批正式版本。源码为 `aa4c0173ba56c48f25c260002139d464382010db`（[Release PR #7](https://github.com/ziyu/sytem-one-sdk/pull/7)）；[Release 工作流](https://github.com/ziyu/sytem-one-sdk/actions/runs/35436132802)首轮全部成功，已创建 11 个正式 GitHub release，例如 [core 0.6.0](https://github.com/ziyu/sytem-one-sdk/releases/tag/core-v0.6.0)。

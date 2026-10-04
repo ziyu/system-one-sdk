@@ -1,4 +1,4 @@
-import { choice, type EvaluationClient } from '@system-one-ai/core';
+import { choice, type EvaluationClient, type ImageInput } from '@system-one-ai/core';
 import { CloudflareWorkers, createCloudflareWorkers, type CloudflareAiBinding } from '@system-one-ai/adapter-cloudflare/workers';
 import { defineDecision } from '@system-one-ai/decisions';
 import { evaluateMany } from '@system-one-ai/batch';
@@ -16,15 +16,16 @@ createCloudflareWorkers({ binding, apiKey: 'token' });
 // @ts-expect-error Native binding does not use an account ID or a REST URL.
 createCloudflareWorkers({ binding, accountId: 'account' });
 
+const images: readonly ImageInput[] = [{ mediaType: 'image/jpeg', base64: 'AAAA' }];
 async function check() {
-  const result = await native.evaluate({ state: {}, questions: { action: choice('Act?', { run: null, stop: null }) } });
+  const result = await native.evaluate({ model: '@cf/cloudflare/clef', images, state: {}, questions: { action: choice('Act?', { run: null, stop: null }) } });
   const action: 'run' | 'stop' = result.answers.action.choice;
   // @ts-expect-error Result stays a closed choice union.
   const invalid: 'fly' = result.answers.action.choice;
   const decision = defineDecision({ instructions: 'Act', actions: { run: { description: null }, stop: { description: null } } });
-  const selected = await decision.evaluate(common, { state: {} });
+  const selected = await decision.evaluate(common, { state: {}, images });
   const name: 'run' | 'stop' = selected.decision.action;
-  await evaluateMany(native, [{ id: 'one', request: { state: {}, questions: decision.questions } }]);
+  await evaluateMany(native, [{ id: 'one', request: { state: {}, images, questions: decision.questions } }]);
   void [action, invalid, name];
 }
 void [check, absentRootExport];

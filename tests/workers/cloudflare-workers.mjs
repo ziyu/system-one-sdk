@@ -33,6 +33,18 @@ export default {
         } });
         check(result.answers.yes.probability === 0.9 && result.answers.quality.score === 0.8, 'Primitives decoded incorrectly');
         check(result.usage.totalTokens === 15 && result.response.requestId === 'own-request', 'Usage or ID missing');
+      } else if (scenario === 'clef') {
+        const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=';
+        let calls = 0;
+        const client = createCloudflareWorkers({ model: '@cf/cloudflare/clef', retryDelayMs: 0, binding: { async run(model, input) {
+          check(model === '@cf/cloudflare/clef' && input.model === 'clef', 'Clef model selectors incorrect');
+          check(input.images.length === 1 && input.images[0] === image, 'Image snapshot lost');
+          input.images[0] = 'mutated';
+          if (++calls === 1) return new Response(null, { status: 503 });
+          return Response.json({ ...payload(), model: 'clef' });
+        } } });
+        const result = await client.evaluate({ ...request(), images: [image] });
+        check(result.answers.route.choice === 'a' && result.response.attempts === 2 && result.rounding === undefined, 'Clef result incorrect');
       } else if (scenario === 'retry') {
         let calls = 0;
         const client = createCloudflareWorkers({ retryDelayMs: 0, binding: { async run() {

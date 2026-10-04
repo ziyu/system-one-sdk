@@ -1,8 +1,8 @@
-# Cloudflare Jev integration
+# Cloudflare Jev and Clef integration
 
 **English** | [简体中文](cloudflare.zh-CN.md)
 
-The independent `@system-one-ai/adapter-cloudflare` package handles REST and AI runner response envelopes. It supplies the REST URL and model; the application supplies an account ID and API token.
+The independent `@system-one-ai/adapter-cloudflare` package supports Jev and the multimodal Clef / Clef Flash models, including REST and AI runner response envelopes. It supplies the REST URL; the application supplies an account ID, API token and optional model selection. Jev remains the default.
 
 ```ts
 import { createFetchTransport } from '@system-one-ai/transport-fetch';
@@ -29,7 +29,7 @@ console.log(result.answers.team.choice); // 'billing' | 'support'
 
 The default URL is `https://api.cloudflare.com/client/v4/accounts/{accountId}/ai/run`; the default model is `typesafe/jev`. The client does not read environment variables. Examples explicitly pass the configuration shown above.
 
-`baseURL` is optional. For a proxy, set it on `SystemOne`, alongside the adapter and key. These path forms preserve the selected origin and any proxy prefix:
+`baseURL` is optional. For a proxy, set it on `SystemOne`, alongside the adapter and key. These path forms preserve the selected origin and any proxy prefix. Clef appends its model ID to the resulting `/ai/run` path:
 
 | Supplied path | Resulting path |
 | --- | --- |
@@ -41,9 +41,36 @@ The default URL is `https://api.cloudflare.com/client/v4/accounts/{accountId}/ai
 | `/client/v4/accounts/{accountId}/ai/run` | Use unchanged |
 | `/team/ai` or `/team/ai/run` | Use the proxy's `/team/ai/run` endpoint |
 
-Trailing slashes are removed. An account segment in `baseURL` must match the adapter's account ID. Legacy model-in-path endpoints are rejected rather than guessed. A proxy endpoint without an account segment must route to the intended account itself. Account IDs are validated as a single nonempty segment containing letters, digits, underscores, or hyphens; the service determines whether that account actually exists.
+Trailing slashes are removed. An account segment in `baseURL` must match the adapter's account ID. Supply the base URL without a model suffix; the adapter adds the documented Clef suffix, while Jev keeps the runner path. A proxy endpoint without an account segment must route to the intended account itself. Account IDs are validated as a single nonempty segment containing letters, digits, underscores, or hyphens; the service determines whether that account actually exists.
 
-Client `model` overrides the adapter default; per-request `model` overrides the client. Explicit IDs are sent unchanged. Supporting another model requires that it accept the same decision primitives and wire contract. Nonempty `providerOptions` are rejected because this adapter currently implements only the documented Jev `state` and `questions` input fields.
+Client `model` overrides the adapter default; per-request `model` overrides the client. `@cf/cloudflare/clef` and `@cf/cloudflare/clef-flash` select the Clef protocol below. Other explicit IDs retain the existing runner contract and must support the same decision primitives. Nonempty `providerOptions` are rejected; image input is a native core request field.
+
+## Clef images
+
+Use the full Workers AI model ID, not the short body selector. Images belong in core's `EvaluateRequest.images`, alongside `state` and `questions`. Both REST and the [native Workers client](cloudflare-workers.md) accept the same `ImageInput` type:
+
+```ts
+import { readFile } from 'node:fs/promises';
+import type { ImageInput } from '@system-one-ai/core';
+
+const images: readonly ImageInput[] = [
+  { mediaType: 'image/png', base64: (await readFile('receipt.png')).toString('base64') },
+];
+const result = await client.evaluate({
+  model: '@cf/cloudflare/clef', // or @cf/cloudflare/clef-flash
+  state: 'Inspect the attached receipt.',
+  questions: { team: choice('Who should handle it?', {
+    billing: 'Payments and refunds', support: 'Technical issues',
+  }) },
+  images,
+});
+```
+
+Each image is a base64 data URL (`data:image/png;base64,...`, JPEG or WebP), or `{ mediaType, base64 }`. Core exports `ImageInput`, validates the representation and base64, and snapshots it with the request. The Cloudflare adapter converts `mediaType` to the native `content_type`; callers never need that provider-specific field. Text-only calls omit `images`. Jev rejects nonempty image input, and remote URLs are rejected before authentication or binding invocation. The SDK never downloads images automatically.
+
+Core requires adapters to opt in with `supportsImages: true`; unsupported image requests fail rather than silently becoming text-only. Cloudflare enforces its own PNG/JPEG/WebP formats, at most four images, 4 MiB decoded bytes per image and 8 MiB in total. These provider-specific limits do not restrict other core adapters. The service additionally enforces valid image content, 16 megapixels per image and a 13 MiB whole-request limit; the SDK does not decode pixels or enforce those last two limits. Images precede state at the model. Although the model description mentions video, the published API schema exposes only `images`; there is no SDK video-upload field or automatic frame extraction.
+
+Reviewed October 4, 2026: [Clef](https://developers.cloudflare.com/workers-ai/models/clef/), [input schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-input.json), [output schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-output.json), and [Clef Flash](https://developers.cloudflare.com/workers-ai/models/clef-flash/). REST uses `POST /client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/clef` with `{ model: "clef", state, questions, images? }`; Flash uses its own path and `model: "clef-flash"`. Workers calls `env.AI.run(fullModelId, sameInput, options)`. Both reuse native choice/score/noul decoding and token normalization without applying Jev's rounding convention.
 
 ## Wire contract and source references
 
@@ -55,7 +82,7 @@ The [general AI REST reference](https://developers.cloudflare.com/api/resources/
 
 Version 0.5.2 adds the reported AI runner compatibility shape: `{ success: true, result: { state: "Completed", result: modelResult } }`. A runner without the outer REST envelope is also accepted. Unwrapping is limited to two envelopes, and every layer is checked before it is removed. A supplied `state` must be exactly `"Completed"` with a `result`; failed or unfinished states are not polled. Simultaneous `answers` and `result` are rejected at any layer. The model result still passes the common answer, probability and usage validation. Runner fixtures are compatibility regression coverage; the model page itself illustrates the inner model result, not this additional runner envelope.
 
-This adapter calls REST through Fetch. Cloudflare's native Workers `env.AI.run()` binding is a separate interface and is not implemented by this entry point. The [REST setup guide](https://developers.cloudflare.com/workers-ai/get-started/rest-api/) explains Cloudflare account and token setup. No automatic endpoint fallback or provider substitution takes place.
+This entry calls REST through Fetch. The separate `@system-one-ai/adapter-cloudflare/workers` entry implements [native `env.AI.run()` calls](cloudflare-workers.md). The [REST setup guide](https://developers.cloudflare.com/workers-ai/get-started/rest-api/) explains Cloudflare account and token setup. No automatic endpoint fallback or provider substitution takes place.
 
 ## Local verification
 
@@ -70,6 +97,6 @@ npm run example:cloudflare
 npm run test:live:cloudflare
 ```
 
-The example accepts optional URL/model overrides. The live check exercises the official defaults and rejects conflicting overrides. On success it makes three inference requests with no retries: a mixed-primitives object state, a Chinese action request, and positive/negative boolean questions over an array state. It saves results, observed HTTP status, model, reported usage, timings and response headers selected for diagnostics to `.artifacts/live-cloudflare.json` and a timestamped copy. API tokens and authorization headers are excluded, and the endpoint masks the account ID.
+The example accepts optional URL/model overrides. Set `SYSTEM_ONE_MODEL=@cf/cloudflare/clef` (or `@cf/cloudflare/clef-flash`) and optionally `CLOUDFLARE_IMAGE_PATH=./receipt.png` for image input. The live check allows Jev and both Clef IDs on the official endpoint and rejects proxy overrides. It makes three text inference requests with no retries: a mixed-primitives object state, a Chinese action request, and positive/negative boolean questions over an array state. Supplying an image adds one image request; its probability contract is checked, not semantic accuracy on an unlabeled image. It saves results, observed HTTP status, model, reported usage, timings and response headers selected for diagnostics to `.artifacts/live-cloudflare.json` and a timestamped copy. API tokens, authorization headers and image bytes are excluded, and the endpoint masks the account ID.
 
-At implementation time the project had no Cloudflare credentials or `.env.cloudflare`; the integration command exited at configuration with zero requests. Live Cloudflare inference and execution inside a Workers runtime remain unverified. See [validation history](validation.md) for the checks actually executed. Ordinary tests and CI never run the live command.
+Hosted inference was verified using credentials supplied in the repository's `.env`: 24 Clef / Clef Flash requests returned HTTP 200 without retries. Synthetic red/blue square images covered PNG/JPEG/WebP, object and data-URL representations, four-image ordering, empty-string state, concurrent/queued batches, asynchronous credential snapshots, decision/policy composition and evaluation state variants. These are small-sample connectivity and semantic checks, not a model benchmark. The standard live command above still reads its dedicated `.env.cloudflare`; this mixed-provider verification used temporary runners without changing credentials or SDK configuration. Actual Workers `env.AI` inference remains blocked by development/preview permissions; it is not implied by REST success. See [validation history](validation.md) for reports and limits. Ordinary tests and CI never run paid inference.

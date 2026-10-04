@@ -112,6 +112,8 @@ console.log(action, result.answers.urgency.score, result.answers.interrupt.proba
 
 Adapters supply native endpoint/model defaults. `baseURL` and `model` override them; per-request `model` has highest priority. Cloudflare requires `cloudflareAdapter({ accountId })`. Custom Fetch implementations are passed to `createFetchTransport(fetch)`. The client does not infer protocols from hostnames or read environment variables.
 
+Core natively accepts `evaluate({ state, questions, images })` using `ImageInput` (base64 data URL or `{ mediaType, base64 }`). It validates and snapshots images and rejects nonempty image input unless the adapter declares `supportsImages: true`. Cloudflare Clef / Clef Flash support this on REST and Workers; Jev remains the default. Local vision runners can opt in, and decision/batch/evaluation composition preserves images. See [core contract](packages/core/README.md#native-image-input) and [Cloudflare formats and limits](docs/cloudflare.md#clef-images).
+
 ## Use a general-purpose LLM for System One decisions
 
 `adapter-llm` adapts general-purpose OpenAI, Anthropic and compatible LLM APIs to System One's `evaluate({ state, questions })` interface. It turns state and questions into prompts and JSON output constraints, then converts LLM responses into this library's choice, score and boolean results. Applications can use an LLM for System One decisions and reuse `decisions`, `policies` and `batch`.

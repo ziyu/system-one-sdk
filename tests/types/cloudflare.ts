@@ -1,11 +1,12 @@
 import { createFetchTransport } from '@system-one-ai/transport-fetch';
-import { SystemOne, choice, type SystemOneAdapter } from '@system-one-ai/core';
+import { SystemOne, choice, type ImageInput, type SystemOneAdapter } from '@system-one-ai/core';
 import { cloudflareAdapter, type CloudflareAdapterOptions } from '@system-one-ai/adapter-cloudflare';
 // @ts-expect-error Cloudflare is an optional entry point, never loaded by the core.
 import { cloudflareAdapter as invalidRootExport } from '@system-one-ai/core';
 
 const options: CloudflareAdapterOptions = { accountId: 'account-id' };
 const adapter: SystemOneAdapter = cloudflareAdapter(options);
+const images: readonly ImageInput[] = ['data:image/png;base64,AAAA', { mediaType: 'image/webp', base64: 'AAAA' }];
 const client = new SystemOne({ transport: createFetchTransport(), adapter, apiKey: 'token' });
 new SystemOne({ transport: createFetchTransport(), adapter, apiKey: 'token', baseURL: 'https://proxy.example/ai/run' });
 // @ts-expect-error Account configuration is required by the adapter factory.
@@ -22,7 +23,7 @@ cloudflareAdapter({ accountId: 'account-id', baseURL: 'https://proxy.example' })
 new SystemOne({ transport: createFetchTransport(), adapter: cloudflareAdapter, apiKey: 'token' });
 
 async function inference() {
-  const result = await client.evaluate({ state: 'Refund this charge.', questions: { team: choice('Team?', { billing: null, support: null }) } });
+  const result = await client.evaluate({ model: '@cf/cloudflare/clef', images, state: 'Refund this charge.', questions: { team: choice('Team?', { billing: null, support: null }) } });
   const team: 'billing' | 'support' = result.answers.team.choice;
   // @ts-expect-error Provider selection must not widen the choice union.
   const invalid: 'sales' = result.answers.team.choice;

@@ -117,7 +117,7 @@ try {
       'index.js': { type: 'esm', contents: bundled.outputFiles[0].text },
     } },
   } }] });
-  for (const scenario of ['success', 'retry', 'cancel', 'timeout', 'invalid', 'oversized', 'parallel', 'composition']) {
+  for (const scenario of ['success', 'clef', 'retry', 'cancel', 'timeout', 'invalid', 'oversized', 'parallel', 'composition']) {
     const response = await mf.dispatchFetch(`http://localhost/${scenario}`);
     const body = await response.text();
     assert.equal(response.status, 200, `${scenario}: ${body}`);

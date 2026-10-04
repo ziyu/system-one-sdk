@@ -1,12 +1,13 @@
 import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { extname } from 'node:path';
 import { parseEnv } from 'node:util';
 import { SystemOne, SystemOneError, choice, score, booleanQuestion } from '@system-one-ai/core';
 import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 
 // Explicit opt-in. Only .env.cloudflare supplies credentials; ordinary tests never call this file.
-// All responses come from native Fetch. Three small requests, no retries, no fallback providers.
+// All responses come from native Fetch. Three text requests and an optional image, no retries or fallback providers.
 const startedAt = new Date().toISOString();
 const report = { startedAt, node: process.version, configFile: '.env.cloudflare', requests: [], rows: [] };
 const nativeFetch = globalThis.fetch.bind(globalThis);
@@ -19,17 +20,26 @@ try {
   assert.ok(apiKey, 'CLOUDFLARE_API_TOKEN is required.');
   const accountId = config.CLOUDFLARE_ACCOUNT_ID;
   const adapter = cloudflareAdapter({ accountId });
-  const expectedURL = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run`;
-  // Live verification deliberately exercises defaults. Proxy and model overrides stay in examples.
-  assert.ok(!config.SYSTEM_ONE_BASE_URL || config.SYSTEM_ONE_BASE_URL.replace(/\/+$/, '') === expectedURL, 'Live verification requires the default Cloudflare endpoint.');
-  assert.ok(!config.SYSTEM_ONE_MODEL || config.SYSTEM_ONE_MODEL === 'typesafe/jev', 'Live verification requires the default Jev model.');
+  const rootURL = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run`;
+  const model = config.SYSTEM_ONE_MODEL || 'typesafe/jev';
+  const clef = model === '@cf/cloudflare/clef' || model === '@cf/cloudflare/clef-flash';
+  assert.ok(clef || model === 'typesafe/jev', 'Live verification requires Jev, Clef or Clef Flash.');
+  const expectedURL = clef ? `${rootURL}/${model}` : rootURL;
+  assert.ok(!config.SYSTEM_ONE_BASE_URL || config.SYSTEM_ONE_BASE_URL.replace(/\/+$/, '') === rootURL, 'Live verification requires the official Cloudflare endpoint.');
+  let images;
+  if (config.CLOUDFLARE_IMAGE_PATH) {
+    assert.ok(clef, 'CLOUDFLARE_IMAGE_PATH requires a Clef model.');
+    const contentType = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }[extname(config.CLOUDFLARE_IMAGE_PATH).toLowerCase()];
+    assert.ok(contentType, 'CLOUDFLARE_IMAGE_PATH must name a PNG, JPEG or WebP file.');
+    images = [{ mediaType: contentType, base64: (await readFile(config.CLOUDFLARE_IMAGE_PATH)).toString('base64') }];
+  }
   const client = new SystemOne({
-    adapter, apiKey, timeoutMs: 15_000, maxRetries: 0,
+    adapter, apiKey, model, timeoutMs: 15_000, maxRetries: 0,
     transport: createFetchTransport(async (url, init) => {
       assert.equal(String(url), expectedURL);
       assert.equal(init.method, 'POST');
       assert.equal(new Headers(init.headers).get('authorization'), `Bearer ${apiKey}`);
-      const record = { scenario, startedAt: new Date().toISOString(), endpoint: '/client/v4/accounts/{accountId}/ai/run', model: JSON.parse(init.body).model };
+      const record = { scenario, startedAt: new Date().toISOString(), endpoint: `/client/v4/accounts/{accountId}/ai/run${clef ? `/${model}` : ''}`, model: JSON.parse(init.body).model };
       report.requests.push(record);
       const response = await nativeFetch(url, init);
       record.status = response.status;
@@ -64,6 +74,14 @@ try {
       check: answers => { assert.ok(answers.lampOn.probability < 0.5); assert.ok(answers.doorOpen.probability > 0.5); },
     },
   ];
+  if (images) cases.push({
+    id: 'image',
+    state: 'Evaluate the attached image.',
+    images,
+    questions: { document: booleanQuestion('Is this image a document or receipt?') },
+    // An arbitrary caller-supplied image has no known semantic label. Check the native probability contract only.
+    check: answers => assert.ok(Number.isFinite(answers.document.probability) && answers.document.probability >= 0 && answers.document.probability <= 1),
+  });
   for (const { id, check, ...input } of cases) {
     scenario = id;
     const result = await client.evaluate(input);
@@ -72,7 +90,7 @@ try {
     assert.equal(result.response.attempts, 1);
     check(result.answers);
   }
-  assert.equal(report.requests.length, 3);
+  assert.equal(report.requests.length, cases.length);
   report.status = 'passed';
 } catch (error) {
   report.status = 'failed';

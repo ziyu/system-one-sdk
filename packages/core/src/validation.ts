@@ -63,13 +63,41 @@ function nonemptyString(value: unknown, path: string, fail: Fail): asserts value
   if (typeof value !== 'string' || value.trim().length === 0) fail(path, 'expected a nonempty string');
 }
 
+function images(value: unknown): void {
+  if (!Array.isArray(value)) invalidInput('images', 'expected an array of embedded images');
+  assertJson(value, 'images');
+  for (let index = 0; index < value.length; index++) {
+    const image: unknown = value[index];
+    const path = `images[${index}]`;
+    let base64: unknown;
+    if (typeof image === 'string') {
+      const prefix = /^data:image\/[a-z0-9.+-]+;base64,/i.exec(image);
+      if (!prefix) invalidInput(path, 'expected an embedded image base64 data URL; remote URLs are unsupported');
+      base64 = image.slice(prefix[0].length);
+    } else if (isRecord(image)) {
+      if (Reflect.ownKeys(image).some(key => key !== 'mediaType' && key !== 'base64')
+        || !Object.getOwnPropertyDescriptor(image, 'mediaType')?.enumerable
+        || !Object.getOwnPropertyDescriptor(image, 'base64')?.enumerable) {
+        invalidInput(path, 'expected only enumerable mediaType and base64 fields');
+      }
+      if (typeof image.mediaType !== 'string' || !/^image\/[a-z0-9.+-]+$/i.test(image.mediaType)) {
+        invalidInput(`${path}.mediaType`, 'expected an image MIME type');
+      }
+      base64 = image.base64;
+    } else invalidInput(path, 'expected a base64 data URL or an object containing mediaType and base64');
+    if (typeof base64 !== 'string' || base64.length === 0 || base64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) {
+      invalidInput(path, 'expected nonempty, padded base64 image bytes');
+    }
+  }
+}
+
 export function snapshotRequest<Q extends Questions>(request: EvaluateRequest<Q>): EvaluateRequest<Q> {
   if (!isRecord(request)) invalidInput('request', 'expected an object');
   if (Object.getOwnPropertySymbols(request).length) invalidInput('request', 'symbol properties are unsupported');
   for (const key of Object.getOwnPropertyNames(request)) {
     if (!('value' in Object.getOwnPropertyDescriptor(request, key)!)) invalidInput('request', 'accessor properties are unsupported');
   }
-  onlyKeys(request, ['state', 'questions', 'model', 'providerOptions'], 'request', invalidInput);
+  onlyKeys(request, ['state', 'questions', 'images', 'model', 'providerOptions'], 'request', invalidInput);
   if (!hasOwn(request, 'state') || request.state === null) invalidInput('state', 'expected a string, object, or array');
   description(request.state, 'state');
   if (!hasOwn(request, 'questions') || !isRecord(request.questions) || Object.keys(request.questions).length === 0) invalidInput('questions', 'expected at least one named question');
@@ -98,6 +126,7 @@ export function snapshotRequest<Q extends Questions>(request: EvaluateRequest<Q>
       }
     } else invalidInput(`${path}.type`, 'expected choice, score, or boolean');
   }
+  if (request.images !== undefined) images(request.images);
   if (request.model !== undefined) nonemptyString(request.model, 'model', invalidInput);
   if (request.providerOptions !== undefined) {
     if (!isRecord(request.providerOptions)) invalidInput('providerOptions', 'expected an object');
@@ -107,6 +136,7 @@ export function snapshotRequest<Q extends Questions>(request: EvaluateRequest<Q>
   return JSON.parse(JSON.stringify({
     state: request.state,
     questions: request.questions,
+    ...(request.images === undefined ? {} : { images: request.images }),
     ...(request.model === undefined ? {} : { model: request.model }),
     ...(request.providerOptions === undefined ? {} : { providerOptions: request.providerOptions }),
   })) as EvaluateRequest<Q>;

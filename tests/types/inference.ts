@@ -1,6 +1,6 @@
 import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
 import { createFetchTransport } from '@system-one-ai/transport-fetch';
-import { SystemOne, choice, score, booleanQuestion, defineQuestions, type Questions, type SystemOneAdapter } from '@system-one-ai/core';
+import { SystemOne, choice, score, booleanQuestion, defineQuestions, type ImageInput, type Questions, type SystemOneAdapter } from '@system-one-ai/core';
 import { vercelAdapter } from '@system-one-ai/adapter-vercel';
 // @ts-expect-error Optional providers must not be re-exported by the core entry point.
 import { vercelAdapter as removedRootExport } from '@system-one-ai/core';
@@ -14,8 +14,14 @@ const questions = defineQuestions({
   interrupt: booleanQuestion('Interrupt?', { true: null, false: 'No new instruction' }),
 });
 
+const images: readonly ImageInput[] = ['data:image/png;base64,AAAA', { mediaType: 'image/gif', base64: 'AAAA' }];
+// @ts-expect-error Audio is not an image MIME type.
+const invalidImage: ImageInput = { mediaType: 'audio/wav', base64: 'AAAA' };
+// @ts-expect-error Provider wire field names do not belong in the core image contract.
+const invalidWireImage: ImageInput = { content_type: 'image/png', base64: 'AAAA' };
+
 async function verifyInference() {
-  const result = await client.evaluate({ state: { message: 'water' }, questions });
+  const result = await client.evaluate({ state: { message: 'water' }, images, questions });
   const action: 'drink' | 'rest' = result.answers.action.choice;
   const probability: number | undefined = result.answers.action.probabilities?.drink;
   const booleanProbability: number = result.answers.interrupt.probability;
@@ -41,7 +47,8 @@ async function verifyInference() {
 
 const adapter: SystemOneAdapter = {
   id: 'future', supportedQuestionTypes: ['boolean'],
-  prepare: ({ request, baseURL }) => ({ url: `${baseURL}/decisions`, body: { context: request.state, questions: request.questions } }),
+  supportsImages: true,
+  prepare: ({ request, baseURL }) => ({ url: `${baseURL}/decisions`, body: { context: request.state, images: request.images, questions: request.questions } }),
   decode: payload => payload,
 };
 // @ts-expect-error Unknown question primitives require a future SDK contract, not an unchecked string.
@@ -49,3 +56,4 @@ const invalidQuestions: Questions = { arbitrary: { type: 'text', instructions: '
 void verifyInference;
 void adapter;
 void invalidQuestions;
+void [invalidImage, invalidWireImage];

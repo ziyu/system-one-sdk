@@ -138,6 +138,41 @@ test('binding mutation cannot change validation or retried input', async () => {
   assert.equal((await client.evaluate(request())).response.attempts, 2);
 });
 
+test('Clef binding snapshots images and restores them after mutation on a retried call', async () => {
+  const latch = deferred();
+  const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=';
+  const source = { ...request(), model: '@cf/cloudflare/clef-flash',
+    images: [{ mediaType: 'image/png', base64: pngBase64 }] };
+  let calls = 0;
+  const client = createCloudflareWorkers({ model: '@cf/cloudflare/clef', retryDelayMs: 0, binding: { async run(model, input) {
+    await latch.promise;
+    assert.equal(model, '@cf/cloudflare/clef-flash');
+    assert.equal(input.model, 'clef-flash');
+    assert.deepEqual(input.images, [{ content_type: 'image/png', base64: pngBase64 }]);
+    input.images[0].base64 = 'mutated by binding';
+    input.images.push('extra');
+    if (++calls === 1) return new Response(null, { status: 503 });
+    return response({ ...payload(), model: 'clef-flash' });
+  } } });
+  const pending = client.evaluate(source);
+  source.model = 'typesafe/jev';
+  source.images[0].base64 = 'mutated by caller';
+  latch.resolve();
+  const result = await pending;
+  assert.equal(result.model, 'clef-flash');
+  assert.equal(result.response.attempts, 2);
+  assert.equal(result.answers.route.choice, 'a');
+  assert.equal(result.rounding, undefined);
+});
+
+test('Clef binding rejects remote image URLs and unknown options before invoking AI', async () => {
+  let calls = 0;
+  const client = createCloudflareWorkers({ model: '@cf/cloudflare/clef', binding: { async run() { calls++; return response(); } } });
+  await assert.rejects(client.evaluate({ ...request(), images: ['https://example.com/image.png'] }), ValidationError);
+  await assert.rejects(client.evaluate({ ...request(), providerOptions: { cloudflare: { video: 'clip.mp4' } } }), UnsupportedFeatureError);
+  assert.equal(calls, 0);
+});
+
 test('thrown binding errors are sanitized, separately typed and not retried', async () => {
   for (const sync of [true, false]) {
     let calls = 0;

@@ -17,6 +17,8 @@ console.log(summarizeEvaluation(rows));
 
 Cases identify one scored question inside a normal System One request and provide its gold answer. Reports include effective/valid accuracy, Wilson 95% intervals, macro F1, Brier score, NLL, ECE, score MAE, p50/p95 latency, failures, retries, throughput, and reported-token means.
 
+Cases may include core's native `request.images`. State-only context variants preserve those images and the other request fields, so paired evaluations do not silently become text-only.
+
 Calibration uses the top-class probability for ECE. System One `confidence` is intentionally not treated as a calibrated class probability.
 
 For calibration and class metrics, summarize one task/label space at a time; Brier magnitude and macro F1 are not directly comparable across unrelated tasks. `pairedContextEffect()` compares the same cases between a base and stressed context variant.

@@ -112,6 +112,8 @@ console.log(action, result.answers.urgency.score, result.answers.interrupt.proba
 
 原生 adapter 提供默认地址和模型，`baseURL`、`model` 可覆盖；单次请求的 `model` 优先级最高。Cloudflare 通过 `cloudflareAdapter({ accountId })` 配置账户。自定义 fetch 传给 `createFetchTransport(fetch)`。客户端不会根据 hostname 猜测协议，也不读取环境变量。
 
+core 原生支持 `evaluate({ state, questions, images })`，图片类型 `ImageInput` 为 base64 data URL 或 `{ mediaType, base64 }`。core 负责校验及快照；adapter 未显式声明 `supportsImages: true` 时，非空图片请求直接报错。Cloudflare 的 REST 与 Workers 均支持 Clef / Clef Flash 图片输入，默认仍为 Jev；本地视觉 runner 可声明支持，决策、批量及评测层均保留图片。参见 [core 契约](packages/core/README.md#native-image-input)与 [Cloudflare 格式和限制](docs/cloudflare.zh-CN.md#clef-图片输入)。
+
 ## 用通用 LLM 提供 System One 决策能力
 
 `adapter-llm` 把 OpenAI、Anthropic 及兼容服务的通用 LLM 接口适配为 System One 的 `evaluate({ state, questions })` 接口。它将状态和问题转换为 prompt 与 JSON 输出约束，再把 LLM 的回答转换为本库的选择、评分和真假结果。应用因此可以用通用 LLM 完成 System One 决策，并继续复用 `decisions`、`policies` 和 `batch`。

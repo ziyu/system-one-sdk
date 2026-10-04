@@ -2,7 +2,7 @@ import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
 import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { SystemOne, ValidationError, ConfigurationError, ResponseValidationError } from '@system-one-ai/core';
+import { SystemOne, ValidationError, ConfigurationError, ResponseValidationError, UnsupportedFeatureError } from '@system-one-ai/core';
 import { vercelAdapter } from '@system-one-ai/adapter-vercel';
 import { request, nativePayload, gatewayPayload, jsonResponse, booleanRequest } from './fixtures.mjs';
 
@@ -52,6 +52,36 @@ test('root request getters and hidden array serializers are rejected without exe
     await assert.rejects(client.evaluate(input), ValidationError);
   }
   assert.equal(calls, 0);
+});
+
+test('core rejects invalid image representations before adapter preparation or credentials', async () => {
+  let reads = 0;
+  const getter = Object.defineProperty({ mediaType: 'image/png' }, 'base64', { enumerable: true, get() { reads++; return 'AAAA'; } });
+  const hidden = Object.defineProperty({ mediaType: 'image/png' }, 'base64', { value: 'AAAA' });
+  const client = new SystemOne({
+    adapter: { ...systemOneAdapter, supportsImages: true, prepare() { assert.fail('invalid images must not reach the adapter'); } },
+    apiKey: () => assert.fail('must not resolve credentials'), transport: createFetchTransport(() => assert.fail('must not send')),
+  });
+  for (const images of [null, 'data:image/png;base64,AAAA', new Array(1), [getter], [hidden],
+    ['https://example.com/image.png'], ['data:text/plain;base64,AAAA'], ['data:image/png;base64,'],
+    ['data:image/png;base64,AA=A'], ['data:image/png;base64,%%=='], ['data:image/png;base64,AAA'],
+    [42], [{ mediaType: 'audio/wav', base64: 'AAAA' }], [{ mediaType: 'image/png' }],
+    [{ content_type: 'image/png', base64: 'AAAA' }], [{ mediaType: 'image/png', base64: 'AAAA', url: 'https://example.com' }],
+    [{ mediaType: 'image/png', base64: new Uint8Array([1]) }],
+  ]) {
+    await assert.rejects(client.evaluate({ ...booleanRequest, images }), error => error instanceof ValidationError && error.path.startsWith('images'));
+  }
+  assert.equal(reads, 0);
+});
+
+test('adapters must opt into images before core prepares or authenticates a request', async () => {
+  for (const capability of [{}, { supportsImages: false }]) {
+    const client = new SystemOne({
+      adapter: { ...systemOneAdapter, ...capability, prepare() { assert.fail('unsupported images must not reach prepare'); } },
+      apiKey: () => assert.fail('must not resolve credentials'), transport: createFetchTransport(() => assert.fail('must not send')),
+    });
+    await assert.rejects(client.evaluate({ ...booleanRequest, images: [{ mediaType: 'image/png', base64: 'AAAA' }] }), UnsupportedFeatureError);
+  }
 });
 
 for (const [label, mutate] of [
