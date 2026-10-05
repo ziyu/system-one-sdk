@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonicalRelease, finalizeBatch, publishBatch, registryState, resolveGraph, validatePackage, validateVerification } from '../scripts/release.mjs';
+import { canonicalRelease, finalizeBatch, publishBatch, registryState, validatePackage, validateVerification } from '../scripts/release.mjs';
+import { resolveGraph } from '../scripts/release-graph.mjs';
 
 const pkg = (name, version = '0.6.0', dependencies = {}) => ({ name: `@system-one-ai/${name}`, version, dependencies, integrity: `sha512-${name}-${version}`, filename: `${name}.tgz` });
 const metadata = value => ({ ...value, dist: { integrity: value.integrity } });

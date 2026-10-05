@@ -224,7 +224,7 @@ See [verification records](docs/validation.md) for current and historical eviden
 - [File/support workflows](docs/decision-workflows.md) and [browser example](docs/browser-decisions.md)
 - [Native Cloudflare Workers binding](docs/cloudflare-workers.md) (`@system-one-ai/adapter-cloudflare/workers`)
 - [Custom adapter example](examples/custom-adapter.ts)
-- [Versions and releases](docs/releasing.md): Changesets Release PRs, fixed artifacts and batch verification
+- [Versions and releases](docs/releasing.md#package-release-boundary): release only explicitly changed packages; unchanged siblings retain their versions and dependency ranges. Testing all workspaces does not authorize publishing all workspaces.
 - [Migrate from SDK 0.5.3](docs/migration-0.6.md): package, entry point and configuration mappings
 
 [MIT License](LICENSE).
