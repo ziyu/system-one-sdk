@@ -4,6 +4,8 @@ Runtime code belongs to one package under `packages/`. Core owns contracts and v
 
 Use Node.js 24 and `npm ci --ignore-scripts`. Run `npm run check` and `npm run test:package`; changes to Workers also require `npm run test:workers`. Node.js 20, 22 and 24 are covered by CI. Real API tests are explicit and use a supplied env file. Do not commit credentials or claim provider coverage based on fixtures.
 
+Source integration tests use the test-only workspace ESM resolver. Do not apply it to installed package, workerd or live release consumers: those must honor published dependency ranges and exact artifact integrities. Release rehearsals reinstall from the generated lockfile before testing. A source-only pass is not proof that a mixed-version consumer installs correctly.
+
 Run `npm run changeset` for consumer-visible runtime, declaration or behavior changes. List only packages with actual implementation/type/export/asset changes or a necessary dependency-contract change, and explain each. A dependency release does not automatically authorize dependent releases. Unchanged package versions, manifests and changelogs must stay untouched; documentation/CI-only work does not justify republishing packages. A dependent consuming a new API or shared error-class identity needs an explicit changeset and minimum-version verification. Do not widen every sibling's dependency range to synchronize the workspace.
 
 Fixes use patch, compatible features use minor. Before 1.0, breaking changes use minor and must say BREAKING with a migration guide; they never use patch. After 1.0, breaking changes use major. Exported helper subpaths follow the same policy as the main API. No runtime implementation may reach into another package's source by relative import.

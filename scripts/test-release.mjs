@@ -51,6 +51,9 @@ for (const pkg of plan.packages) {
 }
 run('git', ['add', '.']);
 run('git', ['commit', '-qm', 'Version release candidates']);
+// Versioning changes the lockfile. A fresh install must reproduce CI's nested historical
+// dependency copies instead of retaining pre-version workspace links from the first npm ci.
+run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund']);
 run('npm', ['run', 'check']);
 run('npm', ['run', 'test:package']);
 run('node', ['scripts/release.mjs', 'prepare', '--dry-run']);

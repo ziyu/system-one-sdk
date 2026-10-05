@@ -29,6 +29,9 @@ export async function checkPackage(name, format = 'esm') {
       },
     });
     assert.equal((await localClient.evaluate(request)).answers.on.probability, 0.9);
+    const failure = new core.ConfigurationError('runner configuration is invalid');
+    const failing = pkg.createLocalClient({ id: 'failing', async evaluate() { throw failure; } });
+    await assert.rejects(failing.evaluate(request), error => error === failure);
     return;
   }
   if (name === 'model-laya') {
@@ -39,6 +42,7 @@ export async function checkPackage(name, format = 'esm') {
     assert.equal(typeof pkg.layaAnswer, 'function');
     assert.equal(typeof browser.createLayaDriver, 'function');
     assert.equal(typeof node.createLayaOnnxModel, 'function');
+    assert.throws(() => pkg.parseLayaManifest({ format: 'invalid' }), core.ConfigurationError);
     return;
   }
   if (name === 'runtime-onnx-node') {
@@ -79,6 +83,7 @@ export async function checkPackage(name, format = 'esm') {
   if (name === 'protocol-system-one') {
     assert.equal(pkg.nativeQuestions(questions).on.type, 'noul');
     assert.equal(pkg.decodeNative(native).answers.on.probability, 0.9);
+    assert.throws(() => pkg.decodeNative(null), core.ResponseValidationError);
   }
   if (name === 'transport-fetch') {
     let calls = 0;
@@ -92,7 +97,11 @@ export async function checkPackage(name, format = 'esm') {
   const client = core.createSystemOne({ adapter, transport, apiKey: 'fixture', model: 'jev-latest', retryDelayMs: 0 });
   const result = await client.evaluate(request);
   assert.equal(result.answers.on.probability, 0.9);
-  if (name === 'transport-fetch') assert.equal(result.response.attempts, 2);
+  if (name === 'transport-fetch') {
+    assert.equal(result.response.attempts, 2);
+    const failing = core.createSystemOne({ adapter, apiKey: null, transport: pkg.createFetchTransport(async () => new Response(null, { status: 401 })) });
+    await assert.rejects(failing.evaluate(request), error => error instanceof core.APIError && error.statusCode === 401);
+  }
   if (name === 'core') {
     assert.throws(() => core.createSystemOne({ apiKey: null, adapter }), core.ConfigurationError);
     assert.throws(() => core.createSystemOne({ apiKey: null, transport }), core.ConfigurationError);
@@ -111,7 +120,10 @@ export async function checkPackage(name, format = 'esm') {
     assert.equal(report.items[0].status, 'fulfilled');
     assert.equal(report.summary.succeeded, 1);
   }
-  if (name === 'policies') assert.equal(pkg.gateBoolean(result.answers.on, { maxFalseProbability: 0.2, minTrueProbability: 0.8 }).status, 'accepted');
+  if (name === 'policies') {
+    assert.equal(pkg.gateBoolean(result.answers.on, { maxFalseProbability: 0.2, minTrueProbability: 0.8 }).status, 'accepted');
+    assert.throws(() => pkg.gateBoolean(result.answers.on, { maxFalseProbability: 0.8, minTrueProbability: 0.2 }), core.ConfigurationError);
+  }
   if (name === 'decisions') {
     const original = { id: 'lamp' };
     const candidate = pkg.choiceFrom({ instructions: 'Target', items: [original], id: item => item.id, describe: () => null });
