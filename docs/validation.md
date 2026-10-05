@@ -2,7 +2,19 @@
 
 本文件保留当前 workspace 验证及历史 SDK 发布记录；不同版本的真实请求分别记录。
 
-## 2026-10-05 多模态发布前审查与演练
+## 2026-10-05 撤销未发布的全量批次，改为选择性发布
+
+用户明确要求只升级有改动的包。原 Release run `37218048854` 已在上传等待审批时取消并拒绝 deployment；逐包查询确认原 16 个候选版本均不存在于 npm，`latest` 未改变。已撤销未发布的版本生成提交，保留多模态实现；旧 16 包 manifest 和产物作废，不得重跑上传。
+
+本次明确选择 8 包：core、Cloudflare、local、decisions、evaluation 的实现/类型变化；batch 使用新增图片快照；protocol-system-one、transport-fetch 必须和新 core 共享错误类型身份。后三个依赖契约更新进入 `0.7.0`，避免作为 `0.6.x` patch 被旧客户端自动安装。未改动的 LLM、OpenRouter、TypeSafe、Vercel、WebGPU、Laya、ONNX、policies 恢复原已发布版本、依赖范围、changelog，并撤回附带的非必要元数据改动。
+
+版本脚本只应用显式 changeset 条目，未选包 manifest 必须逐字节不变；冻结发布清单保存前后版本和变更原因，prepare/verify 拒绝无范围依据的上传。消费者按各自兼容依赖图测试，历史依赖安装 npm 已发布字节，而不是为了让全仓使用同一 core 而全量发版。真实 Changesets 场景及范围拒绝、registry 依赖隔离的 13 项针对性测试通过。
+
+Node `24.19.0` 的完整选择性演练在 `/var/folders/dg/6z94gr516x7fssvd7_5w7_8h0000gn/T/system-one-release-e89gRj` 完成：只生成 8 包，282 项回归、13 项业务场景通过，16 个 workspace 根按新旧两个兼容图进行 ESM/CJS/声明安装验证，最终只冻结 8 个上传产物。篡改产物被拒绝，未选包 manifest/changelog 与已发布基线 `ccf1cfa` 逐字节相同。
+
+同一候选产物通过 Wrangler 生成类型和 9 项 workerd fixture 场景；隔离安装后 TypeSafe 7 次、Clef/Clef Flash 7 次真实调用全部通过且不重试。TypeSafe adapter 和 policies 使用未升级的 npm 已发布版本，不纳入上传清单。演练源码为 `f921a101b4426cc0d4ecbb8c70029ff8ebe35987`，真实报告位于该目录 `.artifacts/release-live.json` 与 `release-cloudflare-live-candidate.json`；正式 CI 与 registry 验收仍分别执行。
+
+## 2026-10-05 多模态发布前审查与演练（16 包计划已撤销）
 
 发布前审查复现了旧包 `repository.url` 仍为 `ziyu/sytem-one-sdk`、而发布 guard 要求 `ziyu/system-one-sdk` 的元数据不一致。修正 10 个旧包的规范仓库 URL，并将对应元数据更新纳入 changeset；没有放宽发布校验。
 

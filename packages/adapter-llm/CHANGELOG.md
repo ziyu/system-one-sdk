@@ -1,12 +1,5 @@
 # @system-one-ai/adapter-llm
 
-## 0.7.1
-
-### Patch Changes
-
-- Updated dependencies [2681b49]
-  - @system-one-ai/core@0.7.0
-
 ## 0.7.0
 
 ### Minor Changes

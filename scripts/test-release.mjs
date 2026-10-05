@@ -5,7 +5,8 @@ import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import semver from 'semver';
-import { root } from './workspaces.mjs';
+import { root, workspaces } from './workspaces.mjs';
+import { assertUnselectedUnchanged, validateReleaseScope } from './release-scope.mjs';
 
 const directory = await mkdtemp(path.join(tmpdir(), 'system-one-release-'));
 const run = (program, args) => execFileSync(program, args, { cwd: directory, stdio: 'inherit', env: { ...process.env, HUSKY: '0' } });
@@ -31,9 +32,12 @@ if (stable) {
   assert.ok(['pre', 'exit'].includes(prerelease.mode), 'Stable rehearsal needs an active prerelease.');
   if (prerelease.mode === 'pre') run('npm', ['run', 'changeset', '--', 'pre', 'exit']);
 }
+const beforeVersioning = new Map(await Promise.all(workspaces.map(async workspace => [workspace.manifest.name, await readFile(path.join(directory, 'packages', workspace.directory, 'package.json'), 'utf8')])));
 run('npm', ['run', 'version:packages']);
 const plan = await json('.changeset/release.json');
-assert.ok(plan.packages.length);
+validateReleaseScope(plan);
+const afterVersioning = new Map(await Promise.all(workspaces.map(async workspace => [workspace.manifest.name, await readFile(path.join(directory, 'packages', workspace.directory, 'package.json'), 'utf8')])));
+assertUnselectedUnchanged(beforeVersioning, afterVersioning, plan.packages);
 for (const pkg of plan.packages) {
   assert.ok(semver.valid(pkg.version));
   if (stable) assert.equal(semver.prerelease(pkg.version), null);

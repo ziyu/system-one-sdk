@@ -1,13 +1,5 @@
 # @system-one-ai/runtime-onnx-node
 
-## 0.2.1
-
-### Patch Changes
-
-- Updated dependencies [2681b49]
-  - @system-one-ai/core@0.7.0
-  - @system-one-ai/adapter-local@0.2.0
-
 ## 0.2.0
 
 ### Minor Changes

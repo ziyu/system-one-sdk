@@ -5,8 +5,9 @@ import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildOrder, root } from './workspaces.mjs';
+import { buildOrder, root, workspaces } from './workspaces.mjs';
 import { pathToFileURL } from 'node:url';
+import { resolveGraph } from './release-graph.mjs';
 
 export const artifacts = path.join(root, '.artifacts');
 export const digest = (bytes, algorithm = 'sha256') => createHash(algorithm).update(bytes).digest(algorithm === 'sha512' ? 'base64' : 'hex');
@@ -59,7 +60,8 @@ export async function testPackages(packages) {
     });
   }
   await withConsumer(packages, async consumer => {
-    const names = new Set(packages.map(pkg => pkg.name));
+    const currentVersions = new Map(workspaces.map(workspace => [workspace.manifest.name, workspace.manifest.version]));
+    const names = new Set(packages.filter(pkg => pkg.version === currentVersions.get(pkg.name)).map(pkg => pkg.name));
     let fixtures = 0;
     for (const file of await readdir(path.join(root, 'tests/types'))) {
       if (!file.endsWith('.ts')) continue;
@@ -81,6 +83,35 @@ export async function testPackages(packages) {
   console.log(`${packages.length} packages passed isolated ESM/CJS contracts and declaration checks (${process.version}).`);
 }
 
+/** Test each package with versions allowed by its own manifest, not one forced workspace cohort. */
+export async function consumerGraphs(packages, lookup) {
+  const graphs = await Promise.all(packages.map(pkg => resolveGraph([pkg], packages, lookup)));
+  const groups = [];
+  for (const graph of graphs) {
+    const group = groups.find(items => graph.every(pkg => !items.some(item => item.name === pkg.name
+      && (item.version !== pkg.version || item.integrity !== pkg.integrity))));
+    if (group) {
+      for (const pkg of graph) if (!group.some(item => item.name === pkg.name)) group.push(pkg);
+    } else groups.push([...graph]);
+  }
+  return groups;
+}
+
+export async function testConsumerGraphs(packages) {
+  const metadata = new Map();
+  const lookup = name => {
+    if (!metadata.has(name)) metadata.set(name, (async () => {
+      const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`, { redirect: 'error', signal: AbortSignal.timeout(15000) });
+      assert.ok(response.ok, `Cannot resolve published dependency ${name}: HTTP ${response.status}.`);
+      return response.json();
+    })());
+    return metadata.get(name);
+  };
+  const groups = await consumerGraphs(packages, lookup);
+  for (const group of groups) await testPackages(group);
+  console.log(`${packages.length} package roots passed in ${groups.length} compatible dependency graphs; unchanged versions were not republished.`);
+}
+
 async function packAndTest() {
   await mkdir(artifacts, { recursive: true });
   await rm(path.join(artifacts, 'package-manifest.json'), { force: true });
@@ -94,7 +125,7 @@ async function packAndTest() {
     const { name, version, filename, integrity } = packed;
     packages.push({ name, version, filename, integrity, dependencies: workspace.manifest.dependencies ?? {} });
   }
-  await testPackages(packages);
+  await testConsumerGraphs(packages);
   await writeFile(path.join(artifacts, 'package-manifest.json'), JSON.stringify({
     source: await sourceIdentity(), node: process.version, npm: run('npm', ['--version']).trim(),
     testedAt: new Date().toISOString(), packages,

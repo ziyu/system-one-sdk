@@ -224,7 +224,7 @@ LLM 文件包含 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`。真实测试按�
 - [文件/客服工作流](docs/decision-workflows.zh-CN.md)与[浏览器示例](docs/browser-decisions.zh-CN.md)
 - [Cloudflare Workers 原生 binding](docs/cloudflare-workers.zh-CN.md)（`@system-one-ai/adapter-cloudflare/workers`）
 - [自定义 adapter 示例](examples/custom-adapter.ts)
-- [版本与发布](docs/releasing.md)：Changesets Release PR、固定产物与整批验证；根目录禁止发布
+- [版本与发布边界](docs/releasing.md#package-release-boundary)：只发布有实际改动或必要依赖契约变化的包；未改动包的版本、依赖范围和 changelog 保持不变。全仓测试不等于全仓升级，根目录禁止发布。
 - [从 SDK 0.5.3 迁移](docs/migration-0.6.md)：包、入口与配置映射
 
 [MIT 许可证](LICENSE)。

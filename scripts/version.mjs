@@ -5,8 +5,14 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { root, workspaces } from './workspaces.mjs';
+import { selectReleasePlan, assertUnselectedUnchanged } from './release-scope.mjs';
 
 const require = createRequire(import.meta.url);
+const unwrap = name => { const value = require(name); return value.default ?? value; };
+const getReleasePlan = unwrap('@changesets/get-release-plan');
+const applyReleasePlan = unwrap('@changesets/apply-release-plan');
+const { getPackages } = require('@manypkg/get-packages');
+const { read: readConfig } = require('@changesets/config');
 export function validateInitialVersions(items, currentBatch, tags) {
   const pending = new Map(currentBatch.packages?.map(pkg => [pkg.name, pkg.version]));
   for (const { directory, manifest } of items) {
@@ -20,13 +26,19 @@ async function main() {
   const currentBatch = JSON.parse(await readFile(path.join(root, '.changeset/release.json'), 'utf8'));
   const tags = execFileSync('git', ['tag', '--list'], { cwd: root, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
   validateInitialVersions(workspaces, currentBatch, tags);
-  execFileSync(process.execPath, [require.resolve('@changesets/cli/bin.js'), 'version'], { cwd: root, stdio: 'inherit' });
-  const packages = [];
-  for (const workspace of workspaces) {
-    const manifest = JSON.parse(await readFile(path.join(workspace.cwd, 'package.json'), 'utf8'));
-    if (manifest.version !== workspace.manifest.version) packages.push({ name: manifest.name, version: manifest.version });
+  const workspacePackages = await getPackages(root);
+  const config = await readConfig(root, workspacePackages);
+  const selected = selectReleasePlan(await getReleasePlan(root), config);
+  const before = new Map(await Promise.all(workspaces.map(async workspace => [workspace.manifest.name, await readFile(path.join(workspace.cwd, 'package.json'), 'utf8')])));
+  if (process.argv.includes('--plan')) {
+    console.log(JSON.stringify({ packages: selected.packages, unchangedDependents: selected.excluded }, null, 2));
+    return;
   }
-  assert.ok(packages.length, 'No versions changed; add a changeset or exit prerelease mode first.');
+  await applyReleasePlan(selected.plan, workspacePackages, config);
+  const after = new Map(await Promise.all(workspaces.map(async workspace => [workspace.manifest.name, await readFile(path.join(workspace.cwd, 'package.json'), 'utf8')])));
+  assertUnselectedUnchanged(before, after, selected.packages);
+  const packages = selected.packages;
+  for (const pkg of packages) assert.equal(JSON.parse(after.get(pkg.name)).version, pkg.version, `Generated version differs for ${pkg.name}.`);
   execFileSync('npm', ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: root, stdio: 'inherit' });
   await writeFile(path.join(root, '.changeset/release.json'), JSON.stringify({ packages }, null, 2) + '\n');
   console.log(`Prepared Release PR versions for ${packages.length} packages.`);
