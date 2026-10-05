@@ -80,10 +80,18 @@ The [desktop WebGPU validation record](docs/laya-webgpu-validation.md) includes 
 
 ## Install and use
 
-**Stable `0.6.0` is available on npm.** Install only the packages your application uses; npm resolves their dependencies. See the [SDK 0.5.3 migration guide](docs/migration-0.6.md) and [published-package verification](docs/validation.md).
+**Native image support is published on npm.** `core`, `adapter-cloudflare`, `transport-fetch`, `protocol-system-one`, `decisions` and `batch` are `0.7.0`; `adapter-local` and `evaluation` are `0.2.0`. Only these eight packages changed in this release. npm `latest`/`next` point to those versions, and GitHub Latest is [core-v0.7.0](https://github.com/ziyu/system-one-sdk/releases/tag/core-v0.7.0). Packages are independently versioned: unchanged packages retain their previous versions. See [release verification](docs/validation.md) and the [SDK 0.5.3 migration guide](docs/migration-0.6.md).
+
+For Clef image input, install the matching `0.7` packages and follow the [Cloudflare example](docs/cloudflare.md#clef-images):
 
 ```sh
-npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-system-one
+npm install @system-one-ai/core@0.7.0 @system-one-ai/transport-fetch@0.7.0 @system-one-ai/adapter-cloudflare@0.7.0
+```
+
+The TypeSafe text-only example below uses the unchanged `0.6` dependency line. Keep its core and transport on that line instead of treating every package's `latest` as a single SDK version:
+
+```sh
+npm install @system-one-ai/core@0.6.0 @system-one-ai/transport-fetch@0.6.0 @system-one-ai/adapter-system-one@0.6.0
 ```
 
 ```ts

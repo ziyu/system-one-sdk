@@ -2,6 +2,25 @@
 
 本文件保留当前 workspace 验证及历史 SDK 发布记录；不同版本的真实请求分别记录。
 
+## 2026-10-05 多模态 8 包正式发布与 latest 验收
+
+选择性发布已完成，源码为 `c5ca713a4bc17965efa779dfb86e69850e9a5f57`（[Release PR #25](https://github.com/ziyu/system-one-sdk/pull/25)）。[Release 工作流](https://github.com/ziyu/system-one-sdk/actions/runs/37260900747)的 prepare、Node 20/22/24 consumers、OIDC 上传、registry 安装验证和受保护 finalize 全部成功；最终晋级时间为 UTC `2026-10-05T04:10:39.169Z`。
+
+| 本次发布包（统一前缀 `@system-one-ai/`） | 版本 | npm 标签 |
+| --- | --- | --- |
+| core、adapter-cloudflare、transport-fetch、protocol-system-one、decisions、batch | `0.7.0` | `latest`、`next` 均指向 `0.7.0` |
+| adapter-local、evaluation | `0.2.0` | `latest`、`next` 均指向 `0.2.0` |
+
+未改动包没有发布新版本：adapter-llm 保持 `0.7.0`；OpenRouter、TypeSafe、Vercel adapter 和 policies 保持 `0.6.0`；adapter-webgpu、model-laya、runtime-onnx-node 保持 `0.2.0`。已逐包查询并确认这些包的 `latest` 不变。npm 标签是逐包独立的，不存在全仓统一版本；GitHub 仓库级 Latest 标记为 [core-v0.7.0](https://github.com/ziyu/system-one-sdk/releases/tag/core-v0.7.0)。
+
+冻结 manifest SHA-256 为 `5bc7a5400214f2641e8376d3ba6d32db103462bc2213f6ebeb5d2262c66c6550`。8 包 registry SHA-512 与 CI tarball 一致，逐包 GitHub Release 含对应 tarball、manifest、校验和及验收回执。正式 CI 产物和 npm 实际安装包分别执行 TypeSafe 7 次、Clef/Clef Flash 7 次真实调用，均通过且无重试；发布后报告确认 `fromRegistry: true`。未升级的 TypeSafe adapter 和 policies 仅作为已发布依赖参与验证，不进入上传清单。
+
+源码回归 282 项、业务场景 13 项、新旧两个兼容依赖图的 ESM/CJS/声明检查及 workerd 9 项 fixture 场景通过。真实 Cloudflare Workers `env.AI` 推理仍因账户开发/预览权限受限而未验证，不能由 REST 通过推断。npm 最初的 E401 通过轮换 protected secret 解决，随后旧仓库名导致的 OIDC 失败通过 canonical Trusted Publisher 配置修正；没有改用 token 上传绕过 OIDC。
+
+本地脱敏记录：`.artifacts/scoped-release-status.json`、`scoped-published-audit.json`、`scoped-release-manifest.json`、`scoped-registry-verification.json`、`scoped-release-result.json`、`scoped-release-live.json`、`scoped-release-cloudflare-live-registry.json`。包、标签、完整性及真实验收对应同一正式源码和 manifest；临时 CLI 凭据和验证脚本已清理，密码/API token 未进入源码或报告。
+
+以下章节保留发布前及已撤销批次的历史证据，不代表当前仍未发布。旧 16 包 run `37218048854` 已取消，不能恢复上传；本次正式发布仅上述 8 包。
+
 ## 2026-10-05 撤销未发布的全量批次，改为选择性发布
 
 用户明确要求只升级有改动的包。原 Release run `37218048854` 已在上传等待审批时取消并拒绝 deployment；逐包查询确认原 16 个候选版本均不存在于 npm，`latest` 未改变。已撤销未发布的版本生成提交，保留多模态实现；旧 16 包 manifest 和产物作废，不得重跑上传。

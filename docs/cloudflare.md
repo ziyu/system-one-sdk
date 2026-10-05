@@ -4,6 +4,12 @@
 
 The independent `@system-one-ai/adapter-cloudflare` package supports Jev and the multimodal Clef / Clef Flash models, including REST and AI runner response envelopes. It supplies the REST URL; the application supplies an account ID, API token and optional model selection. Jev remains the default.
 
+Native `images` support is available in `adapter-cloudflare@0.7.0` with core and transport on the same `0.7` line:
+
+```sh
+npm install @system-one-ai/core@0.7.0 @system-one-ai/transport-fetch@0.7.0 @system-one-ai/adapter-cloudflare@0.7.0
+```
+
 ```ts
 import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import { SystemOne, choice } from '@system-one-ai/core';
@@ -100,3 +106,5 @@ npm run test:live:cloudflare
 The example accepts optional URL/model overrides. Set `SYSTEM_ONE_MODEL=@cf/cloudflare/clef` (or `@cf/cloudflare/clef-flash`) and optionally `CLOUDFLARE_IMAGE_PATH=./receipt.png` for image input. The live check allows Jev and both Clef IDs on the official endpoint and rejects proxy overrides. It makes three text inference requests with no retries: a mixed-primitives object state, a Chinese action request, and positive/negative boolean questions over an array state. Supplying an image adds one image request; its probability contract is checked, not semantic accuracy on an unlabeled image. It saves results, observed HTTP status, model, reported usage, timings and response headers selected for diagnostics to `.artifacts/live-cloudflare.json` and a timestamped copy. API tokens, authorization headers and image bytes are excluded, and the endpoint masks the account ID.
 
 Hosted inference was verified using credentials supplied in the repository's `.env`: 24 Clef / Clef Flash requests returned HTTP 200 without retries. Synthetic red/blue square images covered PNG/JPEG/WebP, object and data-URL representations, four-image ordering, empty-string state, concurrent/queued batches, asynchronous credential snapshots, decision/policy composition and evaluation state variants. These are small-sample connectivity and semantic checks, not a model benchmark. The standard live command above still reads its dedicated `.env.cloudflare`; this mixed-provider verification used temporary runners without changing credentials or SDK configuration. Actual Workers `env.AI` inference remains blocked by development/preview permissions; it is not implied by REST success. See [validation history](validation.md) for reports and limits. Ordinary tests and CI never run paid inference.
+
+The published `0.7.0` artifacts were then installed from npm in an isolated consumer and passed seven more Clef / Clef Flash image, batch, decision and evaluation calls without retries. The registry SHA-512 values matched the frozen CI manifest before `latest` was promoted. See the [completed eight-package release record](validation.md) for the release source, manifest digest and unchanged package versions; the Workers binding permission limit still applies.

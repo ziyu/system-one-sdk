@@ -80,10 +80,18 @@ Node.js 使用 `npm run test:live:laya:node` 通过 `onnxruntime-node` 加载同
 
 ## 安装与调用
 
-**稳定版 `0.6.0` 已发布到 npm。** 按需安装应用使用的包，npm 自动解析其依赖。详见 [SDK 0.5.3 迁移说明](docs/migration-0.6.md)和[发布包验证记录](docs/validation.md)。
+**原生图片支持已发布到 npm。** `core`、`adapter-cloudflare`、`transport-fetch`、`protocol-system-one`、`decisions`、`batch` 为 `0.7.0`，`adapter-local`、`evaluation` 为 `0.2.0`。本次只升级这 8 个包；npm `latest`/`next` 指向对应版本，GitHub Latest 为 [core-v0.7.0](https://github.com/ziyu/system-one-sdk/releases/tag/core-v0.7.0)。各包独立版本化，未改动包保持原版本。详见 [发布验证记录](docs/validation.md)和 [SDK 0.5.3 迁移说明](docs/migration-0.6.md)。
+
+使用 Clef 图片输入时安装匹配的 `0.7` 包，参照 [Cloudflare 示例](docs/cloudflare.zh-CN.md#clef-图片输入)：
 
 ```sh
-npm install @system-one-ai/core @system-one-ai/transport-fetch @system-one-ai/adapter-system-one
+npm install @system-one-ai/core@0.7.0 @system-one-ai/transport-fetch@0.7.0 @system-one-ai/adapter-cloudflare@0.7.0
+```
+
+下方 TypeSafe 纯文本示例继续使用未改动的 `0.6` 依赖线，core 和 transport 也保持同一条线；不要将所有包的 `latest` 当成统一 SDK 版本：
+
+```sh
+npm install @system-one-ai/core@0.6.0 @system-one-ai/transport-fetch@0.6.0 @system-one-ai/adapter-system-one@0.6.0
 ```
 
 ```ts
