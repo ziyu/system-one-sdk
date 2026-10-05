@@ -4,6 +4,12 @@
 
 独立包 `@system-one-ai/adapter-cloudflare` 支持 Jev 和多模态 Clef / Clef Flash，兼容 REST 与 AI runner 响应包装。adapter 提供默认地址，应用传入账户 ID、API token 及可选模型配置；默认模型仍为 Jev。
 
+原生 `images` 支持已在 `adapter-cloudflare@0.7.0` 发布，core 和 transport 使用同一 `0.7` 依赖线：
+
+```sh
+npm install @system-one-ai/core@0.7.0 @system-one-ai/transport-fetch@0.7.0 @system-one-ai/adapter-cloudflare@0.7.0
+```
+
 ```ts
 import { createFetchTransport } from '@system-one-ai/transport-fetch';
 import { SystemOne, choice } from '@system-one-ai/core';
@@ -100,3 +106,5 @@ npm run test:live:cloudflare
 示例支持可选地址/模型覆盖。图片输入设置 `SYSTEM_ONE_MODEL=@cf/cloudflare/clef`（或 `@cf/cloudflare/clef-flash`），并设置 `CLOUDFLARE_IMAGE_PATH=./receipt.png`。联调脚本允许在官方端点使用 Jev、Clef 或 Clef Flash，拒绝代理地址；不重试，发出三次文本推理请求，分别验证三个原语的对象状态、中文动作请求、数组状态的正反真假判断。提供图片时额外发出一次图片请求，只检查概率契约，不将无标签图片作为语义准确率证据。答案、HTTP 状态、模型、用量、耗时及选取的诊断响应头写入 `.artifacts/live-cloudflare.json` 和时间戳副本。报告不包含 API token、Authorization 或图片字节，端点中的账户 ID 被遮蔽。
 
 使用本仓库 `.env` 中的凭据完成了真实托管推理：Clef / Clef Flash 共 24 次请求均 HTTP 200、无重试。红蓝方块合成样本覆盖 PNG/JPEG/WebP、对象及 data URL、四图顺序、空字符串 state、并发/排队批量、异步鉴权快照、决策/概率策略及评测状态变体。这是小样本连通性和语义检查，不是模型质量基准。上方标准命令仍读取独立 `.env.cloudflare`；本次混合供应商验证使用临时 runner，没有改动凭据或 SDK 配置。真正 Workers `env.AI` 推理仍被开发/预览权限阻塞，REST 成功不代表 binding 已线上验证。证据与限制见 [验证历史](validation.md)；普通测试和 CI 不调用付费模型。
+
+发布后又从 npm 隔离安装 `0.7.0` 实际产物，完成 7 次 Clef / Clef Flash 图片、批量、决策和评测真实调用，全部通过且无重试。registry SHA-512 与冻结 CI manifest 一致后才晋级 `latest`。源码、manifest 摘要及未改动包版本见 [8 包正式发布记录](validation.md)；Workers 原生 binding 的权限限制仍保留。
