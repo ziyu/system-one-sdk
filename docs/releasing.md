@@ -23,6 +23,8 @@ Only release packages with an actual change to their runtime, public types, expo
 
 `test:package` tests compatible dependency graphs separately, resolving historical dependencies from npm where their existing ranges require them. This does not expand the upload list. `release:prepare` still requires one consistent dependency version within the selected release graph, validates lower bounds and fails if the selected set omits a genuinely required dependency update. Fix the explicit package scope; never force all siblings to upgrade merely to make a single artificial workspace cohort install.
 
+Source integration (`npm test`, `test:scenarios`) resolves internal ESM imports to the checked-out workspace exports using a test-only loader. It tests the current implementations together; it is not installation evidence. `test:package`, workerd and live release consumers never load that resolver: they install exact tarballs/registry versions and retain error-identity, retry and cancellation checks. The release rehearsal performs a fresh `npm ci` after version generation so nested historical dependencies match a clean CI checkout.
+
 For the image feature the reviewed scope is eight packages: `core`, `adapter-cloudflare`, `adapter-local`, `decisions`, `evaluation`, `batch`, `protocol-system-one`, and `transport-fetch`. The first five change implementation/types; batch requires the new core snapshot; protocol/transport move with core's runtime error identity. LLM, OpenRouter, TypeSafe, Vercel, WebGPU, Laya, ONNX and policies are not released. Package versions are generated, not manually synchronized.
 
 ## Frozen artifacts and release gate

@@ -14,6 +14,8 @@ Node `24.19.0` 的完整选择性演练在 `/var/folders/dg/6z94gr516x7fssvd7_5w
 
 同一候选产物通过 Wrangler 生成类型和 9 项 workerd fixture 场景；隔离安装后 TypeSafe 7 次、Clef/Clef Flash 7 次真实调用全部通过且不重试。TypeSafe adapter 和 policies 使用未升级的 npm 已发布版本，不纳入上传清单。演练源码为 `f921a101b4426cc0d4ecbb8c70029ff8ebe35987`，真实报告位于该目录 `.artifacts/release-live.json` 与 `release-cloudflare-live-candidate.json`；正式 CI 与 registry 验收仍分别执行。
 
+Release PR #25 的干净 CI 安装暴露了源码测试混用 core 0.6/0.7 副本的错误身份问题；初轮演练仅刷新 lockfile、保留旧 workspace 链接，因此遗漏。现在演练在版本生成后重新 `npm ci`，源码集成用测试专用 workspace ESM resolver；隔离 tarball/registry/workerd/live 消费者不加载 resolver，额外保留 local、protocol、transport、policies 的错误身份断言。没有升级未改动包或改动运行时代码。新的 Node 24.19.0 演练 `/var/folders/dg/6z94gr516x7fssvd7_5w7_8h0000gn/T/system-one-release-jp4p0Z` 从干净安装通过 282 项回归、13 项场景、两个兼容图及 8 包冻结/篡改验证；独立 smoke 确認历史 core 确实安装且源码测试身份正确。
+
 ## 2026-10-05 多模态发布前审查与演练（16 包计划已撤销）
 
 发布前审查复现了旧包 `repository.url` 仍为 `ziyu/sytem-one-sdk`、而发布 guard 要求 `ziyu/system-one-sdk` 的元数据不一致。修正 10 个旧包的规范仓库 URL，并将对应元数据更新纳入 changeset；没有放宽发布校验。
