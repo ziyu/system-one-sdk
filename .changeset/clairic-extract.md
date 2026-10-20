@@ -10,4 +10,6 @@ Add Clairic extraction to core: typed field specs (`text`, `number`, `date`, `ti
 
 `systemOneAdapter` sends extract requests to `{baseURL}/extract` (typically `POST /v1/extract`) with default model `clairic`. Direct Cloudflare REST and Workers bindings encode the same field schema on the Clairic model path. Adapters opt in with `supportsExtract`; question-only adapters reject `extract()` before I/O.
 
-Protocol and Fetch packages are included so extract-capable adapters resolve the same core generation as the new extract types and error classes. Unchanged LLM, OpenRouter, Vercel, local, WebGPU, Laya, ONNX, decisions, policies, evaluation and batch packages keep their published versions.
+Protocol and Fetch packages are included so extract-capable adapters resolve the same core generation as the new extract types and error classes. Unchanged LLM, local, WebGPU, Laya, ONNX, decisions, evaluation and batch packages keep their published versions.
+
+`adapter-system-one` package metadata now points `repository.url` at the canonical GitHub repository `ziyu/system-one-sdk`.
