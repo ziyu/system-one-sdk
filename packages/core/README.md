@@ -1,11 +1,31 @@
 # @system-one-ai/core
 
-Create a shared `evaluate` client, define choice, score and boolean questions, and validate model answers. Supply the adapter for your model service and a transport when creating the client.
+Create a shared `evaluate` client, define choice, score and boolean questions, and validate model answers. Supply the adapter for your model service and a transport when creating the client. Extraction models such as Clairic use `extract({ state, fields })` on the same client.
 
 ```ts
 import { createSystemOne } from '@system-one-ai/core';
 // Supply an explicit adapter and transport to createSystemOne({ adapter, transport, apiKey }).
 ```
+
+## Clairic extraction
+
+```ts
+import { createSystemOne, defineFields, textField, numberField, dateField } from '@system-one-ai/core';
+// const client = createSystemOne({ adapter, transport, apiKey });
+
+const result = await client.extract({
+  model: 'clairic',
+  state: 'Invoice INV-2291 from Northwind Supply, issued 2026-09-02, net 30.',
+  fields: defineFields({
+    invoice_number: textField(),
+    due_date: dateField({ instructions: 'Issue date plus the net payment days' }),
+    total: numberField({ decimals: 2, unit: 'USD' }),
+  }),
+});
+const invoice: string | null = result.answers.invoice_number.value;
+```
+
+`state` must be a nonempty string unless `images` are sent. Fields are a discriminated union of `text`, `number`, `date`, `time`, `datetime`, `duration`, `list`, `estimate` and `forecast`. Core validates field names, per-type properties, image representation/limits (PNG/JPEG/WebP, at most four, 4 MiB each, 8 MiB total decoded) and a 16 MiB JSON body. Adapters must set `supportsExtract: true`. See [Clairic extraction](../../docs/clairic.md).
 
 ## Native image input
 

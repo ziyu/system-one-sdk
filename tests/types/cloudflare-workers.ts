@@ -1,4 +1,4 @@
-import { choice, type EvaluationClient, type ImageInput } from '@system-one-ai/core';
+import { choice, type EvaluationClient, type ExtractClient, type ImageInput } from '@system-one-ai/core';
 import { CloudflareWorkers, createCloudflareWorkers, type CloudflareAiBinding } from '@system-one-ai/adapter-cloudflare/workers';
 import { defineDecision } from '@system-one-ai/decisions';
 import { evaluateMany } from '@system-one-ai/batch';
@@ -8,6 +8,7 @@ import { CloudflareWorkers as absentRootExport } from '@system-one-ai/core';
 declare const binding: CloudflareAiBinding;
 const native = createCloudflareWorkers({ binding, timeoutMs: 1500, maxRetries: 0 });
 const common: EvaluationClient = native;
+const extractClient: ExtractClient = native;
 new CloudflareWorkers({ binding });
 // @ts-expect-error Binding must be provided.
 createCloudflareWorkers({});
@@ -19,6 +20,9 @@ createCloudflareWorkers({ binding, accountId: 'account' });
 const images: readonly ImageInput[] = [{ mediaType: 'image/jpeg', base64: 'AAAA' }];
 async function check() {
   const result = await native.evaluate({ model: '@cf/cloudflare/clef', images, state: {}, questions: { action: choice('Act?', { run: null, stop: null }) } });
+  const extracted = await native.extract({ state: 'Invoice INV-2291', fields: { invoice_number: { type: 'text' } } });
+  const invoice: string | null = extracted.answers.invoice_number.value;
+  void invoice;
   const action: 'run' | 'stop' = result.answers.action.choice;
   // @ts-expect-error Result stays a closed choice union.
   const invalid: 'fly' = result.answers.action.choice;
@@ -26,6 +30,6 @@ async function check() {
   const selected = await decision.evaluate(common, { state: {}, images });
   const name: 'run' | 'stop' = selected.decision.action;
   await evaluateMany(native, [{ id: 'one', request: { state: {}, images, questions: decision.questions } }]);
-  void [action, invalid, name];
+  void [action, invalid, name, extractClient];
 }
 void [check, absentRootExport];

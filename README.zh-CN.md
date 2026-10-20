@@ -10,7 +10,7 @@
 
 | 包（`@system-one-ai/…`） | 功能 | 运行时依赖 |
 | --- | --- | --- |
-| `core` | 创建统一的 `evaluate` 客户端，定义选择、评分和真假问题，并校验模型返回的答案。 | 无 |
+| `core` | 创建统一的 `evaluate` / `extract` 客户端，定义选择、评分、真假问题或 Clairic 字段，并校验模型返回的答案。 | 无 |
 | `transport-fetch` | 通过 Fetch 发送模型请求，处理鉴权、超时、取消、重试和响应大小限制。 | core |
 | `protocol-system-one` | 在本库的问题／答案格式与原生 System One 协议之间转换，供 TypeSafe、OpenRouter 和 Cloudflare adapter 复用。 | core |
 | `adapter-system-one` | 连接 TypeSafe 官方 System One 服务，用原生决策模型回答选择、评分和真假问题。 | core、protocol-system-one |
@@ -116,6 +116,29 @@ const result = await client.evaluate({
 
 const action: 'drink' | 'rest' = result.answers.action.choice;
 console.log(action, result.answers.urgency.score, result.answers.interrupt.probability);
+```
+
+Clairic 抽取在同一客户端上使用 `extract({ state, fields })`。`systemOneAdapter` 将请求发到 `{baseURL}/extract`（一般为 `POST /v1/extract`）。详见 [Clairic 抽取](docs/clairic.md)。
+
+```ts
+import { createSystemOne, defineFields, textField, numberField } from '@system-one-ai/core';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+
+const extractClient = createSystemOne({
+  adapter: systemOneAdapter,
+  transport: createFetchTransport(),
+  apiKey: process.env.SYSTEM_ONE_API_KEY!,
+});
+const extracted = await extractClient.extract({
+  model: 'clairic',
+  state: 'Invoice INV-2291, total $1,080.00 including shipping.',
+  fields: defineFields({
+    invoice_number: textField(),
+    total: numberField({ decimals: 2, unit: 'USD' }),
+  }),
+});
+const invoice: string | null = extracted.answers.invoice_number.value;
 ```
 
 原生 adapter 提供默认地址和模型，`baseURL`、`model` 可覆盖；单次请求的 `model` 优先级最高。Cloudflare 通过 `cloudflareAdapter({ accountId })` 配置账户。自定义 fetch 传给 `createFetchTransport(fetch)`。客户端不会根据 hostname 猜测协议，也不读取环境变量。
@@ -231,6 +254,7 @@ LLM 文件包含 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`。真实测试按�
 - [OpenRouter](docs/openrouter.md)、[Cloudflare](docs/cloudflare.zh-CN.md)、[Jev API 研究](docs/jev-api.md)
 - [文件/客服工作流](docs/decision-workflows.zh-CN.md)与[浏览器示例](docs/browser-decisions.zh-CN.md)
 - [Cloudflare Workers 原生 binding](docs/cloudflare-workers.zh-CN.md)（`@system-one-ai/adapter-cloudflare/workers`）
+- [Clairic 抽取](docs/clairic.md)与[示例](examples/clairic.ts)
 - [自定义 adapter 示例](examples/custom-adapter.ts)
 - [版本与发布边界](docs/releasing.md#package-release-boundary)：只发布有实际改动或必要依赖契约变化的包；未改动包的版本、依赖范围和 changelog 保持不变。全仓测试不等于全仓升级，根目录禁止发布。
 - [从 SDK 0.5.3 迁移](docs/migration-0.6.md)：包、入口与配置映射

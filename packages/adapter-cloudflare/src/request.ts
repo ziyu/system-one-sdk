@@ -1,10 +1,15 @@
-import { UnsupportedFeatureError, ValidationError } from '@system-one-ai/core';
-import type { EvaluateRequest, ImageInput } from '@system-one-ai/core';
+import { encodeExtractBody, UnsupportedFeatureError, ValidationError } from '@system-one-ai/core';
+import type { EvaluateRequest, ExtractRequest, ImageInput } from '@system-one-ai/core';
 import { nativeQuestions } from '@system-one-ai/protocol-system-one';
 
 export function clefModel(model: string): 'clef' | 'clef-flash' | undefined {
   if (model === '@cf/cloudflare/clef') return 'clef';
   if (model === '@cf/cloudflare/clef-flash') return 'clef-flash';
+  return undefined;
+}
+
+export function clairicModel(model: string): 'clairic' | undefined {
+  if (model === 'clairic' || model === '@cf/cloudflare/clairic') return 'clairic';
   return undefined;
 }
 
@@ -42,4 +47,10 @@ export function cloudflareInput(model: string, request: EvaluateRequest): Record
     questions: nativeQuestions(request.questions),
     ...(selector === undefined || request.images === undefined ? {} : { images: clefImages(request.images) }),
   };
+}
+
+export function cloudflareExtractInput(model: string, request: ExtractRequest): Record<string, unknown> {
+  const selector = clairicModel(model);
+  if (selector === undefined) throw new UnsupportedFeatureError('Extraction requires the Clairic model.');
+  return encodeExtractBody(selector, request);
 }

@@ -1,7 +1,7 @@
-import { decodeCloudflareResponse } from './codec.js';
-import { clefModel, cloudflareInput } from './request.js';
+import { decodeCloudflareExtractResponse, decodeCloudflareResponse } from './codec.js';
+import { clairicModel, clefModel, cloudflareExtractInput, cloudflareInput } from './request.js';
 import { ConfigurationError } from '@system-one-ai/core';
-import type { AdapterContext, SystemOneAdapter } from '@system-one-ai/core';
+import type { AdapterContext, ExtractAdapterContext, SystemOneAdapter } from '@system-one-ai/core';
 import { isRecord, parseBaseURL } from '@system-one-ai/core/validation';
 
 export interface CloudflareAdapterOptions {
@@ -53,8 +53,13 @@ export function cloudflareAdapter(options: CloudflareAdapterOptions): SystemOneA
     id: 'cloudflare',
     defaultBaseURL: `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run`,
     defaultModel: 'typesafe/jev',
+    defaultExtractModel: '@cf/cloudflare/clairic',
     supportedQuestionTypes: Object.freeze(['choice', 'score', 'boolean'] as const),
+    supportedFieldTypes: Object.freeze([
+      'text', 'number', 'date', 'time', 'datetime', 'duration', 'list', 'estimate', 'forecast',
+    ] as const),
     supportsImages: true,
+    supportsExtract: true,
     prepare({ baseURL, model, request }: AdapterContext) {
       const input = cloudflareInput(model, request);
       const url = endpoint(baseURL, accountId);
@@ -63,5 +68,14 @@ export function cloudflareAdapter(options: CloudflareAdapterOptions): SystemOneA
         : { url: `${url}/${model}`, body: input };
     },
     decode: decodeCloudflareResponse,
+    prepareExtract({ baseURL, model, request }: ExtractAdapterContext) {
+      const url = endpoint(baseURL, accountId);
+      const selector = clairicModel(model);
+      return {
+        url: `${url}/@cf/cloudflare/clairic`,
+        body: cloudflareExtractInput(selector === undefined ? model : `@cf/cloudflare/clairic`, request),
+      };
+    },
+    decodeExtract: decodeCloudflareExtractResponse,
   });
 }

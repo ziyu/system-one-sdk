@@ -1,5 +1,5 @@
 import { ResponseValidationError } from '@system-one-ai/core';
-import type { AdapterContext } from '@system-one-ai/core';
+import type { AdapterContext, ExtractAdapterContext } from '@system-one-ai/core';
 import { hasOwn, responseRecord } from '@system-one-ai/core/validation';
 import { decodeNative } from '@system-one-ai/protocol-system-one';
 
@@ -45,4 +45,9 @@ export function decodeCloudflareResponse(payload: unknown, context: AdapterConte
     // Keep Jev's known precision without imposing it on future decision models.
     rounding: result.rounding === undefined && jev ? normalized.rounding : result.rounding,
   };
+}
+
+export function decodeCloudflareExtractResponse(payload: unknown, context: ExtractAdapterContext): unknown {
+  const result = decisionPayload(payload, 'response');
+  return { ...result, model: result.model ?? context.model };
 }

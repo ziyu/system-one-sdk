@@ -15,7 +15,7 @@ export async function checkPackage(name, format = 'esm') {
   let url = 'https://fixture.example/evaluate';
   let adapter = { id: 'fixture', defaultBaseURL: 'https://fixture.example', defaultModel: 'fixture', supportedQuestionTypes: ['boolean'], prepare: () => ({ url, body: request }), decode: value => value };
   let transport = { async send(prepared) {
-    assert.equal(prepared.url, url);
+    assert.ok(prepared.url === url || prepared.url === `${url}/@cf/cloudflare/clairic` || prepared.url.endsWith('/extract'), `unexpected URL ${prepared.url}`);
     return { payload, status: 200, attempts: 1 };
   } };
   if (name === 'adapter-local') {
@@ -97,6 +97,14 @@ export async function checkPackage(name, format = 'esm') {
   const client = core.createSystemOne({ adapter, transport, apiKey: 'fixture', model: 'jev-latest', retryDelayMs: 0 });
   const result = await client.evaluate(request);
   assert.equal(result.answers.on.probability, 0.9);
+  if ((name === 'adapter-system-one' || name === 'adapter-cloudflare' || name === 'core') && typeof client.extract === 'function' && adapter.supportsExtract) {
+    const extractPayload = name === 'adapter-cloudflare'
+      ? { success: true, result: { model: 'clairic', truncated: false, answers: { name: { type: 'text', value: 'INV-1' } }, usage: { input_tokens: 1, output_tokens: 0 } } }
+      : { model: 'clairic', truncated: false, answers: { name: { type: 'text', value: 'INV-1' } }, usage: { input_tokens: 1, output_tokens: 0 } };
+    payload = extractPayload;
+    const extracted = await client.extract({ state: 'Invoice INV-1', fields: { name: { type: 'text' } } });
+    assert.equal(extracted.answers.name.value, 'INV-1');
+  }
   if (name === 'transport-fetch') {
     assert.equal(result.response.attempts, 2);
     const failing = core.createSystemOne({ adapter, apiKey: null, transport: pkg.createFetchTransport(async () => new Response(null, { status: 401 })) });

@@ -18,7 +18,7 @@ Requires Node.js 20+. Build from the repository with `npm run build --workspace 
 
 Native Workers AI bindings are available through the explicit `@system-one-ai/adapter-cloudflare/workers` entry. `createCloudflareWorkers({ binding: env.AI })` implements core's `EvaluationClient` and needs no API token or REST account URL. The REST entry does not load the binding client. Both paths share validation and response codecs.
 
-Select `model: '@cf/cloudflare/clef'` (or `@cf/cloudflare/clef-flash`) on either client or per request for Clef. Jev remains the default. Clef uses its model-specific REST path and required short input selector; the native binding receives the same input.
+Select `model: '@cf/cloudflare/clef'` (or `@cf/cloudflare/clef-flash`) on either client or per request for Clef. Jev remains the default. Clef uses its model-specific REST path and required short input selector; the native binding receives the same input. Extraction uses `extract({ state, fields })` on the same REST and Workers clients; see [Clairic extraction](../../docs/clairic.md).
 
 ```ts
 import { booleanQuestion, type ImageInput } from '@system-one-ai/core';

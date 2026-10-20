@@ -14,4 +14,16 @@ const client = createSystemOne({
 });
 ```
 
+Extraction uses the same client. `extract()` posts to `{baseURL}/extract` (for example `POST /v1/extract`) with the Clairic field schema. The default extract model is `clairic`.
+
+```ts
+import { textField } from '@system-one-ai/core';
+
+const extracted = await client.extract({
+  state: 'Invoice INV-2291, total $1,080.00.',
+  fields: { invoice_number: textField(), total: { type: 'number', decimals: 2, unit: 'USD' } },
+});
+extracted.answers.invoice_number.value;
+```
+
 Requires Node.js 20+. Build from the repository with `npm run build --workspace @system-one-ai/adapter-system-one`.

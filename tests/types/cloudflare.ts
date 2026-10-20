@@ -27,6 +27,8 @@ async function inference() {
   const team: 'billing' | 'support' = result.answers.team.choice;
   // @ts-expect-error Provider selection must not widen the choice union.
   const invalid: 'sales' = result.answers.team.choice;
-  return { team, invalid };
+  const extracted = await client.extract({ model: 'clairic', state: 'Invoice INV-2291', fields: { invoice_number: { type: 'text' } } });
+  const invoice: string | null = extracted.answers.invoice_number.value;
+  return { team, invalid, invoice };
 }
 void [invalidRootExport, inference];

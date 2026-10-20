@@ -10,7 +10,7 @@ The repository is a private npm workspace. Runtime code lives in independently p
 
 | Package (`@system-one-ai/…`) | What it does | Runtime dependencies |
 | --- | --- | --- |
-| `core` | Create a shared `evaluate` client, define choice, score and boolean questions, and validate model answers. | None |
+| `core` | Create a shared `evaluate` / `extract` client, define choice, score and boolean questions or Clairic fields, and validate model answers. | None |
 | `transport-fetch` | Send model requests using Fetch, with authentication, timeouts, cancellation, retries and response size limits. | core |
 | `protocol-system-one` | Convert between this library’s questions/answers and the native System One wire format, shared by the TypeSafe, OpenRouter and Cloudflare adapters. | core |
 | `adapter-system-one` | Connect to TypeSafe’s official System One service to answer choice, score and boolean questions with native decision models. | core, protocol-system-one |
@@ -116,6 +116,29 @@ const result = await client.evaluate({
 
 const action: 'drink' | 'rest' = result.answers.action.choice;
 console.log(action, result.answers.urgency.score, result.answers.interrupt.probability);
+```
+
+Clairic extraction uses `extract({ state, fields })` on the same client. `systemOneAdapter` posts to `{baseURL}/extract` (typically `POST /v1/extract`). See [Clairic extraction](docs/clairic.md).
+
+```ts
+import { createSystemOne, defineFields, textField, numberField } from '@system-one-ai/core';
+import { createFetchTransport } from '@system-one-ai/transport-fetch';
+import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
+
+const extractClient = createSystemOne({
+  adapter: systemOneAdapter,
+  transport: createFetchTransport(),
+  apiKey: process.env.SYSTEM_ONE_API_KEY!,
+});
+const extracted = await extractClient.extract({
+  model: 'clairic',
+  state: 'Invoice INV-2291, total $1,080.00 including shipping.',
+  fields: defineFields({
+    invoice_number: textField(),
+    total: numberField({ decimals: 2, unit: 'USD' }),
+  }),
+});
+const invoice: string | null = extracted.answers.invoice_number.value;
 ```
 
 Adapters supply native endpoint/model defaults. `baseURL` and `model` override them; per-request `model` has highest priority. Cloudflare requires `cloudflareAdapter({ accountId })`. Custom Fetch implementations are passed to `createFetchTransport(fetch)`. The client does not infer protocols from hostnames or read environment variables.
@@ -231,6 +254,7 @@ See [verification records](docs/validation.md) for current and historical eviden
 - [OpenRouter](docs/openrouter.md), [Cloudflare](docs/cloudflare.md), [Jev API research](docs/jev-api.md)
 - [File/support workflows](docs/decision-workflows.md) and [browser example](docs/browser-decisions.md)
 - [Native Cloudflare Workers binding](docs/cloudflare-workers.md) (`@system-one-ai/adapter-cloudflare/workers`)
+- [Clairic extraction](docs/clairic.md) and [example](examples/clairic.ts)
 - [Custom adapter example](examples/custom-adapter.ts)
 - [Versions and releases](docs/releasing.md#package-release-boundary): release only explicitly changed packages; unchanged siblings retain their versions and dependency ranges. Testing all workspaces does not authorize publishing all workspaces.
 - [Migrate from SDK 0.5.3](docs/migration-0.6.md): package, entry point and configuration mappings

@@ -104,6 +104,197 @@ export interface EvaluationClient {
   evaluate<const Q extends Questions>(request: EvaluateRequest<Q>, options?: RequestOptions): Promise<EvaluationResult<Q>>;
 }
 
+export type FieldType = 'text' | 'number' | 'date' | 'time' | 'datetime' | 'duration' | 'list' | 'estimate' | 'forecast';
+export type ListItemType = 'text' | 'number' | 'date';
+export type DurationUnit = 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years';
+export type EstimateScale = 'linear' | 'log';
+export type EstimateStep = number | 'month' | 'year';
+export type ForecastInterval = 'step' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
+
+interface FieldBase {
+  readonly instructions?: string;
+  /** Probability of null above which `value` is null. Default 0.5. */
+  readonly nullThreshold?: number;
+}
+export interface TextFieldSpec extends FieldBase { readonly type: 'text' }
+export interface NumberFieldSpec extends FieldBase {
+  readonly type: 'number';
+  readonly unit?: string;
+  readonly integer?: boolean;
+  readonly decimals?: number;
+}
+export interface DateFieldSpec extends FieldBase { readonly type: 'date' }
+export interface TimeFieldSpec extends FieldBase { readonly type: 'time' }
+export interface DateTimeFieldSpec extends FieldBase { readonly type: 'datetime' }
+export interface DurationFieldSpec extends FieldBase {
+  readonly type: 'duration';
+  readonly unit?: DurationUnit;
+  readonly integer?: boolean;
+  readonly decimals?: number;
+}
+export interface ListFieldSpec<I extends ListItemType = ListItemType> {
+  readonly type: 'list';
+  readonly items: I;
+  readonly instructions?: string;
+  readonly unit?: string;
+  readonly decimals?: number;
+}
+export interface EstimateFieldSpec extends FieldBase {
+  readonly type: 'estimate';
+  readonly min: number | string;
+  readonly max: number | string;
+  readonly step?: EstimateStep;
+  readonly scale?: EstimateScale;
+  readonly unit?: string;
+}
+export interface ForecastFieldSpec extends FieldBase {
+  readonly type: 'forecast';
+  readonly min: number | string;
+  readonly max: number | string;
+  readonly step?: EstimateStep;
+  readonly scale?: EstimateScale;
+  readonly unit?: string;
+  readonly horizon?: number;
+  readonly interval?: ForecastInterval;
+}
+export type FieldSpec = TextFieldSpec | NumberFieldSpec | DateFieldSpec | TimeFieldSpec | DateTimeFieldSpec
+  | DurationFieldSpec | ListFieldSpec | EstimateFieldSpec | ForecastFieldSpec;
+export type Fields = Readonly<Record<string, FieldSpec>>;
+
+export interface ExtractOptions {
+  /** Applied to scalar fields that omit `nullThreshold`. The service default is 0.5. */
+  readonly nullThreshold?: number;
+  /** Add all 99 percentiles to estimate and forecast answers. */
+  readonly includeQuantiles?: boolean;
+  /** Return the text that text/list spans index into. */
+  readonly returnStateText?: boolean;
+}
+
+export interface ExtractRequest<F extends Fields = Fields> {
+  readonly fields: F;
+  /** Text to read. Required and nonempty unless `images` are sent. Text answers are spans of this string. */
+  readonly state?: string;
+  readonly images?: readonly ImageInput[];
+  readonly model?: string;
+  /** ISO date (`YYYY-MM-DD`) that anchors dates written without a year. */
+  readonly referenceDate?: string;
+  readonly options?: ExtractOptions;
+}
+
+export type CharacterSpan = readonly [number, number];
+export interface TextFieldAnswer {
+  readonly type: 'text';
+  readonly value: string | null;
+  readonly guess?: string;
+  readonly span?: CharacterSpan;
+  readonly confidence?: number;
+  readonly pNull?: number;
+}
+export interface NumberFieldAnswer {
+  readonly type: 'number';
+  readonly value: number | null;
+  readonly guess?: number;
+  readonly confidence?: number;
+  readonly pNull?: number;
+}
+export interface DateFieldAnswer {
+  readonly type: 'date';
+  readonly value: string | null;
+  readonly guess?: string;
+  readonly confidence?: number;
+  readonly pNull?: number;
+}
+export interface TimeFieldAnswer {
+  readonly type: 'time';
+  readonly value: string | null;
+  readonly guess?: string;
+  readonly confidence?: number;
+  readonly pNull?: number;
+}
+export interface DateTimeFieldAnswer {
+  readonly type: 'datetime';
+  readonly value: string | null;
+  readonly guess?: string;
+  readonly confidence?: number;
+  readonly pNull?: number;
+}
+export interface DurationFieldAnswer {
+  readonly type: 'duration';
+  readonly value: number | null;
+  readonly guess?: number;
+  readonly unit?: DurationUnit | string;
+  readonly confidence?: number;
+  readonly pNull?: number;
+}
+export interface ListFieldAnswer<V = string | number> {
+  readonly type: 'list';
+  readonly value: readonly V[];
+  readonly spans?: readonly CharacterSpan[];
+  readonly confidence?: number;
+}
+export interface EstimateFieldAnswer {
+  readonly type: 'estimate';
+  readonly value: number | string;
+  readonly mean?: number | string;
+  readonly median?: number | string;
+  readonly p10?: number | string;
+  readonly p90?: number | string;
+  readonly pBelow?: number;
+  readonly pAbove?: number;
+  readonly quantiles?: readonly (number | string)[];
+}
+export interface ForecastFieldAnswer {
+  readonly type: 'forecast';
+  readonly value: readonly (number | string)[];
+  readonly mean?: readonly (number | string)[];
+  readonly median?: readonly (number | string)[];
+  readonly p10?: readonly (number | string)[];
+  readonly p90?: readonly (number | string)[];
+  readonly pBelow?: number | readonly number[];
+  readonly pAbove?: number | readonly number[];
+  readonly quantiles?: readonly (readonly (number | string)[])[];
+  readonly steps?: readonly EstimateFieldAnswer[];
+}
+export type FieldAnswer = TextFieldAnswer | NumberFieldAnswer | DateFieldAnswer | TimeFieldAnswer | DateTimeFieldAnswer
+  | DurationFieldAnswer | ListFieldAnswer | EstimateFieldAnswer | ForecastFieldAnswer;
+export type ListValueFor<I extends ListItemType> = I extends 'number' ? number : string;
+export type FieldAnswerFor<F extends FieldSpec> =
+  F extends TextFieldSpec ? TextFieldAnswer :
+  F extends NumberFieldSpec ? NumberFieldAnswer :
+  F extends DateFieldSpec ? DateFieldAnswer :
+  F extends TimeFieldSpec ? TimeFieldAnswer :
+  F extends DateTimeFieldSpec ? DateTimeFieldAnswer :
+  F extends DurationFieldSpec ? DurationFieldAnswer :
+  F extends ListFieldSpec<infer I> ? ListFieldAnswer<ListValueFor<I>> :
+  F extends EstimateFieldSpec ? EstimateFieldAnswer : ForecastFieldAnswer;
+export type FieldAnswers<F extends Fields> = { readonly [K in keyof F]: FieldAnswerFor<F[K]> };
+
+export interface ExtractUsage {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly totalTokens?: number;
+  readonly stateTokens?: number;
+  readonly imageTokens?: number;
+  readonly schemaTokens?: number;
+  readonly passes?: number;
+}
+export interface ExtractResult<F extends Fields> {
+  readonly model: string;
+  readonly answers: FieldAnswers<F>;
+  readonly truncated: boolean;
+  readonly usage: ExtractUsage;
+  readonly stateText?: string;
+  readonly response: EvaluationResult<Questions>['response'];
+}
+export interface ExtractClient {
+  extract<const F extends Fields>(request: ExtractRequest<F>, options?: RequestOptions): Promise<ExtractResult<F>>;
+}
+export interface ExtractAdapterContext {
+  readonly baseURL: string;
+  readonly model: string;
+  readonly request: ExtractRequest;
+}
+
 export interface AdapterContext {
   readonly baseURL: string;
   readonly model: string;
@@ -130,13 +321,20 @@ export interface SystemOneAdapter {
   readonly defaultBaseURL?: string;
   /** Used when neither the client nor the evaluation explicitly selects a model. */
   readonly defaultModel?: string;
+  /** Used when extract() does not select a model. Defaults to `clairic` when extraction is enabled. */
+  readonly defaultExtractModel?: string;
   readonly supportedQuestionTypes: readonly QuestionType[];
+  readonly supportedFieldTypes?: readonly FieldType[];
   /** Explicit opt-in. Omission means text/JSON only; prepare must enforce model-specific support. */
   readonly supportsImages?: boolean;
+  /** Explicit opt-in for `extract()`. Omission means the adapter answers questions only. */
+  readonly supportsExtract?: boolean;
   /** Synchronous codec. Network I/O, cancellation, and retries belong to the client. */
   prepare(context: AdapterContext): PreparedRequest;
   /** Return a ProviderResponse envelope. The unknown boundary is deliberately runtime-validated. */
   decode(payload: unknown, context: AdapterContext): unknown;
+  prepareExtract?(context: ExtractAdapterContext): PreparedRequest;
+  decodeExtract?(payload: unknown, context: ExtractAdapterContext): unknown;
   /** Omit for standard Bearer authentication. Useful for future x-api-key protocols. */
   authenticate?(apiKey: string | null): HeadersInit;
 }
