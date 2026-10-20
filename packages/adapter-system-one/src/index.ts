@@ -8,16 +8,11 @@ const fieldTypes = Object.freeze([
   'text', 'number', 'date', 'time', 'datetime', 'duration', 'list', 'estimate', 'forecast',
 ] as const);
 
-function endpoint(baseURL: string, kind: 'systemone' | 'extract' = 'systemone'): string {
+function endpoint(baseURL: string): string {
   const url = parseBaseURL(baseURL);
   let path = url.pathname.replace(/\/+$/, '');
   if (path === '') path = '/v1';
-  if (kind === 'extract') {
-    if (path.endsWith('/systemone')) path = path.slice(0, -'/systemone'.length) || '/v1';
-    if (!path.endsWith('/extract')) path += '/extract';
-  } else if (!path.endsWith('/systemone')) {
-    path += '/systemone';
-  }
+  if (!path.endsWith('/systemone')) path += '/systemone';
   url.pathname = path;
   return url.toString();
 }
@@ -40,7 +35,7 @@ export const systemOneAdapter: SystemOneAdapter = Object.freeze({
   },
   decode: decodeNative,
   prepareExtract({ baseURL, model, request }: ExtractAdapterContext) {
-    return { url: endpoint(baseURL, 'extract'), body: encodeExtractBody(model, request) };
+    return { url: endpoint(baseURL), body: encodeExtractBody(model, request) };
   },
   decodeExtract(payload: unknown) {
     return payload;

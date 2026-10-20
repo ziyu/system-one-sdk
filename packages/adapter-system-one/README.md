@@ -14,7 +14,7 @@ const client = createSystemOne({
 });
 ```
 
-Extraction uses the same client. `extract()` posts to `{baseURL}/extract` (`POST https://system-one.dev/v1/extract` by default) with the Clairic field schema. The default extract model is `clairic`.
+Extraction uses the same client. `extract()` posts to `{baseURL}/systemone` (`POST https://system-one.dev/v1/systemone` by default) with a Clairic `fields` body. The default extract model is `clairic`.
 
 ```ts
 import { textField } from '@system-one-ai/core';

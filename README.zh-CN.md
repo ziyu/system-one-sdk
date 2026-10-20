@@ -118,7 +118,7 @@ const action: 'drink' | 'rest' = result.answers.action.choice;
 console.log(action, result.answers.urgency.score, result.answers.interrupt.probability);
 ```
 
-Clairic 抽取在同一客户端上使用 `extract({ state, fields })`。`systemOneAdapter` 将请求发到 `{baseURL}/extract`，默认是 `POST https://system-one.dev/v1/extract`。详见 [Clairic 抽取](docs/clairic.md)。
+Clairic 抽取在同一客户端上使用 `extract({ state, fields })`。`systemOneAdapter` 将带 `fields` 的请求发到官方 `{baseURL}/systemone` 路由，默认是 `POST https://system-one.dev/v1/systemone`。详见 [Clairic 抽取](docs/clairic.md)。
 
 ```ts
 import { createSystemOne, defineFields, textField, numberField } from '@system-one-ai/core';

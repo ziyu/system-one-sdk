@@ -33,14 +33,14 @@ for (const { name, adapter, url, model, overrideURL } of providers) {
   });
 }
 
-test('hosted extract defaults to https://system-one.dev/v1/extract and the clairic model', async () => {
+test('hosted extract defaults to https://system-one.dev/v1/systemone and the clairic model', async () => {
   const sent = [];
   const client = new SystemOne({ adapter: systemOneAdapter, apiKey: 'fixture', transport: createFetchTransport(async (url, init) => {
     sent.push({ url, model: JSON.parse(init.body).model });
     return jsonResponse({ model: 'clairic', truncated: false, answers: { on: { type: 'text', value: 'ok' } }, usage: { input_tokens: 1, output_tokens: 0 } });
   }) });
   await client.extract({ state: 'ok', fields: { on: { type: 'text' } } });
-  assert.deepEqual(sent, [{ url: 'https://system-one.dev/v1/extract', model: 'clairic' }]);
+  assert.deepEqual(sent, [{ url: 'https://system-one.dev/v1/systemone', model: 'clairic' }]);
 });
 
 test('custom adapters without a default URL still require an explicit endpoint', () => {

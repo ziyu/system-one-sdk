@@ -44,12 +44,12 @@ function extractClient(fetch, options = {}) {
   });
 }
 
-test('system-one extract posts Clairic fields to /v1/extract and normalizes answers', async () => {
+test('system-one extract posts Clairic fields to /v1/systemone and normalizes answers', async () => {
   let calls = 0;
   const input = structuredClone(request);
   const client = extractClient(async (url, init) => {
     calls++;
-    assert.equal(url, 'https://system-one.dev/v1/extract');
+    assert.equal(url, 'https://system-one.dev/v1/systemone');
     assert.equal(init.method, 'POST');
     assert.equal(init.headers.get('authorization'), 'Bearer fixture');
     assert.deepEqual(JSON.parse(init.body), {
@@ -245,11 +245,11 @@ test('extract JSON body over 16 MiB is rejected before send', async () => {
 });
 
 for (const [baseURL, expected] of [
-  ['https://system-one.dev', 'https://system-one.dev/v1/extract'],
-  ['https://system-one.dev/v1/', 'https://system-one.dev/v1/extract'],
-  ['https://system-one.dev/v1/systemone', 'https://system-one.dev/v1/extract'],
-  ['https://system-one.dev/v1/systemone/', 'https://system-one.dev/v1/extract'],
-  ['https://local.example/tenant/v2/', 'https://local.example/tenant/v2/extract'],
+  ['https://system-one.dev', 'https://system-one.dev/v1/systemone'],
+  ['https://system-one.dev/v1/', 'https://system-one.dev/v1/systemone'],
+  ['https://system-one.dev/v1/systemone', 'https://system-one.dev/v1/systemone'],
+  ['https://system-one.dev/v1/systemone/', 'https://system-one.dev/v1/systemone'],
+  ['https://local.example/tenant/v2/', 'https://local.example/tenant/v2/systemone'],
 ]) {
   test(`extract URL preserves the API prefix: ${baseURL}`, async () => {
     const client = extractClient(async url => {

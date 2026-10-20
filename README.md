@@ -118,7 +118,7 @@ const action: 'drink' | 'rest' = result.answers.action.choice;
 console.log(action, result.answers.urgency.score, result.answers.interrupt.probability);
 ```
 
-Clairic extraction uses `extract({ state, fields })` on the same client. `systemOneAdapter` posts to `{baseURL}/extract`. The default is `POST https://system-one.dev/v1/extract`. See [Clairic extraction](docs/clairic.md).
+Clairic extraction uses `extract({ state, fields })` on the same client. `systemOneAdapter` posts to `{baseURL}/systemone` (the official evaluate route) with a `fields` body. The default is `POST https://system-one.dev/v1/systemone`. See [Clairic extraction](docs/clairic.md).
 
 ```ts
 import { createSystemOne, defineFields, textField, numberField } from '@system-one-ai/core';

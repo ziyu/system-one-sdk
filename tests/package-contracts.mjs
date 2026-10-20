@@ -15,7 +15,7 @@ export async function checkPackage(name, format = 'esm') {
   let url = 'https://fixture.example/evaluate';
   let adapter = { id: 'fixture', defaultBaseURL: 'https://fixture.example', defaultModel: 'fixture', supportedQuestionTypes: ['boolean'], prepare: () => ({ url, body: request }), decode: value => value };
   let transport = { async send(prepared) {
-    assert.ok(prepared.url === url || prepared.url === `${url}/@cf/cloudflare/clairic` || prepared.url.endsWith('/extract'), `unexpected URL ${prepared.url}`);
+    assert.ok(prepared.url === url || prepared.url === `${url}/@cf/cloudflare/clairic` || prepared.url.endsWith('/systemone'), `unexpected URL ${prepared.url}`);
     return { payload, status: 200, attempts: 1 };
   } };
   if (name === 'adapter-local') {
