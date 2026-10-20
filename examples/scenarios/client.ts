@@ -24,7 +24,7 @@ export async function scenarioClient(provider: string) {
   if (!apiKey) throw new Error(`Configure the API key in ${file}.`);
   const adapter = provider === 'openrouter' ? openRouterAdapter : provider === 'cloudflare'
     ? cloudflareAdapter({ accountId: env.CLOUDFLARE_ACCOUNT_ID ?? '' }) : undefined;
-  const expectedOrigin = provider === 'typesafe' ? 'https://api.typesafe.ai' : provider === 'openrouter' ? 'https://openrouter.ai' : 'https://api.cloudflare.com';
+  const expectedOrigin = provider === 'typesafe' ? 'https://system-one.dev' : provider === 'openrouter' ? 'https://openrouter.ai' : 'https://api.cloudflare.com';
   const requests: RequestTrace[] = [];
   const nativeFetch = globalThis.fetch.bind(globalThis);
   const client = new SystemOne({

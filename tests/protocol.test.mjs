@@ -13,7 +13,7 @@ test('TypeSafe sends the native HTTP contract and normalizes all three answers',
     apiKey: 'fixture-key',
     transport: createFetchTransport(async (url, init) => {
       calls++;
-      assert.equal(url, 'https://api.typesafe.ai/v1/systemone');
+      assert.equal(url, 'https://system-one.dev/v1/systemone');
       assert.equal(init.method, 'POST');
       assert.equal(init.redirect, 'manual');
       assert.equal(init.headers.get('authorization'), 'Bearer fixture-key');
@@ -65,9 +65,9 @@ test('explicit optional Vercel adapter uses the Evaluation v4 contract', async (
 });
 
 for (const [baseURL, adapter, expected] of [
-  ['https://api.typesafe.ai', undefined, 'https://api.typesafe.ai/v1/systemone'],
-  ['https://api.typesafe.ai/v1/', undefined, 'https://api.typesafe.ai/v1/systemone'],
-  ['https://api.typesafe.ai/v1/systemone/', undefined, 'https://api.typesafe.ai/v1/systemone'],
+  ['https://system-one.dev', undefined, 'https://system-one.dev/v1/systemone'],
+  ['https://system-one.dev/v1/', undefined, 'https://system-one.dev/v1/systemone'],
+  ['https://system-one.dev/v1/systemone/', undefined, 'https://system-one.dev/v1/systemone'],
   ['https://local.example/tenant/v2/', undefined, 'https://local.example/tenant/v2/systemone'],
   ['https://ai-gateway.vercel.sh', vercelAdapter, 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model'],
   ['https://ai-gateway.vercel.sh/v4/ai/', vercelAdapter, 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model'],

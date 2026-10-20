@@ -20,7 +20,7 @@ async function evaluate(adapter, payload, expectedURL, options = {}) {
 }
 
 test('workspace core and adapter packages compose without the root package', async () => {
-  await evaluate(systemOneAdapter, { answers: { on: { type: 'noul', noul: 0.9 } } }, 'https://api.typesafe.ai/v1/systemone', { apiKey: null });
+  await evaluate(systemOneAdapter, { answers: { on: { type: 'noul', noul: 0.9 } } }, 'https://system-one.dev/v1/systemone', { apiKey: null });
   await evaluate(openRouterAdapter, { model: 'typesafe/jev-1', answers: { on: { type: 'noul', noul: 0.9 } }, usage: {} }, 'https://openrouter.ai/api/alpha/decisions');
   await evaluate(vercelAdapter, { answers: { on: { type: 'boolean', probability: 0.9 } } }, 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model');
   await evaluate(cloudflareAdapter({ accountId: 'account' }), { success: true, errors: [], result: { answers: { on: { type: 'noul', noul: 0.9 } } } }, 'https://api.cloudflare.com/client/v4/accounts/account/ai/run');

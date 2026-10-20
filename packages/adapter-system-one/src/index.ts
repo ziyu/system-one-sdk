@@ -24,7 +24,7 @@ function endpoint(baseURL: string, kind: 'systemone' | 'extract' = 'systemone'):
 
 export const systemOneAdapter: SystemOneAdapter = Object.freeze({
   id: 'system-one',
-  defaultBaseURL: 'https://api.typesafe.ai/v1',
+  defaultBaseURL: 'https://system-one.dev/v1',
   defaultModel: 'jev-latest',
   defaultExtractModel: 'clairic',
   supportedQuestionTypes: questionTypes,

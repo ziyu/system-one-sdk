@@ -2,7 +2,7 @@
 
 Clairic is a System One extraction model: it reads shared state and a map of typed fields, then returns one typed value per field. It does not generate free-form text. Decision models still use `evaluate({ state, questions })`; extraction uses `extract({ state, fields })`.
 
-The hosted API path used by `systemOneAdapter` is `POST {baseURL}/extract`. With the usual System One base URL that is `POST /v1/extract`. If `baseURL` already ends in `/systemone`, the adapter replaces that suffix with `/extract`. The default extract model is `clairic`.
+The hosted API path used by `systemOneAdapter` is `POST {baseURL}/extract`. The default `baseURL` is `https://system-one.dev/v1`, so extract is `POST https://system-one.dev/v1/extract`. If `baseURL` already ends in `/systemone`, the adapter replaces that suffix with `/extract`. The default extract model is `clairic`.
 
 ```ts
 import { createSystemOne, defineFields, textField, numberField, dateField, listField, estimateField } from '@system-one-ai/core';
@@ -13,7 +13,6 @@ const client = createSystemOne({
   adapter: systemOneAdapter,
   transport: createFetchTransport(),
   apiKey: process.env.SYSTEM_ONE_API_KEY!,
-  baseURL: process.env.SYSTEM_ONE_BASE_URL, // e.g. https://system-one.dev/v1
 });
 
 const fields = defineFields({

@@ -49,7 +49,7 @@ test('system-one extract posts Clairic fields to /v1/extract and normalizes answ
   const input = structuredClone(request);
   const client = extractClient(async (url, init) => {
     calls++;
-    assert.equal(url, 'https://api.typesafe.ai/v1/extract');
+    assert.equal(url, 'https://system-one.dev/v1/extract');
     assert.equal(init.method, 'POST');
     assert.equal(init.headers.get('authorization'), 'Bearer fixture');
     assert.deepEqual(JSON.parse(init.body), {
@@ -245,10 +245,9 @@ test('extract JSON body over 16 MiB is rejected before send', async () => {
 });
 
 for (const [baseURL, expected] of [
-  ['https://api.typesafe.ai', 'https://api.typesafe.ai/v1/extract'],
-  ['https://api.typesafe.ai/v1/', 'https://api.typesafe.ai/v1/extract'],
-  ['https://api.typesafe.ai/v1/systemone', 'https://api.typesafe.ai/v1/extract'],
-  ['https://system-one.dev/v1', 'https://system-one.dev/v1/extract'],
+  ['https://system-one.dev', 'https://system-one.dev/v1/extract'],
+  ['https://system-one.dev/v1/', 'https://system-one.dev/v1/extract'],
+  ['https://system-one.dev/v1/systemone', 'https://system-one.dev/v1/extract'],
   ['https://system-one.dev/v1/systemone/', 'https://system-one.dev/v1/extract'],
   ['https://local.example/tenant/v2/', 'https://local.example/tenant/v2/extract'],
 ]) {

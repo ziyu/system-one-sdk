@@ -69,7 +69,7 @@ export async function checkPackage(name, format = 'esm') {
   }
   if (name.startsWith('adapter-')) {
     const cases = {
-      'adapter-system-one': ['systemOneAdapter', 'https://api.typesafe.ai/v1/systemone', native],
+      'adapter-system-one': ['systemOneAdapter', 'https://system-one.dev/v1/systemone', native],
       'adapter-openrouter': ['openRouterAdapter', 'https://openrouter.ai/api/alpha/decisions', native],
       'adapter-vercel': ['vercelAdapter', 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model', payload],
       'adapter-cloudflare': ['cloudflareAdapter', 'https://api.cloudflare.com/client/v4/accounts/account/ai/run', { success: true, result: native }],

@@ -1,6 +1,6 @@
 # @system-one-ai/adapter-system-one
 
-Connect to TypeSafe’s official System One service to answer choice, score and boolean questions with native decision models. Install this package with `@system-one-ai/core` and `@system-one-ai/transport-fetch`.
+Connect to the hosted System One service (`https://system-one.dev/v1`) to answer choice, score and boolean questions with native decision models. Install this package with `@system-one-ai/core` and `@system-one-ai/transport-fetch`.
 
 ```ts
 import { createSystemOne } from '@system-one-ai/core';
@@ -14,7 +14,7 @@ const client = createSystemOne({
 });
 ```
 
-Extraction uses the same client. `extract()` posts to `{baseURL}/extract` (for example `POST /v1/extract`) with the Clairic field schema. The default extract model is `clairic`.
+Extraction uses the same client. `extract()` posts to `{baseURL}/extract` (`POST https://system-one.dev/v1/extract` by default) with the Clairic field schema. The default extract model is `clairic`.
 
 ```ts
 import { textField } from '@system-one-ai/core';

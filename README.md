@@ -13,7 +13,7 @@ The repository is a private npm workspace. Runtime code lives in independently p
 | `core` | Create a shared `evaluate` / `extract` client, define choice, score and boolean questions or Clairic fields, and validate model answers. | None |
 | `transport-fetch` | Send model requests using Fetch, with authentication, timeouts, cancellation, retries and response size limits. | core |
 | `protocol-system-one` | Convert between this library’s questions/answers and the native System One wire format, shared by the TypeSafe, OpenRouter and Cloudflare adapters. | core |
-| `adapter-system-one` | Connect to TypeSafe’s official System One service to answer choice, score and boolean questions with native decision models. | core, protocol-system-one |
+| `adapter-system-one` | Connect to the hosted System One service (`https://system-one.dev/v1`) to answer choice, score and boolean questions with native decision models. | core, protocol-system-one |
 | `adapter-openrouter` | Call System One models through OpenRouter Decisions and convert answers, usage and cost metadata into this library’s results. | core, protocol-system-one |
 | `adapter-cloudflare` | Run System One models on Cloudflare through its REST API or the native `env.AI` binding inside Workers. | core, protocol-system-one, transport-fetch |
 | `adapter-vercel` | Call decision models through Vercel AI Gateway’s Evaluation API, converting requests and answers to this library’s format. | core |
@@ -118,7 +118,7 @@ const action: 'drink' | 'rest' = result.answers.action.choice;
 console.log(action, result.answers.urgency.score, result.answers.interrupt.probability);
 ```
 
-Clairic extraction uses `extract({ state, fields })` on the same client. `systemOneAdapter` posts to `{baseURL}/extract` (typically `POST /v1/extract`). See [Clairic extraction](docs/clairic.md).
+Clairic extraction uses `extract({ state, fields })` on the same client. `systemOneAdapter` posts to `{baseURL}/extract`. The default is `POST https://system-one.dev/v1/extract`. See [Clairic extraction](docs/clairic.md).
 
 ```ts
 import { createSystemOne, defineFields, textField, numberField } from '@system-one-ai/core';
