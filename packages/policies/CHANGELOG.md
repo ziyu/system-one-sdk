@@ -1,5 +1,14 @@
 # @system-one-ai/policies
 
+## 0.6.1
+
+### Patch Changes
+
+- ab56588: Point package `repository.url` at the canonical GitHub repository `ziyu/system-one-sdk`.
+- Updated dependencies [d971587]
+- Updated dependencies [ab56588]
+  - @system-one-ai/core@0.8.0
+
 ## 0.6.0
 
 ### Minor Changes
