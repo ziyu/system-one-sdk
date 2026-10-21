@@ -1,8 +1,14 @@
-import { decodeCloudflareResponse } from './codec.js';
-import { cloudflareInput } from './request.js';
-import { APIError, BindingError, ConfigurationError, ConnectionError, ResponseValidationError, TimeoutError } from '@system-one-ai/core';
+import { decodeCloudflareExtractResponse, decodeCloudflareResponse } from './codec.js';
+import { clairicModel, cloudflareExtractInput, cloudflareInput } from './request.js';
+import {
+  APIError, BindingError, ConfigurationError, ConnectionError, ResponseValidationError, TimeoutError,
+  snapshotExtractRequest, validateExtractResponse,
+} from '@system-one-ai/core';
 import { cancelBody, readJsonResponse, RequestScope, snapshotHeaders } from '@system-one-ai/transport-fetch';
-import type { AdapterContext, EvaluateRequest, EvaluationClient, EvaluationResult, Questions, RequestOptions } from '@system-one-ai/core';
+import type {
+  AdapterContext, EvaluateRequest, EvaluationClient, EvaluationResult, ExtractAdapterContext,
+  ExtractClient, ExtractRequest, ExtractResult, Fields, Questions, RequestOptions,
+} from '@system-one-ai/core';
 import { configInteger, isRecord, snapshotRequest, validateResponse } from '@system-one-ai/core/validation';
 
 /** Structural subset of Workers AI. No Cloudflare package is required at runtime. */
@@ -49,7 +55,7 @@ function bindingHeaders(...sources: (HeadersInit | undefined)[]): Headers {
 }
 
 /** Native env.AI.run() client. Model calls never use a public REST endpoint or API token. */
-export class CloudflareWorkers implements EvaluationClient {
+export class CloudflareWorkers implements EvaluationClient, ExtractClient {
   readonly model: string;
   readonly adapterId = 'cloudflare-workers';
   #run: CloudflareAiBinding['run'];
@@ -119,6 +125,66 @@ export class CloudflareWorkers implements EvaluationClient {
           }
           const response = await readJsonResponse(raw, this.#maxResponseBytes, scope);
           const validated = validateResponse(decodeCloudflareResponse(response.payload, context), snapshot.questions, model);
+          scope.throwIfAborted();
+          return {
+            ...validated,
+            response: {
+              ...(response.requestId === undefined ? {} : { requestId: response.requestId }),
+              status: response.status, attempts: attempt + 1, durationMs: Date.now() - start, adapter: this.adapterId,
+            },
+          };
+        } catch (error) {
+          scope.throwIfAborted();
+          if (attempt >= maxRetries || !(error instanceof ConnectionError || error instanceof APIError && error.retryable)) throw error;
+          const reportedDelay = error instanceof APIError ? error.retryAfterMs : undefined;
+          const backoff = Math.min(this.#maxRetryDelayMs, this.#retryDelayMs * 2 ** Math.min(attempt, 30));
+          const delay = reportedDelay ?? Math.floor(backoff * (0.5 + Math.random() * 0.5));
+          if (delay >= timeoutMs - (Date.now() - start)) throw new TimeoutError();
+          await scope.delay(delay);
+        }
+      }
+    } finally { scope.dispose(); }
+  }
+
+  async extract<const F extends Fields>(request: ExtractRequest<F>, options: RequestOptions = {}): Promise<ExtractResult<F>> {
+    const start = Date.now();
+    const snapshot = snapshotExtractRequest(request);
+    checkOptions(options, ['signal', 'timeoutMs', 'maxRetries', 'headers'], 'request options');
+    const timeoutMs = configInteger(options.timeoutMs ?? this.#timeoutMs, 'timeoutMs', 1);
+    const maxRetries = configInteger(options.maxRetries ?? this.#maxRetries, 'maxRetries', 0, 100);
+    const headers = bindingHeaders(this.#headers, options.headers);
+    const signal = options.signal;
+    if (signal !== undefined && (signal === null || typeof signal.aborted !== 'boolean'
+      || typeof signal.addEventListener !== 'function' || typeof signal.removeEventListener !== 'function')) {
+      throw new ConfigurationError('signal must be an AbortSignal.');
+    }
+    const model = snapshot.model ?? (clairicModel(this.model) === undefined ? '@cf/cloudflare/clairic' : this.model);
+    const input = cloudflareExtractInput(model, snapshot);
+    const context: ExtractAdapterContext = { baseURL: '', model, request: snapshot };
+    const remaining = timeoutMs - (Date.now() - start);
+    if (remaining <= 0) throw new TimeoutError();
+    const scope = new RequestScope(remaining, signal);
+    try {
+      for (let attempt = 0; ; attempt++) {
+        scope.throwIfAborted();
+        try {
+          const current = structuredClone(input);
+          let raw: unknown;
+          try {
+            raw = await scope.run(() => Promise.resolve(this.#run(model.startsWith('@cf/') ? model : '@cf/cloudflare/clairic', current,
+              { returnRawResponse: true, signal: scope.signal, extraHeaders: Object.fromEntries(headers) })).then(value => {
+              if (scope.signal.aborted && value instanceof Response) cancelBody(value);
+              return value;
+            }));
+          } catch {
+            scope.throwIfAborted();
+            throw new BindingError();
+          }
+          if (!(raw instanceof Response)) {
+            throw new ResponseValidationError('binding.response', 'expected a Response from returnRawResponse: true');
+          }
+          const response = await readJsonResponse(raw, this.#maxResponseBytes, scope);
+          const validated = validateExtractResponse(decodeCloudflareExtractResponse(response.payload, context), snapshot.fields, model);
           scope.throwIfAborted();
           return {
             ...validated,

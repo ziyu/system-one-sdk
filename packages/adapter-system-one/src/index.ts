@@ -1,9 +1,12 @@
-import { UnsupportedFeatureError } from '@system-one-ai/core';
-import type { AdapterContext, SystemOneAdapter } from '@system-one-ai/core';
+import { encodeExtractBody, UnsupportedFeatureError } from '@system-one-ai/core';
+import type { AdapterContext, ExtractAdapterContext, SystemOneAdapter } from '@system-one-ai/core';
 import { parseBaseURL } from '@system-one-ai/core/validation';
 import { nativeQuestions, decodeNative } from '@system-one-ai/protocol-system-one';
 
 const questionTypes = Object.freeze(['choice', 'score', 'boolean'] as const);
+const fieldTypes = Object.freeze([
+  'text', 'number', 'date', 'time', 'datetime', 'duration', 'list', 'estimate', 'forecast',
+] as const);
 
 function endpoint(baseURL: string): string {
   const url = parseBaseURL(baseURL);
@@ -16,9 +19,12 @@ function endpoint(baseURL: string): string {
 
 export const systemOneAdapter: SystemOneAdapter = Object.freeze({
   id: 'system-one',
-  defaultBaseURL: 'https://api.typesafe.ai/v1',
+  defaultBaseURL: 'https://system-one.dev/v1',
   defaultModel: 'jev-latest',
+  defaultExtractModel: 'clairic',
   supportedQuestionTypes: questionTypes,
+  supportedFieldTypes: fieldTypes,
+  supportsExtract: true,
   prepare({ baseURL, model, request }: AdapterContext) {
     if (request.providerOptions !== undefined && Object.keys(request.providerOptions).length > 0) {
       throw new UnsupportedFeatureError('The TypeSafe System One protocol does not define providerOptions. Use an adapter that supports them.');
@@ -28,4 +34,10 @@ export const systemOneAdapter: SystemOneAdapter = Object.freeze({
     return { url: endpoint(baseURL), body: { model, state: request.state, questions } };
   },
   decode: decodeNative,
+  prepareExtract({ baseURL, model, request }: ExtractAdapterContext) {
+    return { url: endpoint(baseURL), body: encodeExtractBody(model, request) };
+  },
+  decodeExtract(payload: unknown) {
+    return payload;
+  },
 });

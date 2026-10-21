@@ -97,6 +97,19 @@ export default {
         check(gateChoice(result.evaluation.answers.action, { minProbability: 0.9 }).status === 'accepted', 'Policy failed');
         const batch = await evaluateMany(client, [{ id: 'one', request: { state: {}, questions: decision.questions } }]);
         check(batch.summary.succeeded === 1, 'Batch failed');
+      } else if (scenario === 'clairic') {
+        const extractPayload = {
+          model: 'clairic', truncated: false,
+          answers: { invoice_number: { type: 'text', value: 'INV-2291', span: [8, 16], confidence: 1, p_null: 0 } },
+          usage: { input_tokens: 12, output_tokens: 0, passes: 1 },
+        };
+        const extractClient = createCloudflareWorkers({ binding: { async run(model, input) {
+          check(model === '@cf/cloudflare/clairic' && input.model === 'clairic', 'Clairic selectors incorrect');
+          check(input.fields.invoice_number.type === 'text', 'Field spec missing');
+          return Response.json(extractPayload, { headers: { 'cf-ai-req-id': 'extract-fixture' } });
+        } } });
+        const extracted = await extractClient.extract({ state: 'Invoice INV-2291', fields: { invoice_number: { type: 'text' } } });
+        check(extracted.answers.invoice_number.value === 'INV-2291' && extracted.response.requestId === 'extract-fixture', 'Clairic extract incorrect');
       } else return new Response('Unknown scenario', { status: 404 });
       return Response.json({ passed: scenario });
     } catch (error) {

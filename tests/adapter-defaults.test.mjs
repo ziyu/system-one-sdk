@@ -9,7 +9,7 @@ import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
 import { booleanRequest, booleanPayload, jsonResponse } from './fixtures.mjs';
 
 const providers = [
-  { name: 'TypeSafe', adapter: systemOneAdapter, url: 'https://api.typesafe.ai/v1/systemone', model: 'jev-latest', overrideURL: 'https://proxy.example/team/systemone' },
+  { name: 'TypeSafe', adapter: systemOneAdapter, url: 'https://system-one.dev/v1/systemone', model: 'jev-latest', overrideURL: 'https://proxy.example/team/systemone' },
   { name: 'Vercel', adapter: vercelAdapter, url: 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model', model: 'typesafe-ai/jev', overrideURL: 'https://proxy.example/team/evaluation-model' },
   { name: 'OpenRouter', adapter: openRouterAdapter, url: 'https://openrouter.ai/api/alpha/decisions', model: '~typesafe/jev-latest', overrideURL: 'https://proxy.example/team/decisions' },
   { name: 'Cloudflare', adapter: cloudflareAdapter({ accountId: 'test-account' }), url: 'https://api.cloudflare.com/client/v4/accounts/test-account/ai/run', model: 'typesafe/jev', overrideURL: 'https://proxy.example/team/ai/run' },
@@ -32,6 +32,16 @@ for (const { name, adapter, url, model, overrideURL } of providers) {
     assert.deepEqual(sent, [{ url, model }, { url: overrideURL, model: 'vendor/pinned' }, { url: overrideURL, model: 'vendor/per-request' }]);
   });
 }
+
+test('hosted extract defaults to https://system-one.dev/v1/systemone and the clairic model', async () => {
+  const sent = [];
+  const client = new SystemOne({ adapter: systemOneAdapter, apiKey: 'fixture', transport: createFetchTransport(async (url, init) => {
+    sent.push({ url, model: JSON.parse(init.body).model });
+    return jsonResponse({ model: 'clairic', truncated: false, answers: { on: { type: 'text', value: 'ok' } }, usage: { input_tokens: 1, output_tokens: 0 } });
+  }) });
+  await client.extract({ state: 'ok', fields: { on: { type: 'text' } } });
+  assert.deepEqual(sent, [{ url: 'https://system-one.dev/v1/systemone', model: 'clairic' }]);
+});
 
 test('custom adapters without a default URL still require an explicit endpoint', () => {
   const custom = { ...systemOneAdapter, id: 'custom' };

@@ -34,7 +34,7 @@ export function verifyBrowserTask(taskId: string, run: BrowserRunResult): { pass
     multipleModelDecisions: run.steps.length >= 3,
   };
   if (taskId === 'npm-sdk') {
-    checks.repositoryLicenseURL = /^\/ziyu\/sytem-one-sdk\/blob\/[^/]+\/LICENSE$/.test(pathname);
+    checks.repositoryLicenseURL = /^\/ziyu\/system-one-sdk\/blob\/[^/]+\/LICENSE$/.test(pathname);
     checks.licenseActuallyRendered = /MIT License/.test(final?.text ?? '') && /Permission is hereby granted/.test(final?.text ?? '');
     checks.npmPackageVisited = run.steps.some(step => /^https:\/\/www\.npmjs\.com\/package\/@system-one-ai\/sdk(?:$|\?)/.test(String((step.before as { url: string }).url)));
   } else if (taskId === 'github-agents') {
