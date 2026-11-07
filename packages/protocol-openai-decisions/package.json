@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/protocol-openai-decisions",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "OpenAI Decisions wire codec.",
   "license": "MIT",
   "type": "module",

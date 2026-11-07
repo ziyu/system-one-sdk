@@ -1,110 +1,38 @@
 {
   "packages": [
     {
-      "name": "@system-one-ai/adapter-openrouter",
-      "version": "0.6.1",
-      "previousVersion": "0.6.0",
+      "name": "@system-one-ai/adapter-openai-decisions",
+      "version": "0.1.0",
+      "previousVersion": "0.0.0",
       "reason": "changeset",
       "changesets": [
         {
-          "id": "canonical-repository-url",
-          "summary": "Point package `repository.url` at the canonical GitHub repository `ziyu/system-one-sdk`."
+          "id": "cloudflare-openai-decisions",
+          "summary": "Separate the OpenAI Decisions wire protocol from Cloudflare. Add `protocol-openai-decisions` as a provider-neutral codec and `adapter-openai-decisions` for OpenAI (`POST /v1/decisions`) or another compatible provider selected through `baseURL`, `apiKey` and `model`. Cloudflare keeps only its runner wrapper for `openai/decisions`, reusing the shared codec and enforcing Cloudflare's narrower schema limits. The codec maps boolean/choice/score questions to predicate/choice/score, sends object and array-of-object state through `input_json`, supports ordered image parts, enforces 2-255 choices and 2-10 score levels, and decodes answer arrays while preserving confidence and token usage. Providers whose published schema omits `input_json` can opt into text state encoding explicitly."
         }
       ]
     },
     {
-      "name": "@system-one-ai/adapter-vercel",
-      "version": "0.6.1",
-      "previousVersion": "0.6.0",
+      "name": "@system-one-ai/protocol-openai-decisions",
+      "version": "0.1.0",
+      "previousVersion": "0.0.0",
       "reason": "changeset",
       "changesets": [
         {
-          "id": "canonical-repository-url",
-          "summary": "Point package `repository.url` at the canonical GitHub repository `ziyu/system-one-sdk`."
-        }
-      ]
-    },
-    {
-      "name": "@system-one-ai/policies",
-      "version": "0.6.1",
-      "previousVersion": "0.6.0",
-      "reason": "changeset",
-      "changesets": [
-        {
-          "id": "canonical-repository-url",
-          "summary": "Point package `repository.url` at the canonical GitHub repository `ziyu/system-one-sdk`."
-        }
-      ]
-    },
-    {
-      "name": "@system-one-ai/core",
-      "version": "0.8.0",
-      "previousVersion": "0.7.0",
-      "reason": "changeset",
-      "changesets": [
-        {
-          "id": "clairic-extract-pr-28",
-          "summary": "新增 Clairic extract()"
-        },
-        {
-          "id": "clairic-extract",
-          "summary": "Add Clairic extraction to core: typed field specs (`text`, `number`, `date`, `time`, `datetime`, `duration`, `list`, `estimate`, `forecast`), `extract({ state, fields })` on the shared client, and client-side validation of field names, per-type properties, image limits (PNG/JPEG/WebP, at most four, 4 MiB each, 8 MiB total decoded) and a 16 MiB JSON body.\n\n`systemOneAdapter` defaults to `https://system-one.dev/v1` and sends extract requests to `{baseURL}/systemone` (`POST https://system-one.dev/v1/systemone`) with a `fields` body and default model `clairic`. Direct Cloudflare REST and Workers bindings encode the same field schema on the Clairic model path. Adapters opt in with `supportsExtract`; question-only adapters reject `extract()` before I/O.\n\nProtocol and Fetch packages are included so extract-capable adapters resolve the same core generation as the new extract types and error classes. Unchanged LLM, local, WebGPU, Laya, ONNX, decisions, evaluation and batch packages keep their published versions.\n\n`adapter-system-one` package metadata now points `repository.url` at the canonical GitHub repository `ziyu/system-one-sdk`."
+          "id": "cloudflare-openai-decisions",
+          "summary": "Separate the OpenAI Decisions wire protocol from Cloudflare. Add `protocol-openai-decisions` as a provider-neutral codec and `adapter-openai-decisions` for OpenAI (`POST /v1/decisions`) or another compatible provider selected through `baseURL`, `apiKey` and `model`. Cloudflare keeps only its runner wrapper for `openai/decisions`, reusing the shared codec and enforcing Cloudflare's narrower schema limits. The codec maps boolean/choice/score questions to predicate/choice/score, sends object and array-of-object state through `input_json`, supports ordered image parts, enforces 2-255 choices and 2-10 score levels, and decodes answer arrays while preserving confidence and token usage. Providers whose published schema omits `input_json` can opt into text state encoding explicitly."
         }
       ]
     },
     {
       "name": "@system-one-ai/adapter-cloudflare",
-      "version": "0.8.0",
-      "previousVersion": "0.7.0",
+      "version": "0.9.0",
+      "previousVersion": "0.8.0",
       "reason": "changeset",
       "changesets": [
         {
-          "id": "clairic-extract-pr-28",
-          "summary": "新增 Clairic extract()"
-        },
-        {
-          "id": "clairic-extract",
-          "summary": "Add Clairic extraction to core: typed field specs (`text`, `number`, `date`, `time`, `datetime`, `duration`, `list`, `estimate`, `forecast`), `extract({ state, fields })` on the shared client, and client-side validation of field names, per-type properties, image limits (PNG/JPEG/WebP, at most four, 4 MiB each, 8 MiB total decoded) and a 16 MiB JSON body.\n\n`systemOneAdapter` defaults to `https://system-one.dev/v1` and sends extract requests to `{baseURL}/systemone` (`POST https://system-one.dev/v1/systemone`) with a `fields` body and default model `clairic`. Direct Cloudflare REST and Workers bindings encode the same field schema on the Clairic model path. Adapters opt in with `supportsExtract`; question-only adapters reject `extract()` before I/O.\n\nProtocol and Fetch packages are included so extract-capable adapters resolve the same core generation as the new extract types and error classes. Unchanged LLM, local, WebGPU, Laya, ONNX, decisions, evaluation and batch packages keep their published versions.\n\n`adapter-system-one` package metadata now points `repository.url` at the canonical GitHub repository `ziyu/system-one-sdk`."
-        }
-      ]
-    },
-    {
-      "name": "@system-one-ai/adapter-system-one",
-      "version": "0.7.0",
-      "previousVersion": "0.6.0",
-      "reason": "changeset",
-      "changesets": [
-        {
-          "id": "clairic-extract-pr-28",
-          "summary": "新增 Clairic extract()"
-        },
-        {
-          "id": "clairic-extract",
-          "summary": "Add Clairic extraction to core: typed field specs (`text`, `number`, `date`, `time`, `datetime`, `duration`, `list`, `estimate`, `forecast`), `extract({ state, fields })` on the shared client, and client-side validation of field names, per-type properties, image limits (PNG/JPEG/WebP, at most four, 4 MiB each, 8 MiB total decoded) and a 16 MiB JSON body.\n\n`systemOneAdapter` defaults to `https://system-one.dev/v1` and sends extract requests to `{baseURL}/systemone` (`POST https://system-one.dev/v1/systemone`) with a `fields` body and default model `clairic`. Direct Cloudflare REST and Workers bindings encode the same field schema on the Clairic model path. Adapters opt in with `supportsExtract`; question-only adapters reject `extract()` before I/O.\n\nProtocol and Fetch packages are included so extract-capable adapters resolve the same core generation as the new extract types and error classes. Unchanged LLM, local, WebGPU, Laya, ONNX, decisions, evaluation and batch packages keep their published versions.\n\n`adapter-system-one` package metadata now points `repository.url` at the canonical GitHub repository `ziyu/system-one-sdk`."
-        }
-      ]
-    },
-    {
-      "name": "@system-one-ai/protocol-system-one",
-      "version": "0.8.0",
-      "previousVersion": "0.7.0",
-      "reason": "changeset",
-      "changesets": [
-        {
-          "id": "clairic-extract",
-          "summary": "Add Clairic extraction to core: typed field specs (`text`, `number`, `date`, `time`, `datetime`, `duration`, `list`, `estimate`, `forecast`), `extract({ state, fields })` on the shared client, and client-side validation of field names, per-type properties, image limits (PNG/JPEG/WebP, at most four, 4 MiB each, 8 MiB total decoded) and a 16 MiB JSON body.\n\n`systemOneAdapter` defaults to `https://system-one.dev/v1` and sends extract requests to `{baseURL}/systemone` (`POST https://system-one.dev/v1/systemone`) with a `fields` body and default model `clairic`. Direct Cloudflare REST and Workers bindings encode the same field schema on the Clairic model path. Adapters opt in with `supportsExtract`; question-only adapters reject `extract()` before I/O.\n\nProtocol and Fetch packages are included so extract-capable adapters resolve the same core generation as the new extract types and error classes. Unchanged LLM, local, WebGPU, Laya, ONNX, decisions, evaluation and batch packages keep their published versions.\n\n`adapter-system-one` package metadata now points `repository.url` at the canonical GitHub repository `ziyu/system-one-sdk`."
-        }
-      ]
-    },
-    {
-      "name": "@system-one-ai/transport-fetch",
-      "version": "0.8.0",
-      "previousVersion": "0.7.0",
-      "reason": "changeset",
-      "changesets": [
-        {
-          "id": "clairic-extract",
-          "summary": "Add Clairic extraction to core: typed field specs (`text`, `number`, `date`, `time`, `datetime`, `duration`, `list`, `estimate`, `forecast`), `extract({ state, fields })` on the shared client, and client-side validation of field names, per-type properties, image limits (PNG/JPEG/WebP, at most four, 4 MiB each, 8 MiB total decoded) and a 16 MiB JSON body.\n\n`systemOneAdapter` defaults to `https://system-one.dev/v1` and sends extract requests to `{baseURL}/systemone` (`POST https://system-one.dev/v1/systemone`) with a `fields` body and default model `clairic`. Direct Cloudflare REST and Workers bindings encode the same field schema on the Clairic model path. Adapters opt in with `supportsExtract`; question-only adapters reject `extract()` before I/O.\n\nProtocol and Fetch packages are included so extract-capable adapters resolve the same core generation as the new extract types and error classes. Unchanged LLM, local, WebGPU, Laya, ONNX, decisions, evaluation and batch packages keep their published versions.\n\n`adapter-system-one` package metadata now points `repository.url` at the canonical GitHub repository `ziyu/system-one-sdk`."
+          "id": "cloudflare-openai-decisions",
+          "summary": "Separate the OpenAI Decisions wire protocol from Cloudflare. Add `protocol-openai-decisions` as a provider-neutral codec and `adapter-openai-decisions` for OpenAI (`POST /v1/decisions`) or another compatible provider selected through `baseURL`, `apiKey` and `model`. Cloudflare keeps only its runner wrapper for `openai/decisions`, reusing the shared codec and enforcing Cloudflare's narrower schema limits. The codec maps boolean/choice/score questions to predicate/choice/score, sends object and array-of-object state through `input_json`, supports ordered image parts, enforces 2-255 choices and 2-10 score levels, and decodes answer arrays while preserving confidence and token usage. Providers whose published schema omits `input_json` can opt into text state encoding explicitly."
         }
       ]
     }

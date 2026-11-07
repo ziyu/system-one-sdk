@@ -1,6 +1,6 @@
 {
   "name": "@system-one-ai/adapter-openai-decisions",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "OpenAI Decisions adapter, including compatible providers.",
   "license": "MIT",
   "type": "module",
@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@system-one-ai/core": "^0.8.0",
-    "@system-one-ai/protocol-openai-decisions": "^0.0.0"
+    "@system-one-ai/protocol-openai-decisions": "^0.1.0"
   },
   "publishConfig": {
     "access": "public",
