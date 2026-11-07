@@ -173,6 +173,40 @@ test('Clef binding rejects remote image URLs and unknown options before invoking
   assert.equal(calls, 0);
 });
 
+test('OpenAI Decisions binding receives predicate input and decodes array answers', async () => {
+  const binding = { async run(model, input, options) {
+    assert.strictEqual(this, binding);
+    assert.equal(model, 'openai/decisions');
+    assert.deepEqual(input, {
+      input: 'Is this covered?',
+      questions: [{
+        name: 'covered',
+        type: 'predicate',
+        instructions: 'Does the policy cover this?\nTrue criteria: The policy covers it.\nFalse criteria: No additional instructions.',
+      }],
+    });
+    assert.equal(options.returnRawResponse, true);
+    return response({
+      model: 'gpt-6-luna',
+      answers: [{ type: 'predicate', name: 'covered', probability: 0.82 }],
+      usage: {
+        input_tokens: 17, output_tokens: 0, total_tokens: 17,
+        input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+        output_tokens_details: { reasoning_tokens: 0 },
+      },
+    });
+  } };
+  const client = createCloudflareWorkers({ binding, model: 'openai/decisions' });
+  const result = await client.evaluate({
+    state: 'Is this covered?',
+    questions: { covered: booleanQuestion('Does the policy cover this?', { true: 'The policy covers it.', false: null }) },
+  });
+  assert.equal(result.model, 'gpt-6-luna');
+  assert.deepEqual(result.answers.covered, { type: 'boolean', probability: 0.82 });
+  assert.deepEqual(result.usage, { inputTokens: 17, outputTokens: 0, totalTokens: 17 });
+  assert.equal(result.rounding, undefined);
+});
+
 test('thrown binding errors are sanitized, separately typed and not retried', async () => {
   for (const sync of [true, false]) {
     let calls = 0;

@@ -30,11 +30,11 @@ const result = await client.evaluate({
 
 本入口导出 `CloudflareWorkers`、`createCloudflareWorkers()`、`CloudflareWorkersOptions` 和 `CloudflareAiBinding`。原生 `ImageInput` 类型属于 `@system-one-ai/core`，不属于供应商包。结构化 binding 接口避免 SDK 使用方依赖 Cloudflare 包。默认模型为 `typesafe/jev`，单次请求可覆盖客户端模型。
 
-原生调用使用 `returnRawResponse: true` 并传入总期限 `AbortSignal`。REST 与 binding 复用 Cloudflare envelope 解码和限长 UTF-8/JSON Response 读取。`boolean` 映射为原生 `noul`，返回值保留 P(true)、概率分布、confidence、warnings 和已报告用量。
+原生调用使用 `returnRawResponse: true` 并传入总期限 `AbortSignal`。REST 与 binding 复用 Cloudflare envelope 解码和限长 UTF-8/JSON Response 读取。`boolean` 映射为原生 `noul`；OpenAI Decisions 则映射为 `predicate`。返回值保留 P(true)、概率分布、confidence、warnings 和已报告用量。
 
 元数据来自每次真实 Response，包括状态码与 `cf-ai-req-id`（优先级在标准请求 ID 头之后）。不会读取 binding 上并发共享的 `lastRequestId` 等字段，缺失统计量保持缺省。输入及 headers 在等待前生成快照，每次重试复制传给 binding 的输入，保护校验依据与后续尝试。
 
-默认 `timeoutMs=10000`、`maxRetries=2`、`retryDelayMs=200`、`maxRetryDelayMs=2000`、`maxResponseBytes=8 MiB`。单次调用可设置 `signal`、`timeoutMs`、`maxRetries` 和 `headers`；低延迟服务建议显式关闭重试。应用 headers 通过 `extraHeaders` 传递，但不能覆盖认证、协议头或 `cf-consn-*`。Clef 支持 core 的原生 `images` 字段；Jev 拒绝非空图片输入。不提供非空 `providerOptions`、Gateway 路由、WebSocket、流式模型响应及异步排队推理。
+默认 `timeoutMs=10000`、`maxRetries=2`、`retryDelayMs=200`、`maxRetryDelayMs=2000`、`maxResponseBytes=8 MiB`。单次调用可设置 `signal`、`timeoutMs`、`maxRetries` 和 `headers`；低延迟服务建议显式关闭重试。应用 headers 通过 `extraHeaders` 传递，但不能覆盖认证、协议头或 `cf-consn-*`。Clef 与 OpenAI Decisions 支持 core 的原生 `images` 字段；Jev 拒绝非空图片输入。不提供非空 `providerOptions`、Gateway 路由、WebSocket、流式模型响应及异步排队推理。
 
 HTTP 408、429、5xx 与响应体读取中断可在同一总期限内重试，不能提前于 Retry-After。binding 在返回 Response 前直接抛错时产生脱敏 `BindingError`（核心错误入口导出，`code: 'binding'`），不附带上游消息或 cause、不猜状态码、不自动重试。损坏响应和失败/未完成的 runner 同样不重试。
 
@@ -52,6 +52,18 @@ const result = await vision.evaluate({
 ```
 
 `receiptBase64` 由应用提供，内容为 PNG 的 base64 编码。Flash 使用 `@cf/cloudflare/clef-flash`。binding 接收完整模型 ID，输入包含 `model: "clef"` 或 `"clef-flash"`、`state`、原生 `questions` 及可选 `images`。共享 codec 在调用 binding 前检查内嵌 PNG/JPEG/WebP 格式与数量、字节限制；调用方或 binding 修改图片不会污染重试。格式、供应商限制及协议来源见 [Cloudflare 图片输入](cloudflare.zh-CN.md#clef-图片输入)；不支持远程图片 URL 或视频上传。
+
+## OpenAI Decisions
+
+```ts
+const decisions = createCloudflareWorkers({ binding: env.AI, model: 'openai/decisions' });
+const result = await decisions.evaluate({
+  state: { ticket: '同一订单被重复扣款。' },
+  questions: { refund: booleanQuestion('客户是否要求退款？') },
+});
+```
+
+binding 接收 `openai/decisions` 和 `{ input, questions }`。Cloudflare 公开的 runner schema 只接受 `input_text` 和 `input_image`，因此这里将对象或数组状态序列化为 JSON 文本；OpenAI 原生端点通过 `adapter-openai-decisions` 使用 `input_json`。图片转换为一条包含有序 `input_text` 与 `input_image` data URL 的 user message。答案以数组返回，按问题 name 匹配回 core 结构。完整映射、限制和响应行为见 [OpenAI Decisions](cloudflare.zh-CN.md#openai-decisions)。
 
 ## 示例与验证
 

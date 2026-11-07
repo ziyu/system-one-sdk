@@ -5,6 +5,7 @@ import { systemOneAdapter } from '@system-one-ai/adapter-system-one';
 import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
 import { vercelAdapter } from '@system-one-ai/adapter-vercel';
 import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
+import { openAiDecisionsAdapter } from '@system-one-ai/adapter-openai-decisions';
 import { llmAdapter } from '@system-one-ai/adapter-llm';
 import { createFetchTransport } from '@system-one-ai/transport-fetch';
 
@@ -24,5 +25,6 @@ test('workspace core and adapter packages compose without the root package', asy
   await evaluate(openRouterAdapter, { model: 'typesafe/jev-1', answers: { on: { type: 'noul', noul: 0.9 } }, usage: {} }, 'https://openrouter.ai/api/alpha/decisions');
   await evaluate(vercelAdapter, { answers: { on: { type: 'boolean', probability: 0.9 } } }, 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model');
   await evaluate(cloudflareAdapter({ accountId: 'account' }), { success: true, errors: [], result: { answers: { on: { type: 'noul', noul: 0.9 } } } }, 'https://api.cloudflare.com/client/v4/accounts/account/ai/run');
+  await evaluate(openAiDecisionsAdapter, { model: 'gpt-6-luna', answers: [{ type: 'predicate', name: 'on', probability: 0.9 }], usage: {} }, 'https://api.openai.com/v1/decisions');
   await evaluate(llmAdapter({ provider: 'openai', api: 'chat_completions', structuredOutputs: false }), { choices: [{ message: { content: JSON.stringify({ answers: { q1: 0.9 } }) } }] }, 'https://api.openai.com/v1/chat/completions', { model: 'test-model' });
 });

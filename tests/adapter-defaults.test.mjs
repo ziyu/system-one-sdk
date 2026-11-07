@@ -6,6 +6,7 @@ import { ConfigurationError, SystemOne } from '@system-one-ai/core';
 import { vercelAdapter } from '@system-one-ai/adapter-vercel';
 import { openRouterAdapter } from '@system-one-ai/adapter-openrouter';
 import { cloudflareAdapter } from '@system-one-ai/adapter-cloudflare';
+import { openAiDecisionsAdapter } from '@system-one-ai/adapter-openai-decisions';
 import { booleanRequest, booleanPayload, jsonResponse } from './fixtures.mjs';
 
 const providers = [
@@ -13,6 +14,7 @@ const providers = [
   { name: 'Vercel', adapter: vercelAdapter, url: 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model', model: 'typesafe-ai/jev', overrideURL: 'https://proxy.example/team/evaluation-model' },
   { name: 'OpenRouter', adapter: openRouterAdapter, url: 'https://openrouter.ai/api/alpha/decisions', model: '~typesafe/jev-latest', overrideURL: 'https://proxy.example/team/decisions' },
   { name: 'Cloudflare', adapter: cloudflareAdapter({ accountId: 'test-account' }), url: 'https://api.cloudflare.com/client/v4/accounts/test-account/ai/run', model: 'typesafe/jev', overrideURL: 'https://proxy.example/team/ai/run' },
+  { name: 'OpenAI Decisions', adapter: openAiDecisionsAdapter, url: 'https://api.openai.com/v1/decisions', model: 'gpt-6-luna', overrideURL: 'https://proxy.example/team/decisions' },
 ];
 
 for (const { name, adapter, url, model, overrideURL } of providers) {
@@ -22,6 +24,9 @@ for (const { name, adapter, url, model, overrideURL } of providers) {
       const body = JSON.parse(init.body);
       const model = init.headers.get('ai-model-id') ?? body.model;
       sent.push({ url, model });
+      if (name === 'OpenAI Decisions') {
+        return jsonResponse({ model: 'gpt-6-luna', answers: [{ type: 'predicate', name: 'on', probability: 0.97 }], usage: {} });
+      }
       return jsonResponse(name === 'Vercel' ? { answers: { on: { type: 'boolean', probability: 0.97 } } } : { ...booleanPayload, model, usage: {} });
     };
     const defaults = new SystemOne({ adapter, apiKey: 'fixture', transport: createFetchTransport(fetch) });

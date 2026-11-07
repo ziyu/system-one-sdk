@@ -1,6 +1,11 @@
 import { encodeExtractBody, UnsupportedFeatureError, ValidationError } from '@system-one-ai/core';
 import type { EvaluateRequest, ExtractRequest, ImageInput } from '@system-one-ai/core';
+import { encodeOpenAiDecisionsRequest } from '@system-one-ai/protocol-openai-decisions';
 import { nativeQuestions } from '@system-one-ai/protocol-system-one';
+
+export function openAiDecisionsModel(model: string): boolean {
+  return model === 'openai/decisions';
+}
 
 export function clefModel(model: string): 'clef' | 'clef-flash' | undefined {
   if (model === '@cf/cloudflare/clef') return 'clef';
@@ -36,7 +41,12 @@ function clefImages(images: readonly ImageInput[]) {
 export function cloudflareInput(model: string, request: EvaluateRequest): Record<string, unknown> {
   const selector = clefModel(model);
   if (request.providerOptions !== undefined && Object.keys(request.providerOptions).length > 0) {
-    throw new UnsupportedFeatureError('The Cloudflare decision protocol does not define providerOptions.');
+    throw new UnsupportedFeatureError('The Cloudflare adapter does not support providerOptions.');
+  }
+  if (openAiDecisionsModel(model)) {
+    // Cloudflare's published input schema omits input_json, so its runner
+    // receives structured state as text even though native OpenAI accepts it.
+    return encodeOpenAiDecisionsRequest(request, { maxQuestions: 200, structuredState: 'text' });
   }
   if (request.images?.length && selector === undefined) {
     throw new UnsupportedFeatureError('Image input requires a Cloudflare Clef model.');

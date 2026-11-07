@@ -13,9 +13,11 @@
 | `core` | 创建统一的 `evaluate` / `extract` 客户端，定义选择、评分、真假问题或 Clairic 字段，并校验模型返回的答案。 | 无 |
 | `transport-fetch` | 通过 Fetch 发送模型请求，处理鉴权、超时、取消、重试和响应大小限制。 | core |
 | `protocol-system-one` | 在本库的问题／答案格式与原生 System One 协议之间转换，供 TypeSafe、OpenRouter 和 Cloudflare adapter 复用。 | core |
+| `protocol-openai-decisions` | 在本库的问题／答案格式与 OpenAI Decisions 协议之间转换，供 OpenAI Decisions 与 Cloudflare adapter 复用。 | core |
 | `adapter-system-one` | 连接托管的 System One 服务（`https://system-one.dev/v1`），用原生决策模型回答选择、评分和真假问题。 | core、protocol-system-one |
 | `adapter-openrouter` | 通过 OpenRouter Decisions 接口调用 System One 模型，将答案、用量和费用信息转换为本库结果。 | core、protocol-system-one |
-| `adapter-cloudflare` | 在 Cloudflare 上调用 System One 模型，支持 REST API 和 Workers 内的 `env.AI` binding。 | core、protocol-system-one、transport-fetch |
+| `adapter-openai-decisions` | 调用 OpenAI Decisions 或其他实现同一 wire 契约的供应商，通过 `baseURL`、`apiKey` 和 `model` 切换供应商。 | core、protocol-openai-decisions |
+| `adapter-cloudflare` | 在 Cloudflare 上调用 System One 模型，支持 REST API、Workers 内的 `env.AI` binding 以及 `openai/decisions` runner 路径。 | core、protocol-openai-decisions、protocol-system-one、transport-fetch |
 | `adapter-vercel` | 通过 Vercel AI Gateway 的 Evaluation 接口调用决策模型，将请求和答案转换为本库格式。 | core |
 | `adapter-llm` | 把通用 LLM 接口适配为 System One 决策接口：将问题转为 prompt 和输出约束，再把 LLM 回答转换为选择、评分和真假结果。 | core |
 | `adapter-local` | 将 Python、MLX、CUDA、WASM 或 sidecar 本地模型统一接入，并执行结果校验。 | core |
@@ -143,7 +145,7 @@ const invoice: string | null = extracted.answers.invoice_number.value;
 
 原生 adapter 提供默认地址和模型，`baseURL`、`model` 可覆盖；单次请求的 `model` 优先级最高。Cloudflare 通过 `cloudflareAdapter({ accountId })` 配置账户。自定义 fetch 传给 `createFetchTransport(fetch)`。客户端不会根据 hostname 猜测协议，也不读取环境变量。
 
-core 原生支持 `evaluate({ state, questions, images })`，图片类型 `ImageInput` 为 base64 data URL 或 `{ mediaType, base64 }`。core 负责校验及快照；adapter 未显式声明 `supportsImages: true` 时，非空图片请求直接报错。Cloudflare 的 REST 与 Workers 均支持 Clef / Clef Flash 图片输入，默认仍为 Jev；本地视觉 runner 可声明支持，决策、批量及评测层均保留图片。参见 [core 契约](packages/core/README.md#native-image-input)与 [Cloudflare 格式和限制](docs/cloudflare.zh-CN.md#clef-图片输入)。
+core 原生支持 `evaluate({ state, questions, images })`，图片类型 `ImageInput` 为 base64 data URL 或 `{ mediaType, base64 }`。core 负责校验及快照；adapter 未显式声明 `supportsImages: true` 时，非空图片请求直接报错。Cloudflare 的 REST 与 Workers 均支持 Clef / Clef Flash 及 `openai/decisions` 图片输入，默认仍为 Jev；本地视觉 runner 可声明支持，决策、批量及评测层均保留图片。参见 [core 契约](packages/core/README.md#native-image-input)与 [Cloudflare 格式和限制](docs/cloudflare.zh-CN.md#clef-图片输入)。
 
 ## 用通用 LLM 提供 System One 决策能力
 
@@ -251,7 +253,7 @@ LLM 文件包含 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`。真实测试按�
 当前与历史证据见[验证记录](docs/validation.md)。真实 LLM 测试不代表其他供应商也已完成真实联调；各供应商协议另有 fixture 和本地 HTTP 回归。
 
 - [包边界](docs/architecture-plan.zh-CN.md)与[设计](docs/design.md)
-- [OpenRouter](docs/openrouter.md)、[Cloudflare](docs/cloudflare.zh-CN.md)、[Jev API 研究](docs/jev-api.md)
+- [OpenRouter](docs/openrouter.md)、[OpenAI Decisions](docs/openai-decisions.zh-CN.md)、[Cloudflare](docs/cloudflare.zh-CN.md)、[Jev API 研究](docs/jev-api.md)
 - [文件/客服工作流](docs/decision-workflows.zh-CN.md)与[浏览器示例](docs/browser-decisions.zh-CN.md)
 - [Cloudflare Workers 原生 binding](docs/cloudflare-workers.zh-CN.md)（`@system-one-ai/adapter-cloudflare/workers`）
 - [Clairic 抽取](docs/clairic.md)与[示例](examples/clairic.ts)

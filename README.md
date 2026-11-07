@@ -13,9 +13,11 @@ The repository is a private npm workspace. Runtime code lives in independently p
 | `core` | Create a shared `evaluate` / `extract` client, define choice, score and boolean questions or Clairic fields, and validate model answers. | None |
 | `transport-fetch` | Send model requests using Fetch, with authentication, timeouts, cancellation, retries and response size limits. | core |
 | `protocol-system-one` | Convert between this library’s questions/answers and the native System One wire format, shared by the TypeSafe, OpenRouter and Cloudflare adapters. | core |
+| `protocol-openai-decisions` | Convert between this library’s questions/answers and the OpenAI Decisions wire format, shared by the OpenAI Decisions and Cloudflare adapters. | core |
 | `adapter-system-one` | Connect to the hosted System One service (`https://system-one.dev/v1`) to answer choice, score and boolean questions with native decision models. | core, protocol-system-one |
 | `adapter-openrouter` | Call System One models through OpenRouter Decisions and convert answers, usage and cost metadata into this library’s results. | core, protocol-system-one |
-| `adapter-cloudflare` | Run System One models on Cloudflare through its REST API or the native `env.AI` binding inside Workers. | core, protocol-system-one, transport-fetch |
+| `adapter-openai-decisions` | Call OpenAI Decisions or another provider implementing the same wire contract; switch providers with `baseURL`, `apiKey` and `model`. | core, protocol-openai-decisions |
+| `adapter-cloudflare` | Run System One models on Cloudflare through its REST API or the native `env.AI` binding inside Workers, including the `openai/decisions` runner path. | core, protocol-openai-decisions, protocol-system-one, transport-fetch |
 | `adapter-vercel` | Call decision models through Vercel AI Gateway’s Evaluation API, converting requests and answers to this library’s format. | core |
 | `adapter-llm` | Adapt general-purpose LLM APIs to the System One decision interface: turn questions into prompts and output constraints, then convert LLM responses into choices, scores and boolean results. | core |
 | `adapter-local` | Run self-hosted Python, MLX, CUDA, WASM or sidecar model runtimes through one validated local contract. | core |
@@ -143,7 +145,7 @@ const invoice: string | null = extracted.answers.invoice_number.value;
 
 Adapters supply native endpoint/model defaults. `baseURL` and `model` override them; per-request `model` has highest priority. Cloudflare requires `cloudflareAdapter({ accountId })`. Custom Fetch implementations are passed to `createFetchTransport(fetch)`. The client does not infer protocols from hostnames or read environment variables.
 
-Core natively accepts `evaluate({ state, questions, images })` using `ImageInput` (base64 data URL or `{ mediaType, base64 }`). It validates and snapshots images and rejects nonempty image input unless the adapter declares `supportsImages: true`. Cloudflare Clef / Clef Flash support this on REST and Workers; Jev remains the default. Local vision runners can opt in, and decision/batch/evaluation composition preserves images. See [core contract](packages/core/README.md#native-image-input) and [Cloudflare formats and limits](docs/cloudflare.md#clef-images).
+Core natively accepts `evaluate({ state, questions, images })` using `ImageInput` (base64 data URL or `{ mediaType, base64 }`). It validates and snapshots images and rejects nonempty image input unless the adapter declares `supportsImages: true`. Cloudflare Clef / Clef Flash and `openai/decisions` support this on REST and Workers; Jev remains the default. Local vision runners can opt in, and decision/batch/evaluation composition preserves images. See [core contract](packages/core/README.md#native-image-input) and [Cloudflare formats and limits](docs/cloudflare.md#clef-images).
 
 ## Use a general-purpose LLM for System One decisions
 
@@ -251,7 +253,7 @@ The native and composition checks read `SYSTEM_ONE_API_KEY`, `SYSTEM_ONE_BASE_UR
 See [verification records](docs/validation.md) for current and historical evidence. A live LLM pass does not verify other providers. Protocol fixtures and local HTTP servers cover those providers separately.
 
 - [Package boundaries](docs/architecture-plan.zh-CN.md) and [design](docs/design.md)
-- [OpenRouter](docs/openrouter.md), [Cloudflare](docs/cloudflare.md), [Jev API research](docs/jev-api.md)
+- [OpenRouter](docs/openrouter.md), [OpenAI Decisions](docs/openai-decisions.md), [Cloudflare](docs/cloudflare.md), [Jev API research](docs/jev-api.md)
 - [File/support workflows](docs/decision-workflows.md) and [browser example](docs/browser-decisions.md)
 - [Native Cloudflare Workers binding](docs/cloudflare-workers.md) (`@system-one-ai/adapter-cloudflare/workers`)
 - [Clairic extraction](docs/clairic.md) and [example](examples/clairic.ts)

@@ -1,6 +1,6 @@
 # SDK 包边界与迁移
 
-仓库使用 npm workspaces，运行时代码全部位于 `packages/`。根目录仅负责编排开发、测试和发布，标记为 private；旧 SDK 入口、转导出和默认客户端已删除。当前 workspace 有 13 个独立包，已有发布包的稳定线为 `0.6.0`，详见[迁移说明](migration-0.6.md)与[验证记录](validation.md)。
+仓库使用 npm workspaces，运行时代码全部位于 `packages/`。根目录仅负责编排开发、测试和发布，标记为 private；旧 SDK 入口、转导出和默认客户端已删除。当前 workspace 有 18 个独立包，已有发布包的稳定线为 `0.6.0`，详见[迁移说明](migration-0.6.md)与[验证记录](validation.md)。
 
 参考 [AI SDK 的 Providers and Models](https://ai-sdk.dev/docs/foundations/providers-and-models) 和 [Testing](https://ai-sdk.dev/docs/ai-sdk-core/testing)：共享稳定契约、显式传入实现、按供应商独立发布，用确定性测试验证业务行为。沿用已有 `SystemOneAdapter.prepare/decode/authenticate` 契约，不引入另一套 LLM model 层。
 
@@ -11,9 +11,11 @@
 | `@system-one-ai/core` | 创建统一的 `evaluate` 客户端，定义选择、评分和真假问题，并校验模型返回的答案。 | 无 |
 | `@system-one-ai/transport-fetch` | 通过 Fetch 发送模型请求，处理鉴权、超时、取消、重试和响应大小限制。 | core |
 | `@system-one-ai/protocol-system-one` | 在本库的问题／答案格式与原生 System One 协议之间转换，供 TypeSafe、OpenRouter 和 Cloudflare adapter 复用。 | core |
+| `@system-one-ai/protocol-openai-decisions` | 在本库的问题／答案格式与 OpenAI Decisions 协议之间转换，供 OpenAI Decisions 和 Cloudflare adapter 复用。 | core |
 | `@system-one-ai/adapter-system-one` | 连接托管的 System One 服务（`https://system-one.dev/v1`），用原生决策模型回答选择、评分和真假问题。 | core、protocol-system-one |
 | `@system-one-ai/adapter-openrouter` | 通过 OpenRouter Decisions 接口调用 System One 模型，将答案、用量和费用信息转换为本库结果。 | core、protocol-system-one |
-| `@system-one-ai/adapter-cloudflare` | 在 Cloudflare 上调用 System One 模型，支持 REST API 和 Workers 内的 `env.AI` binding。 | core、protocol-system-one、transport-fetch |
+| `@system-one-ai/adapter-openai-decisions` | 调用 OpenAI Decisions 或其他兼容供应商，通过 baseURL/model/凭据切换端点。 | core、protocol-openai-decisions |
+| `@system-one-ai/adapter-cloudflare` | 在 Cloudflare 上调用 System One 模型，支持 REST API、Workers binding 及 `openai/decisions` runner。 | core、protocol-openai-decisions、protocol-system-one、transport-fetch |
 | `@system-one-ai/adapter-vercel` | 通过 Vercel AI Gateway 的 Evaluation 接口调用决策模型，将请求和答案转换为本库格式。 | core |
 | `@system-one-ai/adapter-llm` | 把通用 LLM 接口适配为 System One 决策接口：将问题转为 prompt 和输出约束，再把 LLM 回答转换为选择、评分和真假结果。 | core |
 | `@system-one-ai/adapter-local` | 将 Python、MLX、CUDA、WASM 或 sidecar 本地模型统一接入，并执行结果校验。 | core |
@@ -32,7 +34,11 @@ graph TD
   Native --> Core
   OR["adapter-openrouter"] --> Protocol
   OR --> Core
+  AOD["adapter-openai-decisions"] --> ProtocolOD["protocol-openai-decisions"]
+  AOD --> Core
+  ProtocolOD --> Core
   CF["adapter-cloudflare"] --> Protocol
+  CF --> ProtocolOD
   CF --> Core
   Protocol --> Core
   Vercel["adapter-vercel"] --> Core
@@ -49,7 +55,7 @@ graph TD
   Batch["batch"] --> Core
 ```
 
-core 不导入任何具体 adapter、transport 或供应商 SDK。浏览器和 Node 原生 runtime 都复用 `adapter-local` 的生命周期和统一校验：浏览器通过 `BrowserModelDriver` 接入，Node ONNX 通过 `OnnxModelPlugin` 接入。模型插件依赖通用 runtime 的接口，通用 runtime 不反向依赖任何 `model-*` 包。其他 provider adapter 之间不互相导入。REST adapter 只做编解码；Cloudflare 的独立 workers 入口实现 EvaluationClient，复用 transport-fetch 的响应和期限工具，调用原生 binding。`protocol-system-one` 只共享已经被三个服务使用的 wire codec，没有 endpoint、默认模型、认证或请求生命周期。
+core 不导入任何具体 adapter、transport 或供应商 SDK。浏览器和 Node 原生 runtime 都复用 `adapter-local` 的生命周期和统一校验：浏览器通过 `BrowserModelDriver` 接入，Node ONNX 通过 `OnnxModelPlugin` 接入。模型插件依赖通用 runtime 的接口，通用 runtime 不反向依赖任何 `model-*` 包。其他 provider adapter 之间不互相导入。REST adapter 只做编解码；Cloudflare 的独立 workers 入口实现 EvaluationClient，复用 transport-fetch 的响应和期限工具，调用原生 binding。`protocol-system-one` 与 `protocol-openai-decisions` 只共享 wire codec，没有 endpoint、默认模型、认证或请求生命周期。OpenAI Decisions 协议归 OpenAI 所有；Cloudflare adapter 只包装 runner 请求与响应 envelope。
 
 core 仍保留当前 HTTP codec 契约中的 URL、headers 和配置类型，以及独立的 `core/http` 校验工具。它不调用 Fetch，不解析供应商特有字段。非 HTTP 权重通过 `adapter-local` 的 runner 边界接入，core 仍只处理统一的 `EvaluationClient` 语义。
 

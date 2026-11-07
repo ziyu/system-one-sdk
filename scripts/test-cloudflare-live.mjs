@@ -23,12 +23,13 @@ try {
   const rootURL = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run`;
   const model = config.SYSTEM_ONE_MODEL || 'typesafe/jev';
   const clef = model === '@cf/cloudflare/clef' || model === '@cf/cloudflare/clef-flash';
-  assert.ok(clef || model === 'typesafe/jev', 'Live verification requires Jev, Clef or Clef Flash.');
+  const decisions = model === 'openai/decisions';
+  assert.ok(clef || decisions || model === 'typesafe/jev', 'Live verification requires Jev, Clef, Clef Flash or OpenAI Decisions.');
   const expectedURL = clef ? `${rootURL}/${model}` : rootURL;
   assert.ok(!config.SYSTEM_ONE_BASE_URL || config.SYSTEM_ONE_BASE_URL.replace(/\/+$/, '') === rootURL, 'Live verification requires the official Cloudflare endpoint.');
   let images;
   if (config.CLOUDFLARE_IMAGE_PATH) {
-    assert.ok(clef, 'CLOUDFLARE_IMAGE_PATH requires a Clef model.');
+    assert.ok(clef || decisions, 'CLOUDFLARE_IMAGE_PATH requires Clef, Clef Flash or OpenAI Decisions.');
     const contentType = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }[extname(config.CLOUDFLARE_IMAGE_PATH).toLowerCase()];
     assert.ok(contentType, 'CLOUDFLARE_IMAGE_PATH must name a PNG, JPEG or WebP file.');
     images = [{ mediaType: contentType, base64: (await readFile(config.CLOUDFLARE_IMAGE_PATH)).toString('base64') }];

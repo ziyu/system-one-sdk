@@ -1,0 +1,51 @@
+{
+  "name": "@system-one-ai/protocol-openai-decisions",
+  "version": "0.0.0",
+  "description": "OpenAI Decisions wire codec.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@system-one-ai/core": "^0.8.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ziyu/system-one-sdk.git",
+    "directory": "packages/protocol-openai-decisions"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-packages.mjs protocol-openai-decisions",
+    "typecheck": "node ../../scripts/build-packages.mjs protocol-openai-decisions --check",
+    "test": "node ../../scripts/test-workspace.mjs protocol-openai-decisions",
+    "prepack": "npm run build"
+  }
+}

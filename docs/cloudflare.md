@@ -2,7 +2,7 @@
 
 **English** | [简体中文](cloudflare.zh-CN.md)
 
-The independent `@system-one-ai/adapter-cloudflare` package supports Jev and the multimodal Clef / Clef Flash models, including REST and AI runner response envelopes. It supplies the REST URL; the application supplies an account ID, API token and optional model selection. Jev remains the default.
+The independent `@system-one-ai/adapter-cloudflare` package supports Jev, the multimodal Clef / Clef Flash models, and Cloudflare's OpenAI Decisions model, including REST and AI runner response envelopes. It supplies the REST URL; the application supplies an account ID, API token and optional model selection. Jev remains the default.
 
 Native `images` support is available in `adapter-cloudflare@0.7.0` with core and transport on the same `0.7` line:
 
@@ -49,7 +49,7 @@ The default URL is `https://api.cloudflare.com/client/v4/accounts/{accountId}/ai
 
 Trailing slashes are removed. An account segment in `baseURL` must match the adapter's account ID. Supply the base URL without a model suffix; the adapter adds the documented Clef suffix, while Jev keeps the runner path. A proxy endpoint without an account segment must route to the intended account itself. Account IDs are validated as a single nonempty segment containing letters, digits, underscores, or hyphens; the service determines whether that account actually exists.
 
-Client `model` overrides the adapter default; per-request `model` overrides the client. `@cf/cloudflare/clef` and `@cf/cloudflare/clef-flash` select the Clef protocol below. Other explicit IDs retain the existing runner contract and must support the same decision primitives. Nonempty `providerOptions` are rejected; image input is a native core request field.
+Client `model` overrides the adapter default; per-request `model` overrides the client. `@cf/cloudflare/clef` and `@cf/cloudflare/clef-flash` select the Clef protocol below, and `openai/decisions` selects the Decisions protocol. Other explicit IDs retain the existing runner contract and must support the same decision primitives. Nonempty `providerOptions` are rejected; image input is a native core request field.
 
 ## Clef images
 
@@ -78,6 +78,28 @@ Core requires adapters to opt in with `supportsImages: true`; unsupported image 
 
 Reviewed October 4, 2026: [Clef](https://developers.cloudflare.com/workers-ai/models/clef/), [input schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-input.json), [output schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-output.json), and [Clef Flash](https://developers.cloudflare.com/workers-ai/models/clef-flash/). REST uses `POST /client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/clef` with `{ model: "clef", state, questions, images? }`; Flash uses its own path and `model: "clef-flash"`. Workers calls `env.AI.run(fullModelId, sameInput, options)`. Both reuse native choice/score/noul decoding and token normalization without applying Jev's rounding convention.
 
+## OpenAI Decisions
+
+The Decisions wire contract belongs to OpenAI, not Cloudflare. The provider-neutral codec lives in `@system-one-ai/protocol-openai-decisions`, and `@system-one-ai/adapter-openai-decisions` calls OpenAI directly or another compatible provider through `baseURL`, `apiKey` and `model`; see [OpenAI Decisions](openai-decisions.md). The section below documents only Cloudflare's runner wrapper around that protocol.
+
+Select `model: 'openai/decisions'` on the Cloudflare REST client or the native Workers client. The REST path is the ordinary runner endpoint, `POST /client/v4/accounts/{accountId}/ai/run`, with a body of `{ model: "openai/decisions", input: { input, questions } }`. The Workers path is `env.AI.run('openai/decisions', { input, questions }, options)`. This model reports `gpt-6-luna` as the resolved model.
+
+Core's string `state` is sent directly as `input`. Object and array states are JSON-serialized into text because Cloudflare's published Decisions input schema accepts only `input_text` and `input_image`, not OpenAI's `input_json` part. Nonempty `images` produce one user message whose content is an `input_text` part followed by ordered `input_image` parts with base64 data URLs; remote image URLs remain unsupported. The input message is only used when images are present. Native OpenAI uses `input_json` for structured state through `adapter-openai-decisions`; Cloudflare passes the shared codec's explicit text compatibility option.
+
+Questions are encoded in core key order:
+
+| Core question | Decisions wire form |
+| --- | --- |
+| `boolean` | `predicate` with `name`, `instructions` and any true/false criteria appended to the instructions |
+| `choice` | `choice` with `choices: [{ value, description? }]` |
+| `score` | `score` with ordered `levels: [{ label, description? }]` |
+
+String score criteria become level labels. Non-string criteria use their level index as the label and their JSON text as the description. Decisions accepts at most 200 questions per request, 2-255 choices per choice question, and 2-10 levels per score question; the adapter rejects inputs outside those limits before authentication or I/O. Nonempty `providerOptions` remain unsupported.
+
+The response `answers` array is matched back to question IDs by name, with position used only when a name is absent. Predicates become boolean probabilities, choice probability arrays become the core choice map, and score probability arrays become index-keyed probabilities plus a rubric legend built from the original request criteria. Confidence and snake-case token usage are preserved. A `refusal` answer has no core answer representation and fails validation as `ResponseValidationError`. Decisions does not declare a rounding convention, so no Jev-style two-decimal rounding is applied.
+
+Reviewed November 7, 2026: [Cloudflare Decisions model page](https://developers.cloudflare.com/ai/models/openai/decisions/), [input schema](https://developers.cloudflare.com/ai/models/openai/decisions/schema-input.json), [output schema](https://developers.cloudflare.com/ai/models/openai/decisions/schema-output.json), and the [OpenAI Decisions guide](https://developers.openai.com/api/docs/guides/decisions). The shared codec defaults to OpenAI's native 400-question limit and `input_json` state; Cloudflare passes 200 and text state because its proxied schema is narrower. Question-specific image instructions are not exposed because core asks all questions against one shared `state` and `images` set.
+
 ## Wire contract and source references
 
 Reviewed September 18, 2026. The [Cloudflare Jev model page](https://developers.cloudflare.com/ai/models/typesafe/jev/) specifies `POST /client/v4/accounts/{accountId}/ai/run` with Bearer authentication and a JSON body of `{ model, input: { state, questions } }`. This model-specific contract is the source for the adapter's request shape.
@@ -103,7 +125,7 @@ npm run example:cloudflare
 npm run test:live:cloudflare
 ```
 
-The example accepts optional URL/model overrides. Set `SYSTEM_ONE_MODEL=@cf/cloudflare/clef` (or `@cf/cloudflare/clef-flash`) and optionally `CLOUDFLARE_IMAGE_PATH=./receipt.png` for image input. The live check allows Jev and both Clef IDs on the official endpoint and rejects proxy overrides. It makes three text inference requests with no retries: a mixed-primitives object state, a Chinese action request, and positive/negative boolean questions over an array state. Supplying an image adds one image request; its probability contract is checked, not semantic accuracy on an unlabeled image. It saves results, observed HTTP status, model, reported usage, timings and response headers selected for diagnostics to `.artifacts/live-cloudflare.json` and a timestamped copy. API tokens, authorization headers and image bytes are excluded, and the endpoint masks the account ID.
+The example accepts optional URL/model overrides. Set `SYSTEM_ONE_MODEL=@cf/cloudflare/clef` (or `@cf/cloudflare/clef-flash`) and optionally `CLOUDFLARE_IMAGE_PATH=./receipt.png` for image input. Set `SYSTEM_ONE_MODEL=openai/decisions` to exercise the Decisions protocol; images are supported there as well. The live check allows Jev, both Clef IDs and `openai/decisions` on the official endpoint and rejects proxy overrides. It makes three text inference requests with no retries: a mixed-primitives object state, a Chinese action request, and positive/negative boolean questions over an array state. Supplying an image adds one image request; its probability contract is checked, not semantic accuracy on an unlabeled image. It saves results, observed HTTP status, model, reported usage, timings and response headers selected for diagnostics to `.artifacts/live-cloudflare.json` and a timestamped copy. API tokens, authorization headers and image bytes are excluded, and the endpoint masks the account ID.
 
 Hosted inference was verified using credentials supplied in the repository's `.env`: 24 Clef / Clef Flash requests returned HTTP 200 without retries. Synthetic red/blue square images covered PNG/JPEG/WebP, object and data-URL representations, four-image ordering, empty-string state, concurrent/queued batches, asynchronous credential snapshots, decision/policy composition and evaluation state variants. These are small-sample connectivity and semantic checks, not a model benchmark. The standard live command above still reads its dedicated `.env.cloudflare`; this mixed-provider verification used temporary runners without changing credentials or SDK configuration. Actual Workers `env.AI` inference remains blocked by development/preview permissions; it is not implied by REST success. See [validation history](validation.md) for reports and limits. Ordinary tests and CI never run paid inference.
 

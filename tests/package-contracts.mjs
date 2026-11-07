@@ -73,6 +73,7 @@ export async function checkPackage(name, format = 'esm') {
       'adapter-openrouter': ['openRouterAdapter', 'https://openrouter.ai/api/alpha/decisions', native],
       'adapter-vercel': ['vercelAdapter', 'https://ai-gateway.vercel.sh/v4/ai/evaluation-model', payload],
       'adapter-cloudflare': ['cloudflareAdapter', 'https://api.cloudflare.com/client/v4/accounts/account/ai/run', { success: true, result: native }],
+      'adapter-openai-decisions': ['openAiDecisionsAdapter', 'https://api.openai.com/v1/decisions', { model: 'gpt-6-luna', answers: [{ type: 'predicate', name: 'on', probability: 0.9 }], usage: {} }],
       'adapter-llm': ['llmAdapter', 'https://api.openai.com/v1/responses', { output_text: JSON.stringify({ answers: { q1: 0.9 } }), status: 'completed' }],
     };
     const [key, endpoint, response] = cases[name];
@@ -84,6 +85,16 @@ export async function checkPackage(name, format = 'esm') {
     assert.equal(pkg.nativeQuestions(questions).on.type, 'noul');
     assert.equal(pkg.decodeNative(native).answers.on.probability, 0.9);
     assert.throws(() => pkg.decodeNative(null), core.ResponseValidationError);
+  }
+  if (name === 'protocol-openai-decisions') {
+    const encoded = pkg.encodeOpenAiDecisionsRequest(request);
+    assert.equal(encoded.input, 'on');
+    assert.equal(encoded.questions[0].type, 'predicate');
+    const decoded = pkg.decodeOpenAiDecisionsResponse({
+      model: 'gpt-6-luna', answers: [{ type: 'predicate', name: 'on', probability: 0.9 }], usage: {},
+    }, questions);
+    assert.equal(decoded.answers.on.probability, 0.9);
+    assert.throws(() => pkg.decodeOpenAiDecisionsResponse(null, questions), core.ResponseValidationError);
   }
   if (name === 'transport-fetch') {
     let calls = 0;

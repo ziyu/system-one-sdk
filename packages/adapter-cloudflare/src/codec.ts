@@ -1,7 +1,9 @@
 import { ResponseValidationError } from '@system-one-ai/core';
 import type { AdapterContext, ExtractAdapterContext } from '@system-one-ai/core';
 import { hasOwn, responseRecord } from '@system-one-ai/core/validation';
+import { decodeOpenAiDecisionsResponse } from '@system-one-ai/protocol-openai-decisions';
 import { decodeNative } from '@system-one-ai/protocol-system-one';
+import { openAiDecisionsModel } from './request.js';
 
 function successfulPayload(payload: unknown, path: string): Record<string, unknown> {
   const root = responseRecord(payload, path);
@@ -37,6 +39,9 @@ function decisionPayload(payload: unknown, path: string): Record<string, unknown
 /** Shared by the REST adapter and native Workers client; this module performs no I/O. */
 export function decodeCloudflareResponse(payload: unknown, context: AdapterContext): unknown {
   const result = decisionPayload(payload, 'response');
+  if (openAiDecisionsModel(context.model)) {
+    return decodeOpenAiDecisionsResponse(result, context.request.questions);
+  }
   const normalized = responseRecord(decodeNative(result), 'response');
   const model = result.model ?? context.model;
   const jev = typeof model === 'string' && /^(?:typesafe\/)?jev(?:-|$)/.test(model);

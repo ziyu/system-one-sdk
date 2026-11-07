@@ -30,11 +30,11 @@ Add `"ai": { "binding": "AI" }` to the service's Wrangler configuration. Model A
 
 The optional entry exports `CloudflareWorkers`, `createCloudflareWorkers`, `CloudflareWorkersOptions` and `CloudflareAiBinding`. Native `ImageInput` belongs to `@system-one-ai/core`, not this provider package. The structural binding interface avoids requiring a Cloudflare package in SDK consumers. Model defaults to `typesafe/jev`; a request-level model overrides the client model.
 
-The client requests `returnRawResponse: true` and forwards its total-deadline `AbortSignal`. Cloudflare envelope decoding and bounded UTF-8/JSON Response reading are shared with the REST client. Public `boolean` questions map to native `noul`, and answers retain P(true), distributions, confidence, warnings and reported usage.
+The client requests `returnRawResponse: true` and forwards its total-deadline `AbortSignal`. Cloudflare envelope decoding and bounded UTF-8/JSON Response reading are shared with the REST client. Public `boolean` questions map to native `noul`, or to `predicate` for OpenAI Decisions. Answers retain P(true), distributions, confidence, warnings and reported usage.
 
 Metadata comes from each actual Response, including status and `cf-ai-req-id` (after standard request-ID headers). The client never reads shared binding fields such as `lastRequestId`. Missing statistics stay absent. Inputs and headers are snapshotted before waiting, and each retry supplies a fresh input copy without altering the original validation snapshot.
 
-Defaults: `timeoutMs=10000`, `maxRetries=2`, `retryDelayMs=200`, `maxRetryDelayMs=2000`, `maxResponseBytes=8 MiB`. Per-call options accept `signal`, `timeoutMs`, `maxRetries` and `headers`. Set zero retries for latency-sensitive service calls. Application headers use binding `extraHeaders`; authentication, protocol and `cf-consn-*` headers cannot be overridden. Clef accepts core's native `images` field; Jev rejects nonempty image input. Nonempty `providerOptions`, Gateway routing, websocket, streaming and queued inference remain outside this interface.
+Defaults: `timeoutMs=10000`, `maxRetries=2`, `retryDelayMs=200`, `maxRetryDelayMs=2000`, `maxResponseBytes=8 MiB`. Per-call options accept `signal`, `timeoutMs`, `maxRetries` and `headers`. Set zero retries for latency-sensitive service calls. Application headers use binding `extraHeaders`; authentication, protocol and `cf-consn-*` headers cannot be overridden. Clef and OpenAI Decisions accept core's native `images` field; Jev rejects nonempty image input. Nonempty `providerOptions`, Gateway routing, websocket, streaming and queued inference remain outside this interface.
 
 HTTP 408, 429 and 5xx errors and interrupted body reads can retry within the same total budget. `Retry-After` is never shortened. A binding exception before a Response returns produces sanitized `BindingError` (`code: 'binding'`, exported by the core error API), with no upstream message/cause, guessed HTTP status or automatic retry. Invalid results and failed/pending runners also reject without retry.
 
@@ -52,6 +52,18 @@ const result = await vision.evaluate({
 ```
 
 `receiptBase64` is the application's base64-encoded PNG. Choose `@cf/cloudflare/clef-flash` for Flash. The binding receives that full ID and an input with `model: "clef"` or `"clef-flash"`, `state`, native `questions` and optional `images`. The shared codec validates embedded PNG/JPEG/WebP images and count/byte limits before invoking the binding. Caller and binding mutations cannot alter retry images. See [image formats, provider limits and protocol sources](cloudflare.md#clef-images); remote URLs and video uploads are not supported.
+
+## OpenAI Decisions
+
+```ts
+const decisions = createCloudflareWorkers({ binding: env.AI, model: 'openai/decisions' });
+const result = await decisions.evaluate({
+  state: { ticket: 'Charged twice for one order.' },
+  questions: { refund: booleanQuestion('Does the customer request a refund?') },
+});
+```
+
+The binding receives `openai/decisions` and `{ input, questions }`. Cloudflare's published runner schema accepts only `input_text` and `input_image`, so object or array state is serialized as JSON text here; native OpenAI uses `input_json` through `adapter-openai-decisions`. Images become a user message with ordered `input_text` and `input_image` data-URL parts. Answers arrive as an array and are matched back by question name. See [OpenAI Decisions](cloudflare.md#openai-decisions) for the complete mapping, limits and response behavior.
 
 ## Example and validation
 

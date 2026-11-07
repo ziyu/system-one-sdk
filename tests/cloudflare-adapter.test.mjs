@@ -322,3 +322,171 @@ test('Clef enforces its image limits before credentials or I/O', async () => {
   }
   await assert.rejects(client.evaluate({ ...request, model: 'typesafe/jev', images: [png] }), UnsupportedFeatureError);
 });
+
+const decisionsState = { ticket: 'The same order was charged twice.', order: { charges: [49, 49] } };
+const decisionsQuestions = {
+  billing: { type: 'boolean', instructions: 'Is this about billing?', criteria: { true: 'Charges, invoices, or refunds.', false: 'Other topics.' } },
+  department: {
+    type: 'choice', instructions: 'Which team should handle it?',
+    criteria: { billing: 'Payments and refunds', technical: 'Product issues', shipping: 'Delivery and tracking' },
+  },
+  severity: { type: 'score', instructions: 'How severe is it?', criteria: ['Cosmetic', 'Workaround available', 'Fully blocked'] },
+};
+const decisionsRequest = { state: decisionsState, questions: decisionsQuestions };
+const decisionsPayload = () => ({
+  model: 'gpt-6-luna',
+  answers: [
+    { type: 'predicate', name: 'billing', probability: 0.93 },
+    {
+      type: 'choice', name: 'department', choice: 'billing', confidence: 0.88,
+      probabilities: [
+        { value: 'billing', probability: 0.88 },
+        { value: 'technical', probability: 0.07 },
+        { value: 'shipping', probability: 0.05 },
+      ],
+    },
+    {
+      type: 'score', name: 'severity', score: 1.2, confidence: 0.7,
+      probabilities: [
+        { value: 0, label: 'Cosmetic', probability: 0.1 },
+        { value: 1, label: 'Workaround available', probability: 0.6 },
+        { value: 2, label: 'Fully blocked', probability: 0.3 },
+      ],
+    },
+  ],
+  usage: {
+    input_tokens: 123, output_tokens: 0, total_tokens: 123,
+    input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+    output_tokens_details: { reasoning_tokens: 0 },
+  },
+});
+
+for (const [wrapped, wrap] of [['raw', value => value], ['wrapped', envelope], ['runner', runnerEnvelope], ['raw runner', runnerResult]]) {
+  test(`Cloudflare encodes and decodes the OpenAI Decisions ${wrapped} contract`, async () => {
+    let calls = 0;
+    const client = new SystemOne({ adapter, model: 'openai/decisions', apiKey: null, transport: createFetchTransport(async (url, init) => {
+      calls++;
+      assert.equal(url, expectedURL);
+      assert.deepEqual(JSON.parse(init.body), {
+        model: 'openai/decisions',
+        input: {
+          input: JSON.stringify(decisionsState),
+          questions: [
+            {
+              name: 'billing', type: 'predicate',
+              instructions: 'Is this about billing?\nTrue criteria: Charges, invoices, or refunds.\nFalse criteria: Other topics.',
+            },
+            {
+              name: 'department', type: 'choice', instructions: 'Which team should handle it?',
+              choices: [
+                { value: 'billing', description: 'Payments and refunds' },
+                { value: 'technical', description: 'Product issues' },
+                { value: 'shipping', description: 'Delivery and tracking' },
+              ],
+            },
+            {
+              name: 'severity', type: 'score', instructions: 'How severe is it?',
+              levels: [{ label: 'Cosmetic' }, { label: 'Workaround available' }, { label: 'Fully blocked' }],
+            },
+          ],
+        },
+      });
+      return jsonResponse(wrap(decisionsPayload()));
+    }) });
+    const result = await client.evaluate(decisionsRequest);
+    assert.equal(calls, 1);
+    assert.equal(result.model, 'gpt-6-luna');
+    assert.deepEqual(result.answers.billing, { type: 'boolean', probability: 0.93 });
+    assert.equal(result.answers.department.choice, 'billing');
+    assert.deepEqual(result.answers.department.probabilities, { billing: 0.88, technical: 0.07, shipping: 0.05 });
+    assert.equal(result.answers.department.confidence, 0.88);
+    assert.equal(result.answers.severity.score, 1.2);
+    assert.deepEqual(result.answers.severity.probabilities, { 0: 0.1, 1: 0.6, 2: 0.3 });
+    assert.deepEqual(result.answers.severity.legend, { 0: 'Cosmetic', 1: 'Workaround available', 2: 'Fully blocked' });
+    assert.equal(result.answers.severity.confidence, 0.7);
+    assert.deepEqual(result.usage, { inputTokens: 123, outputTokens: 0, totalTokens: 123 });
+    assert.equal(result.rounding, undefined);
+  });
+}
+
+test('OpenAI Decisions encodes state as text and preserves image order', async () => {
+  let body;
+  const client = new SystemOne({ adapter, model: 'openai/decisions', apiKey: null, transport: createFetchTransport(async (_, init) => {
+    body = JSON.parse(init.body);
+    return jsonResponse({ model: 'gpt-6-luna',
+      answers: [{ type: 'predicate', name: 'visible', probability: 0.8 }], usage: {} });
+  }) });
+  const state = { note: 'Inspect the evidence.', tags: ['a', 'b'] };
+  await client.evaluate({
+    state,
+    images: [png, { mediaType: 'image/jpeg', base64: pngBase64 }],
+    questions: { visible: booleanQuestion('Is damage visible?') },
+  });
+  assert.deepEqual(body, {
+    model: 'openai/decisions',
+    input: {
+      input: [{
+        role: 'user', type: 'message',
+        content: [
+          { type: 'input_text', text: JSON.stringify(state) },
+          { type: 'input_image', image_url: png },
+          { type: 'input_image', image_url: `data:image/jpeg;base64,${pngBase64}` },
+        ],
+      }],
+      questions: [{ name: 'visible', type: 'predicate', instructions: 'Is damage visible?' }],
+    },
+  });
+});
+
+test('OpenAI Decisions rejects refusals and malformed answer arrays without retrying', async () => {
+  const oneRequest = { state: 'The light is on.', questions: { on: booleanQuestion('Is it on?') } };
+  for (const payload of [
+    { model: 'gpt-6-luna', answers: [{ type: 'refusal', name: 'on' }], usage: {} },
+    { model: 'gpt-6-luna', answers: [], usage: {} },
+    { model: 'gpt-6-luna', answers: [{ type: 'predicate', name: 'other', probability: 0.5 }], usage: {} },
+    { model: 'gpt-6-luna', answers: [{ type: 'predicate', name: 'on', probability: 1.1 }], usage: {} },
+    { model: 'gpt-6-luna', answers: [{ type: 'predicate', name: 'on', probability: 0.5 }], usage: { input_tokens: -1 } },
+  ]) {
+    let calls = 0;
+    const client = new SystemOne({ adapter, model: 'openai/decisions', apiKey: null,
+      transport: createFetchTransport(async () => { calls++; return jsonResponse(payload); }) });
+    await assert.rejects(client.evaluate(oneRequest), ResponseValidationError);
+    assert.equal(calls, 1);
+  }
+});
+
+test('OpenAI Decisions rejects duplicate answer names and mismatched answer types', async () => {
+  const twoQuestions = { state: 'x', questions: {
+    a: booleanQuestion('A?'), b: booleanQuestion('B?'),
+  } };
+  for (const answers of [
+    [{ type: 'predicate', name: 'a', probability: 0.5 }, { type: 'predicate', name: 'a', probability: 0.5 }],
+    [{ type: 'predicate', name: 'a', probability: 0.5 }, { type: 'choice', name: 'b', choice: 'x' }],
+  ]) {
+    let calls = 0;
+    const client = new SystemOne({ adapter, model: 'openai/decisions', apiKey: null,
+      transport: createFetchTransport(async () => { calls++; return jsonResponse({ model: 'gpt-6-luna', answers, usage: {} }); }) });
+    await assert.rejects(client.evaluate(twoQuestions), ResponseValidationError);
+    assert.equal(calls, 1);
+  }
+});
+
+test('OpenAI Decisions validates protocol limits before credentials or I/O', async () => {
+  const client = new SystemOne({ adapter, model: 'openai/decisions',
+    apiKey: () => assert.fail('invalid requests must not resolve credentials'),
+    transport: createFetchTransport(() => assert.fail('invalid requests must not be sent')) });
+  const tooManyQuestions = Object.fromEntries(Array.from({ length: 201 }, (_, index) => [
+    `q${index}`, booleanQuestion('Question?'),
+  ]));
+  await assert.rejects(client.evaluate({ state: 'x', questions: tooManyQuestions }), ValidationError);
+  await assert.rejects(client.evaluate({ state: 'x', questions: {
+    one: { type: 'choice', instructions: 'Pick', criteria: { only: 'Only option' } },
+  } }), ValidationError);
+  await assert.rejects(client.evaluate({ state: 'x', questions: {
+    many: { type: 'choice', instructions: 'Pick', criteria: Object.fromEntries(Array.from({ length: 256 }, (_, index) => [`c${index}`, 'Option'])) },
+  } }), ValidationError);
+  await assert.rejects(client.evaluate({ state: 'x', questions: {
+    many: { type: 'score', instructions: 'Rate', criteria: Array.from({ length: 11 }, (_, index) => `level ${index}`) },
+  } }), ValidationError);
+  await assert.rejects(client.evaluate({ state: 'x', questions: { on: booleanQuestion('On?') }, providerOptions: { openai: {} } }), UnsupportedFeatureError);
+});

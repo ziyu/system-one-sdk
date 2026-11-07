@@ -22,7 +22,7 @@
 
 core 的 `EvaluateRequest.images` 与 `state`、`questions` 并列，使用供应商无关的 `ImageInput`（data URL 或 `{ mediaType, base64 }`）。core 负责表示及 base64 校验、请求快照和 `supportsImages` 能力检查；adapter 未显式支持图片时，非空图片输入在 prepare/鉴权/transport 前失败，不能静默丢弃。具体模型支持的 MIME 类型、数量/字节限制和原生字段转换属于 adapter。`State` 继续表示文本/JSON，图片不塞入供应商参数或伪装成文本。
 
-Cloudflare 的 Jev 使用 `/ai/run` 与 `{ model, input }`，拒绝非空图片；Clef / Clef Flash 使用模型专属路径与 `{ model: 短名称, state, questions, images? }`，将 core 的 `mediaType` 转为原生 `content_type`。REST 与独立 `/workers` binding 共享 codec。`defineDecision`、`evaluateMany` 和 `runEvaluation` 保留原生图片字段；本地 runner 通过 `supportsImages: true` 显式接入。完整协议见 [Cloudflare 接入文档](cloudflare.zh-CN.md)。
+Cloudflare 的 Jev 使用 `/ai/run` 与 `{ model, input }`，拒绝非空图片；Clef / Clef Flash 使用模型专属路径与 `{ model: 短名称, state, questions, images? }`，将 core 的 `mediaType` 转为原生 `content_type`。`openai/decisions` 的 wire 映射由独立 `protocol-openai-decisions` 提供，Cloudflare 仅复用 `/ai/run` runner 包装；直接调用 OpenAI 或兼容供应商使用 `adapter-openai-decisions`。REST 与独立 `/workers` binding 共享 codec。`defineDecision`、`evaluateMany` 和 `runEvaluation` 保留原生图片字段；本地 runner 通过 `supportsImages: true` 显式接入。完整协议见 [Cloudflare 接入文档](cloudflare.zh-CN.md)与 [OpenAI Decisions](openai-decisions.zh-CN.md)。
 
 ## 调用生命周期
 

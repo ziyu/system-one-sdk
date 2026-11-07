@@ -2,7 +2,7 @@
 
 [English](cloudflare.md) | **简体中文**
 
-独立包 `@system-one-ai/adapter-cloudflare` 支持 Jev 和多模态 Clef / Clef Flash，兼容 REST 与 AI runner 响应包装。adapter 提供默认地址，应用传入账户 ID、API token 及可选模型配置；默认模型仍为 Jev。
+独立包 `@system-one-ai/adapter-cloudflare` 支持 Jev、多模态 Clef / Clef Flash，以及 Cloudflare 托管的 OpenAI Decisions 模型，兼容 REST 与 AI runner 响应包装。adapter 提供默认地址，应用传入账户 ID、API token 及可选模型配置；默认模型仍为 Jev。
 
 原生 `images` 支持已在 `adapter-cloudflare@0.7.0` 发布，core 和 transport 使用同一 `0.7` 依赖线：
 
@@ -49,7 +49,7 @@ Cloudflare 的接口属于具体账户，因此使用 `cloudflareAdapter({ accou
 
 末尾斜线会被移除。`baseURL` 中存在账户段时，它必须与 adapter 的账户 ID 一致。请传不带模型后缀的基础地址；adapter 为 Clef 添加文档规定的后缀，Jev 保持 runner 路径。不包含账户段的代理端点需要自行路由到目标账户。账户 ID 必须是仅包含字母、数字、下划线或连字符的非空路径段，账户是否存在由 Cloudflare 确认。
 
-客户端 `model` 覆盖 adapter 默认模型，单次请求的 `model` 再覆盖客户端值。`@cf/cloudflare/clef` 与 `@cf/cloudflare/clef-flash` 选择下方 Clef 协议；其他显式 ID 保留原有 runner 契约，必须支持相同决策原语。非空 `providerOptions` 均被拒绝；图片使用 core 的原生请求字段。
+客户端 `model` 覆盖 adapter 默认模型，单次请求的 `model` 再覆盖客户端值。`@cf/cloudflare/clef` 与 `@cf/cloudflare/clef-flash` 选择下方 Clef 协议，`openai/decisions` 选择 Decisions 协议；其他显式 ID 保留原有 runner 契约，必须支持相同决策原语。非空 `providerOptions` 均被拒绝；图片使用 core 的原生请求字段。
 
 ## Clef 图片输入
 
@@ -78,6 +78,28 @@ core 要求 adapter 显式声明 `supportsImages: true`，否则非空图片请�
 
 2026-10-04 核对：[Clef 模型页](https://developers.cloudflare.com/workers-ai/models/clef/)、[输入 schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-input.json)、[输出 schema](https://developers.cloudflare.com/workers-ai/models/clef/schema-output.json)、[Clef Flash](https://developers.cloudflare.com/workers-ai/models/clef-flash/)。REST 使用 `POST /client/v4/accounts/{accountId}/ai/run/@cf/cloudflare/clef`，请求体为 `{ model: "clef", state, questions, images? }`；Flash 使用自己的路径和 `model: "clef-flash"`。Workers 调用 `env.AI.run(完整模型ID, 同一输入, options)`。两者复用 choice/score/noul 解码与 token 归一化，不套用 Jev 的两位小数约定。
 
+## OpenAI Decisions
+
+Decisions wire 契约属于 OpenAI，不属于 Cloudflare。与供应商无关的 codec 位于 `@system-one-ai/protocol-openai-decisions`；`@system-one-ai/adapter-openai-decisions` 可通过 `baseURL`、`apiKey` 和 `model` 直接调用 OpenAI 或其他兼容供应商，见 [OpenAI Decisions](openai-decisions.zh-CN.md)。下面只说明 Cloudflare 对该协议的 runner 包装。
+
+在 Cloudflare REST 客户端或原生 Workers 客户端上设置 `model: 'openai/decisions'`。REST 仍使用普通 runner 地址 `POST /client/v4/accounts/{accountId}/ai/run`，请求体为 `{ model: "openai/decisions", input: { input, questions } }`；Workers 调用 `env.AI.run('openai/decisions', { input, questions }, options)`。该模型在响应中报告解析后的模型 ID 为 `gpt-6-luna`。
+
+core 的字符串 `state` 直接作为 `input` 发送。对象和数组状态会序列化为 JSON 文本，因为 Cloudflare 公开的 Decisions 输入 schema 只接受 `input_text` 和 `input_image`，不接受 OpenAI 的 `input_json` part。存在 `images` 时，adapter 生成一条 user message，内容依次为 `input_text` 和有序的 `input_image` base64 data URL；远程图片 URL 仍不支持。纯文本调用不会额外包裹消息。通过 `adapter-openai-decisions` 调用 OpenAI 原生端点时，结构化 state 使用 `input_json`；Cloudflare 则显式启用共享 codec 的文本兼容选项。
+
+问题按 core 对象的键顺序编码：
+
+| core 题型 | Decisions wire 结构 |
+| --- | --- |
+| `boolean` | `predicate`，包含 `name`、`instructions`，true/false 条件描述会追加到 instructions |
+| `choice` | `choice`，`choices: [{ value, description? }]` |
+| `score` | `score`，有序 `levels: [{ label, description? }]` |
+
+字符串 score 条件作为 level label；非字符串条件使用 level 索引作为 label，并将 JSON 文本放入 description。Decisions 每次请求最多 200 个问题，每个 choice 问题允许 2-255 个选项，每个 score 问题允许 2-10 个级别；超出限制时 adapter 在鉴权和 I/O 之前拒绝。非空 `providerOptions` 仍不支持。
+
+响应 `answers` 数组按 name 匹配回问题 ID；仅当 name 缺失时按位置回退。predicate 转为 boolean 概率，choice 概率数组转为 core 的选项映射，score 概率数组转为索引键概率，并用原始请求条件生成 rubric legend。confidence 和 snake-case token 用量会保留。`refusal` 答案没有对应的 core 答案类型，因此以 `ResponseValidationError` 失败。Decisions 未声明舍入约定，不套用 Jev 的两位小数精度。
+
+2026-11-07 核对：[Cloudflare Decisions 模型页](https://developers.cloudflare.com/ai/models/openai/decisions/)、[输入 schema](https://developers.cloudflare.com/ai/models/openai/decisions/schema-input.json)、[输出 schema](https://developers.cloudflare.com/ai/models/openai/decisions/schema-output.json) 与 [OpenAI Decisions 指南](https://developers.openai.com/api/docs/guides/decisions)。共享 codec 默认使用 OpenAI 原生的 400 问上限和 `input_json` state；Cloudflare 因代理 schema 更窄而传入 200 与文本 state。core 的接口让所有问题共享同一份 `state` 和 `images`，因此未暴露问题级图片 instructions。
+
 ## 协议与来源
 
 核对日期：2026-09-18。[Cloudflare Jev 模型页](https://developers.cloudflare.com/ai/models/typesafe/jev/) 使用 `POST /client/v4/accounts/{accountId}/ai/run`、Bearer 鉴权以及 `{ model, input: { state, questions } }` 请求体。adapter 按该模型专属契约发送请求。
@@ -103,7 +125,7 @@ npm run example:cloudflare
 npm run test:live:cloudflare
 ```
 
-示例支持可选地址/模型覆盖。图片输入设置 `SYSTEM_ONE_MODEL=@cf/cloudflare/clef`（或 `@cf/cloudflare/clef-flash`），并设置 `CLOUDFLARE_IMAGE_PATH=./receipt.png`。联调脚本允许在官方端点使用 Jev、Clef 或 Clef Flash，拒绝代理地址；不重试，发出三次文本推理请求，分别验证三个原语的对象状态、中文动作请求、数组状态的正反真假判断。提供图片时额外发出一次图片请求，只检查概率契约，不将无标签图片作为语义准确率证据。答案、HTTP 状态、模型、用量、耗时及选取的诊断响应头写入 `.artifacts/live-cloudflare.json` 和时间戳副本。报告不包含 API token、Authorization 或图片字节，端点中的账户 ID 被遮蔽。
+示例支持可选地址/模型覆盖。图片输入设置 `SYSTEM_ONE_MODEL=@cf/cloudflare/clef`（或 `@cf/cloudflare/clef-flash`），并设置 `CLOUDFLARE_IMAGE_PATH=./receipt.png`。设置 `SYSTEM_ONE_MODEL=openai/decisions` 可验证 Decisions 协议，图片输入同样可用。联调脚本允许在官方端点使用 Jev、Clef、Clef Flash 或 `openai/decisions`，拒绝代理地址；不重试，发出三次文本推理请求，分别验证三个原语的对象状态、中文动作请求、数组状态的正反真假判断。提供图片时额外发出一次图片请求，只检查概率契约，不将无标签图片作为语义准确率证据。答案、HTTP 状态、模型、用量、耗时及选取的诊断响应头写入 `.artifacts/live-cloudflare.json` 和时间戳副本。报告不包含 API token、Authorization 或图片字节，端点中的账户 ID 被遮蔽。
 
 使用本仓库 `.env` 中的凭据完成了真实托管推理：Clef / Clef Flash 共 24 次请求均 HTTP 200、无重试。红蓝方块合成样本覆盖 PNG/JPEG/WebP、对象及 data URL、四图顺序、空字符串 state、并发/排队批量、异步鉴权快照、决策/概率策略及评测状态变体。这是小样本连通性和语义检查，不是模型质量基准。上方标准命令仍读取独立 `.env.cloudflare`；本次混合供应商验证使用临时 runner，没有改动凭据或 SDK 配置。真正 Workers `env.AI` 推理仍被开发/预览权限阻塞，REST 成功不代表 binding 已线上验证。证据与限制见 [验证历史](validation.md)；普通测试和 CI 不调用付费模型。
 
